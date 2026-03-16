@@ -5,42 +5,60 @@ import { getDb } from '@/lib/db'
 export const maxDuration = 60
 
 /**
- * Converte um valor do Excel para número, lidando com:
- * - Número nativo do Excel (já é float, sem escala extra)
- * - String pt-BR  "1.234,56"  → 1234.56
- * - String en-US  "1,234.56"  → 1234.56
- * - String simples "825.70" ou "825,70"
+ * Converte qualquer valor vindo do Excel para número JS correto.
+ *
+ * Casos cobertos:
+ *   número nativo float  →  retorna direto (xlsx já parseou certo)
+ *   "-4.425,04"          →  -4425.04   (pt-BR: ponto=milhar, vírgula=decimal)
+ *   "-23.076,28"         →  -23076.28
+ *   "-0,02"              →  -0.02
+ *   "1,234.56"           →  1234.56    (en-US)
+ *   "825.70"             →  825.70
+ *   "-0,00002"           →  -0.00002
+ *
+ * Problema raiz anterior: Excel exporta o sinal de menos como Unicode
+ * MINUS SIGN (U+2212 −) em vez do hífen ASCII (U+002D -). Isso quebrava
+ * todas as regexes de detecção de formato.
  */
 function parseNumber(v: unknown): number {
   if (v === null || v === undefined || v === '') return 0
 
-  // Se já é número nativo (xlsx leu como float), retorna direto — sem escala
+  // Número nativo: xlsx já leu como float — retorna direto, sem escala
   if (typeof v === 'number') return isNaN(v) ? 0 : v
 
-  const s = String(v).trim().replace(/\s/g, '')
-  if (s === '' || s === '-') return 0
+  let s = String(v)
+    .trim()
+    // Normaliza QUALQUER variante de sinal negativo para hífen ASCII
+    .replace(/[\u2212\u2010\u2011\u2013\u2014\uFE58\uFE63\uFF0D]/g, '-')
+    // Remove espaços e caracteres invisíveis
+    .replace(/[\s\u00A0\u202F\u2009]/g, '')
 
-  // Detecta formato pt-BR: tem ponto como milhar E vírgula como decimal
-  // Ex: "1.234,56" ou "1.234.567,89"
-  const ptBR = /^-?[\d.]+,[\d]+$/.test(s)
-  if (ptBR) {
-    // Remove pontos de milhar, troca vírgula por ponto
-    return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0
+  if (s === '' || s === '-' || s === '') return 0
+
+  const negative = s.startsWith('-')
+  if (negative) s = s.slice(1)
+
+  let result: number
+
+  // Caso 1 — pt-BR: tem vírgula (decimal) e pode ter pontos (milhar)
+  // Ex: "4.425,04" | "23.076,28" | "0,02" | "1.234.567,89"
+  if (s.includes(',')) {
+    // Remove todos os pontos (separadores de milhar) e troca vírgula por ponto
+    result = parseFloat(s.replace(/\./g, '').replace(',', '.'))
+
+  // Caso 2 — en-US: tem ponto decimal e pode ter vírgulas (milhar)
+  // Ex: "4,425.04" | "1,234.56"
+  } else if (s.includes(',') === false && s.includes('.')) {
+    // Vírgulas são milhares; ponto é decimal — remove as vírgulas
+    result = parseFloat(s.replace(/,/g, ''))
+
+  // Caso 3 — inteiro puro ou ponto como decimal sem ambiguidade
+  } else {
+    result = parseFloat(s) || 0
   }
 
-  // Formato en-US com vírgula como milhar: "1,234.56"
-  const enUS = /^-?[\d,]+\.[\d]+$/.test(s)
-  if (enUS) {
-    return parseFloat(s.replace(/,/g, '')) || 0
-  }
-
-  // Só vírgula sem ponto: "825,70" → pt-BR decimal
-  if (s.includes(',') && !s.includes('.')) {
-    return parseFloat(s.replace(',', '.')) || 0
-  }
-
-  // Fallback: remove tudo que não é dígito, ponto ou sinal
-  return parseFloat(s.replace(/[^0-9.\-]/g, '')) || 0
+  if (isNaN(result)) return 0
+  return negative ? -result : result
 }
 
 function parseDate(v: unknown): string {
@@ -49,7 +67,6 @@ function parseDate(v: unknown): string {
     return (v as Date).toISOString().substring(0, 10)
   }
   const s = String(v).trim()
-  // Handle Excel serial date
   if (/^\d+$/.test(s)) {
     const d = XLSX.SSF.parse_date_code(parseInt(s))
     if (d) return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`
@@ -67,16 +84,22 @@ export async function POST(req: NextRequest) {
     if (!file) return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
 
     const bytes    = await file.arrayBuffer()
-    // cellDates:true para datas, mas NÃO usar cellNF para não escalar números
     const workbook = XLSX.read(bytes, { type: 'array', cellDates: true })
     const sheet    = workbook.Sheets[workbook.SheetNames[0]]
-    const raw      = XLSX.utils.sheet_to_json(sheet, { defval: '' }) as Record<string, unknown>[]
+
+    // rawNumbers: false  → força células numéricas a virem como string formatada
+    // (ex: "-4.425,04") em vez de float já parseado de forma errada pelo xlsx
+    // quando a célula tem formato pt-BR customizado.
+    // Para datas, xlsx ainda respeita cellDates:true independente de rawNumbers.
+    const raw = XLSX.utils.sheet_to_json(sheet, {
+      defval: '',
+      rawNumbers: false,
+    }) as Record<string, unknown>[]
 
     if (!raw.length) return NextResponse.json({ error: 'Arquivo vazio' }, { status: 400 })
 
     const columns = Object.keys(raw[0])
 
-    // Step 1: return columns for mapping
     if (!mapping) {
       return NextResponse.json({ columns, sample: raw.slice(0, 5), total: raw.length })
     }
@@ -86,10 +109,10 @@ export async function POST(req: NextRequest) {
 
     const db = getDb()
 
-    // ── Lançamentos Budget or Razão ──────────────────────────────────────────
+    // ── Lançamentos Budget ou Razão ──────────────────────────────────────────
     if (tipo === 'lancamentos_budget' || tipo === 'lancamentos_razao') {
       const tipoVal = tipo === 'lancamentos_budget' ? 'budget' : 'razao'
-      const modeRaw = formData.get('mode') as string ?? 'append'
+      const modeRaw = (formData.get('mode') as string) ?? 'append'
 
       if (modeRaw === 'replace') {
         db.prepare(`DELETE FROM lancamentos WHERE tipo = ?`).run(tipoVal)
