@@ -89,11 +89,24 @@ function runStarQuery(
   return db.prepare(sql).all(...(params as unknown[])) as Array<Record<string, unknown>>
 }
 
+export interface MedidaQueryOptions {
+  groupByDept?: boolean
+  groupByPeriod?: boolean
+  groupByCentroCusto?: boolean
+  periodos?: string[]   // filtro extra: ['2024-01', '2024-02', ...]
+}
+
 export function getMedidaResultados(
   medidaId: number,
-  groupByDept = true,
-  groupByPeriod = true
+  options: MedidaQueryOptions = {}
 ): MedidaResultado[] {
+  const {
+    groupByDept = true,
+    groupByPeriod = true,
+    groupByCentroCusto = false,
+    periodos = [],
+  } = options
+
   const db = getDb()
   const raw = db.prepare('SELECT * FROM medidas WHERE id = ?').get(medidaId) as {
     id: number; nome: string; descricao: string; cor: string
@@ -107,33 +120,59 @@ export function getMedidaResultados(
     filtros: JSON.parse(raw.filtros || '[]'),
   }
 
+  // Monta filtros extras de período
+  const extraFilters: FilterCondition[] = [...medida.filtros]
+  if (periodos.length) {
+    extraFilters.push({
+      column: 'data_lancamento',
+      operator: 'in',
+      value: periodos.join(','),
+    } as FilterCondition)
+  }
+
   const groupBy: string[] = []
-  if (groupByDept)    groupBy.push('cc.departamento', 'cc.nome_departamento')
-  if (groupByPeriod)  groupBy.push("strftime('%Y-%m', l.data_lancamento) as periodo")
+  if (groupByDept)          groupBy.push('cc.departamento', 'cc.nome_departamento')
+  if (groupByCentroCusto)   groupBy.push('l.centro_custo', 'cc.nome_centro_custo')
+  if (groupByPeriod)        groupBy.push("strftime('%Y-%m', l.data_lancamento) as periodo")
 
   const tiposToRun: Array<'budget' | 'razao'> =
     medida.tipo_fonte === 'ambos' ? ['budget', 'razao'] : [medida.tipo_fonte]
 
-  const byKey: Record<string, { budget: number; razao: number; nome_dept: string }> = {}
+  const byKey: Record<string, {
+    budget: number; razao: number
+    nome_dept: string; centro_custo: string; nome_cc: string
+  }> = {}
 
   for (const tipo of tiposToRun) {
-    const rows = runStarQuery(tipo, medida.filtros, groupBy)
+    // Se filtro de período usa 'in' com valores YYYY-MM, converte para
+    // comparação strftime na query manualmente
+    const periodoFilters = periodos.length
+      ? buildPeriodoWhere(periodos)
+      : null
+
+    const rows = runStarQueryWithPeriodo(tipo, medida.filtros, groupBy, periodoFilters)
     for (const r of rows) {
-      const dept = (r['departamento'] ?? r['cc.departamento'] ?? '') as string
-      const periodo = (r['periodo'] ?? '') as string
-      const key = `${dept}||${periodo}`
-      if (!byKey[key]) byKey[key] = { budget: 0, razao: 0, nome_dept: (r['nome_departamento'] ?? '') as string }
+      const dept      = (r['departamento']     ?? r['cc.departamento']     ?? '') as string
+      const nomeDept  = (r['nome_departamento'] ?? r['cc.nome_departamento'] ?? '') as string
+      const cc        = (r['centro_custo']      ?? r['l.centro_custo']       ?? '') as string
+      const nomeCc    = (r['nome_centro_custo'] ?? r['cc.nome_centro_custo'] ?? '') as string
+      const periodo   = (r['periodo'] ?? '') as string
+      const key       = `${dept}||${cc}||${periodo}`
+      if (!byKey[key]) byKey[key] = { budget: 0, razao: 0, nome_dept: nomeDept, centro_custo: cc, nome_cc: nomeCc }
       if (tipo === 'budget') byKey[key].budget += (r['valor'] as number) ?? 0
       if (tipo === 'razao')  byKey[key].razao  += (r['valor'] as number) ?? 0
     }
   }
 
   return Object.entries(byKey).map(([key, vals]) => {
-    const [departamento, periodo] = key.split('||')
+    const [departamento, centro_custo, periodo] = key.split('||')
     const variacao = vals.razao - vals.budget
     return {
       medida,
       departamento,
+      nome_departamento: vals.nome_dept,
+      centro_custo,
+      nome_centro_custo: vals.nome_cc,
       periodo,
       budget: vals.budget,
       razao:  vals.razao,
@@ -141,6 +180,42 @@ export function getMedidaResultados(
       variacao_pct: vals.budget ? (variacao / Math.abs(vals.budget)) * 100 : 0,
     }
   })
+}
+
+// Versão interna que aceita cláusula de período extra já montada
+function buildPeriodoWhere(periodos: string[]): { where: string; params: unknown[] } | null {
+  if (!periodos.length) return null
+  const placeholders = periodos.map(() => '?').join(',')
+  return {
+    where: `strftime('%Y-%m', l.data_lancamento) IN (${placeholders})`,
+    params: periodos,
+  }
+}
+
+function runStarQueryWithPeriodo(
+  tipo: 'budget' | 'razao',
+  filters: FilterCondition[],
+  groupBy: string[],
+  periodoClause: { where: string; params: unknown[] } | null
+): Array<Record<string, unknown>> {
+  const db = getDb()
+  const { where, params } = buildFilterSQL(filters)
+  const periodoPart = periodoClause?.where ?? ''
+  const allConditions = [`l.tipo = '${tipo}'`, where, periodoPart].filter(Boolean).join(' AND ')
+  const allParams = [...(params as unknown[]), ...(periodoClause?.params ?? [])]
+  const selectCols = groupBy.join(', ')
+  const groupClause = groupBy.length ? `GROUP BY ${selectCols}` : ''
+
+  const sql = `
+    SELECT
+      ${groupBy.length ? selectCols + ',' : ''}
+      SUM(l.debito_credito) as valor
+    ${STAR_SCHEMA_JOIN}
+    WHERE ${allConditions}
+    ${groupClause}
+    ORDER BY ${groupBy.length ? selectCols : '1'}
+  `
+  return db.prepare(sql).all(...allParams) as Array<Record<string, unknown>>
 }
 
 // ─── Análise geral (sem medida específica) ───────────────────────────────────

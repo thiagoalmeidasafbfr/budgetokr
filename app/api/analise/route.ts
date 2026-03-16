@@ -4,8 +4,8 @@ import type { FilterCondition, FilterColumn } from '@/lib/types'
 
 export async function GET(req: NextRequest) {
   try {
-    const sp     = new URL(req.url).searchParams
-    const type   = sp.get('type') ?? 'analise'
+    const sp       = new URL(req.url).searchParams
+    const type     = sp.get('type') ?? 'analise'
     const medidaId = sp.get('medidaId')
 
     if (type === 'summary') {
@@ -19,7 +19,18 @@ export async function GET(req: NextRequest) {
     }
 
     if (type === 'medida' && medidaId) {
-      const results = getMedidaResultados(parseInt(medidaId))
+      const groupByDept        = sp.get('groupByDept')        !== 'false'
+      const groupByPeriod      = sp.get('groupByPeriod')      !== 'false'
+      const groupByCentroCusto = sp.get('groupByCentroCusto') === 'true'
+      const periodosRaw        = sp.get('periodos')
+      const periodos           = periodosRaw ? periodosRaw.split(',').filter(Boolean) : []
+
+      const results = getMedidaResultados(parseInt(medidaId), {
+        groupByDept,
+        groupByPeriod,
+        groupByCentroCusto,
+        periodos,
+      })
       return NextResponse.json(results)
     }
 

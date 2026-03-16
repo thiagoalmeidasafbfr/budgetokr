@@ -4,9 +4,42 @@ import { getDb } from '@/lib/db'
 
 export const maxDuration = 60
 
+/**
+ * Converte um valor do Excel para número, lidando com:
+ * - Número nativo do Excel (já é float, sem escala extra)
+ * - String pt-BR  "1.234,56"  → 1234.56
+ * - String en-US  "1,234.56"  → 1234.56
+ * - String simples "825.70" ou "825,70"
+ */
 function parseNumber(v: unknown): number {
   if (v === null || v === undefined || v === '') return 0
-  const s = String(v).replace(/\s/g, '').replace(',', '.')
+
+  // Se já é número nativo (xlsx leu como float), retorna direto — sem escala
+  if (typeof v === 'number') return isNaN(v) ? 0 : v
+
+  const s = String(v).trim().replace(/\s/g, '')
+  if (s === '' || s === '-') return 0
+
+  // Detecta formato pt-BR: tem ponto como milhar E vírgula como decimal
+  // Ex: "1.234,56" ou "1.234.567,89"
+  const ptBR = /^-?[\d.]+,[\d]+$/.test(s)
+  if (ptBR) {
+    // Remove pontos de milhar, troca vírgula por ponto
+    return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0
+  }
+
+  // Formato en-US com vírgula como milhar: "1,234.56"
+  const enUS = /^-?[\d,]+\.[\d]+$/.test(s)
+  if (enUS) {
+    return parseFloat(s.replace(/,/g, '')) || 0
+  }
+
+  // Só vírgula sem ponto: "825,70" → pt-BR decimal
+  if (s.includes(',') && !s.includes('.')) {
+    return parseFloat(s.replace(',', '.')) || 0
+  }
+
+  // Fallback: remove tudo que não é dígito, ponto ou sinal
   return parseFloat(s.replace(/[^0-9.\-]/g, '')) || 0
 }
 
@@ -28,12 +61,13 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
     const file     = formData.get('file') as File
-    const tipo     = formData.get('tipo') as string   // upload type
+    const tipo     = formData.get('tipo') as string
     const mapping  = formData.get('mapping') as string
 
     if (!file) return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
 
     const bytes    = await file.arrayBuffer()
+    // cellDates:true para datas, mas NÃO usar cellNF para não escalar números
     const workbook = XLSX.read(bytes, { type: 'array', cellDates: true })
     const sheet    = workbook.Sheets[workbook.SheetNames[0]]
     const raw      = XLSX.utils.sheet_to_json(sheet, { defval: '' }) as Record<string, unknown>[]

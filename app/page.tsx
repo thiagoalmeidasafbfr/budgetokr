@@ -76,12 +76,15 @@ export default function Dashboard() {
     </div>
   )
 
-  // Aggregate by department
-  const byDept = analise.reduce<Record<string, { budget: number; razao: number }>>((acc, r) => {
-    const key = r.departamento || r.nome_departamento || '—'
-    if (!acc[key]) acc[key] = { budget: 0, razao: 0 }
-    acc[key].budget += r.budget
-    acc[key].razao  += r.razao
+  // Aggregate by department — usa nome_departamento como chave de exibição
+  const byDept = analise.reduce<Record<string, { budget: number; razao: number; codigo: string }>>((acc, r) => {
+    // chave de exibição: nome do departamento (fallback para código)
+    const label = (r.nome_departamento && r.nome_departamento.trim())
+      ? r.nome_departamento.trim()
+      : (r.departamento || '—')
+    if (!acc[label]) acc[label] = { budget: 0, razao: 0, codigo: r.departamento }
+    acc[label].budget += r.budget
+    acc[label].razao  += r.razao
     return acc
   }, {})
 
@@ -159,7 +162,7 @@ export default function Dashboard() {
               <BarChart data={deptVariance} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis type="number" tickFormatter={v => formatCurrency(v).replace('R$\u00a0','')} tick={{ fontSize: 10 }} />
-                <YAxis type="category" dataKey="dept" width={90} tick={{ fontSize: 10 }} />
+                <YAxis type="category" dataKey="dept" width={140} tick={{ fontSize: 10 }} />
                 <Tooltip formatter={(v) => formatCurrency(Number(v))} />
                 <Bar dataKey="variacao" name="Variação" radius={[0,3,3,0]}>
                   {deptVariance.map((e, i) => <Cell key={i} fill={e.variacao >= 0 ? '#34d399' : '#f87171'} />)}
@@ -184,12 +187,17 @@ export default function Dashboard() {
                 <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>
               </tr></thead>
               <tbody>
-                {Object.entries(byDept).map(([dept, vals], i) => {
+                {Object.entries(byDept).map(([label, vals], i) => {
                   const variacao = vals.razao - vals.budget
                   const pct     = vals.budget ? (variacao / Math.abs(vals.budget)) * 100 : 0
                   return (
                     <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                      <td className="px-5 py-3 font-medium text-gray-900">{dept}</td>
+                      <td className="px-5 py-3 font-medium text-gray-900">
+                        {label}
+                        {vals.codigo && vals.codigo !== label && (
+                          <span className="ml-2 text-xs text-gray-400 font-normal">{vals.codigo}</span>
+                        )}
+                      </td>
                       <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(vals.budget)}</td>
                       <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(vals.razao)}</td>
                       <td className={cn('px-5 py-3 text-right font-semibold', variacao >= 0 ? 'text-emerald-600' : 'text-red-500')}>{formatCurrency(variacao)}</td>

@@ -21,6 +21,9 @@ interface AnaliseRow {
 interface MedidaResult {
   medida: Medida
   departamento: string
+  nome_departamento: string
+  centro_custo: string
+  nome_centro_custo: string
   periodo: string
   budget: number
   razao: number
@@ -34,12 +37,16 @@ type GroupBy = 'departamento' | 'periodo'
 export default function AnalisePage() {
   const [data,          setData]          = useState<AnaliseRow[]>([])
   const [medidas,       setMedidas]       = useState<Medida[]>([])
-  const [medidaResults, setMedidaResults] = useState<Record<number, MedidaResult[]>>({})
+  const [medidaResults, setMedidaResults] = useState<MedidaResult[]>([])
   const [departamentos, setDepartamentos] = useState<string[]>([])
   const [periodos,      setPeriodos]      = useState<string[]>([])
   const [selDepts,      setSelDepts]      = useState<string[]>([])
   const [selPeriods,    setSelPeriods]    = useState<string[]>([])
-  const [selMedida,     setSelMedida]     = useState<number | null>(null)
+  // medida view state
+  const [selMedida,        setSelMedida]        = useState<number | null>(null)
+  const [medidaGroupBy,    setMedidaGroupBy]    = useState<'departamento' | 'periodo' | 'centro_custo'>('departamento')
+  const [medidaSelPeriods, setMedidaSelPeriods] = useState<string[]>([])
+  const [medidaLoading,    setMedidaLoading]    = useState(false)
   const [viewMode,      setViewMode]      = useState<ViewMode>('table')
   const [groupBy,       setGroupBy]       = useState<GroupBy>('departamento')
   const [loading,       setLoading]       = useState(false)
@@ -49,10 +56,9 @@ export default function AnalisePage() {
       fetch('/api/analise?type=distinct&col=departamento').then(r => r.json()),
       fetch('/api/analise?type=distinct&col=data_lancamento').then(r => r.json()),
       fetch('/api/medidas').then(r => r.json()),
-    ]).then(([depts, periods, meds]) => {
+    ]).then(([depts, dates, meds]) => {
       setDepartamentos(Array.isArray(depts) ? depts : [])
-      // Extract YYYY-MM from dates
-      const uniquePeriods = [...new Set((Array.isArray(periods) ? periods : []).map((d: string) => d?.substring(0, 7)).filter(Boolean))].sort()
+      const uniquePeriods = [...new Set((Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean))].sort() as string[]
       setPeriodos(uniquePeriods)
       setMedidas(Array.isArray(meds) ? meds : [])
     })
@@ -69,28 +75,54 @@ export default function AnalisePage() {
     setLoading(false)
   }, [])
 
-  const loadMedida = async (id: number) => {
-    if (medidaResults[id]) return
-    const res = await fetch(`/api/analise?type=medida&medidaId=${id}`)
-    if (res.ok) {
-      const results = await res.json()
-      setMedidaResults(prev => ({ ...prev, [id]: Array.isArray(results) ? results : [] }))
-    }
-  }
+  const loadMedidaResults = useCallback(async (
+    id: number,
+    gb: 'departamento' | 'periodo' | 'centro_custo',
+    prds: string[]
+  ) => {
+    setMedidaLoading(true)
+    const params = new URLSearchParams({
+      type: 'medida',
+      medidaId: String(id),
+      groupByDept:        String(gb === 'departamento'),
+      groupByPeriod:      String(gb === 'periodo'),
+      groupByCentroCusto: String(gb === 'centro_custo'),
+    })
+    if (prds.length) params.set('periodos', prds.join(','))
+    const res = await fetch(`/api/analise?${params}`)
+    if (res.ok) setMedidaResults(await res.json())
+    setMedidaLoading(false)
+  }, [])
 
-  const toggleMedida = async (id: number) => {
-    if (selMedida === id) { setSelMedida(null); setViewMode('table'); return }
-    await loadMedida(id)
+  const selectMedida = (id: number) => {
     setSelMedida(id)
     setViewMode('medida')
+    setMedidaSelPeriods([])
+    setMedidaGroupBy('departamento')
+    loadMedidaResults(id, 'departamento', [])
   }
 
   const applyFilters = () => loadData(selDepts, selPeriods)
 
-  // Aggregate by groupBy key
-  const grouped = data.reduce<Record<string, { budget: number; razao: number; variacao: number; sub: Set<string> }>>((acc, row) => {
-    const key = groupBy === 'departamento' ? (row.departamento || row.nome_departamento || '—') : row.periodo
-    if (!acc[key]) acc[key] = { budget: 0, razao: 0, variacao: 0, sub: new Set() }
+  // Re-fetch medida when groupBy or period filter changes
+  useEffect(() => {
+    if (selMedida !== null) {
+      loadMedidaResults(selMedida, medidaGroupBy, medidaSelPeriods)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [medidaGroupBy, medidaSelPeriods])
+
+  // Aggregate by groupBy key — usa nome_departamento para exibição
+  const grouped = data.reduce<Record<string, { budget: number; razao: number; variacao: number; sub: Set<string>; codigo: string }>>((acc, row) => {
+    let key: string
+    if (groupBy === 'departamento') {
+      key = (row.nome_departamento && row.nome_departamento.trim())
+        ? row.nome_departamento.trim()
+        : (row.departamento || '—')
+    } else {
+      key = row.periodo
+    }
+    if (!acc[key]) acc[key] = { budget: 0, razao: 0, variacao: 0, sub: new Set(), codigo: row.departamento }
     acc[key].budget   += row.budget
     acc[key].razao    += row.razao
     acc[key].variacao += row.variacao
@@ -105,15 +137,25 @@ export default function AnalisePage() {
   const totals = tableRows.reduce((a, r) => ({ budget: a.budget + r.budget, razao: a.razao + r.razao, variacao: a.variacao + r.variacao }), { budget: 0, razao: 0, variacao: 0 })
   const chartData = tableRows.slice(0, 15)
 
-  // Medida view
+  // Medida view aggregation
   const activeMedida = medidas.find(m => m.id === selMedida)
-  const activeMedidaResults = selMedida ? (medidaResults[selMedida] ?? []) : []
-  const medidaByDept = activeMedidaResults.reduce<Record<string, { budget: number; razao: number }>>((acc, r) => {
-    if (!acc[r.departamento]) acc[r.departamento] = { budget: 0, razao: 0 }
-    acc[r.departamento].budget += r.budget
-    acc[r.departamento].razao  += r.razao
+
+  // Label helper for medida rows
+  const medidaRowLabel = (r: MedidaResult) => {
+    if (medidaGroupBy === 'departamento') return r.nome_departamento?.trim() || r.departamento || '—'
+    if (medidaGroupBy === 'centro_custo') return r.nome_centro_custo?.trim() || r.centro_custo || '—'
+    return r.periodo || '—'
+  }
+
+  const medidaAgg = medidaResults.reduce<Record<string, { budget: number; razao: number }>>((acc, r) => {
+    const k = medidaRowLabel(r)
+    if (!acc[k]) acc[k] = { budget: 0, razao: 0 }
+    acc[k].budget += r.budget
+    acc[k].razao  += r.razao
     return acc
   }, {})
+
+  const medidaTotals = Object.values(medidaAgg).reduce((a, v) => ({ budget: a.budget + v.budget, razao: a.razao + v.razao }), { budget: 0, razao: 0 })
 
   const exportCSV = () => {
     const rows = [
@@ -186,7 +228,7 @@ export default function AnalisePage() {
                   <Target size={11} /> Medidas
                 </p>
                 {medidas.map(m => (
-                  <button key={m.id} onClick={() => toggleMedida(m.id)}
+                  <button key={m.id} onClick={() => selectMedida(m.id)}
                     className={cn('w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left text-xs transition-colors',
                       selMedida === m.id ? 'bg-indigo-50 text-indigo-700 font-medium' : 'hover:bg-gray-50 text-gray-600')}>
                     <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: m.cor }} />
@@ -223,19 +265,21 @@ export default function AnalisePage() {
                 </button>
               )}
             </div>
-            <div className="flex bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5 ml-auto">
-              {(['departamento','periodo'] as const).map(g => (
-                <button key={g} onClick={() => setGroupBy(g)}
-                  className={cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-                    groupBy === g ? 'bg-gray-100 text-gray-800' : 'text-gray-500 hover:bg-gray-50')}>
-                  Por {g === 'departamento' ? 'Departamento' : 'Período'}
-                </button>
-              ))}
-            </div>
+            {viewMode !== 'medida' && (
+              <div className="flex bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5 ml-auto">
+                {(['departamento','periodo'] as const).map(g => (
+                  <button key={g} onClick={() => setGroupBy(g)}
+                    className={cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                      groupBy === g ? 'bg-gray-100 text-gray-800' : 'text-gray-500 hover:bg-gray-50')}>
+                    Por {g === 'departamento' ? 'Departamento' : 'Período'}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Active filters */}
-          {(selDepts.length > 0 || selPeriods.length > 0) && (
+          {/* Active filters badges */}
+          {viewMode !== 'medida' && (selDepts.length > 0 || selPeriods.length > 0) && (
             <div className="flex flex-wrap gap-1">
               {selDepts.map(d => <Badge key={d} variant="secondary" className="gap-1">{d}<button onClick={() => setSelDepts(p => p.filter(x => x !== d))}><X size={9} /></button></Badge>)}
               {selPeriods.map(p => <Badge key={p} variant="outline" className="gap-1">{p}<button onClick={() => setSelPeriods(prev => prev.filter(x => x !== p))}><X size={9} /></button></Badge>)}
@@ -259,7 +303,12 @@ export default function AnalisePage() {
                   <tbody>
                     {tableRows.map((row, i) => (
                       <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                        <td className="px-5 py-3 font-medium text-gray-900">{row.key}</td>
+                        <td className="px-5 py-3 font-medium text-gray-900">
+                          {row.key}
+                          {groupBy === 'departamento' && row.codigo && row.codigo !== row.key && (
+                            <span className="ml-2 text-xs text-gray-400 font-normal">{row.codigo}</span>
+                          )}
+                        </td>
                         <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.budget)}</td>
                         <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.razao)}</td>
                         <td className={cn('px-5 py-3 text-right font-semibold', colorForVariance(row.variacao))}>{formatCurrency(row.variacao)}</td>
@@ -309,7 +358,7 @@ export default function AnalisePage() {
                     <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 20, left: 80, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                       <XAxis type="number" tickFormatter={v => formatCurrency(v).replace('R$\u00a0', '')} tick={{ fontSize: 10 }} />
-                      <YAxis type="category" dataKey="key" width={80} tick={{ fontSize: 10 }} />
+                      <YAxis type="category" dataKey="key" width={140} tick={{ fontSize: 10 }} />
                       <Tooltip formatter={(v) => formatCurrency(Number(v))} />
                       <Bar dataKey="variacao" name="Variação" radius={[0,3,3,0]}>
                         {chartData.map((e, i) => <Cell key={i} fill={e.variacao >= 0 ? '#34d399' : '#f87171'} />)}
@@ -322,9 +371,10 @@ export default function AnalisePage() {
           )}
 
           {/* MEDIDA VIEW */}
-          {!loading && viewMode === 'medida' && activeMedida && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 p-4 rounded-xl" style={{ backgroundColor: activeMedida.cor + '18', borderLeft: `4px solid ${activeMedida.cor}` }}>
+          {viewMode === 'medida' && activeMedida && (
+            <div className="space-y-3">
+              {/* Medida header */}
+              <div className="flex items-start gap-3 p-4 rounded-xl" style={{ backgroundColor: activeMedida.cor + '18', borderLeft: `4px solid ${activeMedida.cor}` }}>
                 <div className="flex-1">
                   <p className="font-bold text-gray-900 text-lg">{activeMedida.nome}</p>
                   {activeMedida.descricao && <p className="text-sm text-gray-500">{activeMedida.descricao}</p>}
@@ -336,41 +386,117 @@ export default function AnalisePage() {
                     ))}
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(Object.values(medidaByDept).reduce((s,v) => s + v.razao, 0))}</p>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(medidaTotals.razao)}</p>
                   <p className="text-xs text-gray-500">Razão Total</p>
-                  <p className="text-xs text-gray-400">Budget: {formatCurrency(Object.values(medidaByDept).reduce((s,v) => s + v.budget, 0))}</p>
+                  <p className="text-xs text-gray-400">Budget: {formatCurrency(medidaTotals.budget)}</p>
                 </div>
               </div>
 
-              <Card>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead><tr className="border-b bg-gray-50">
-                      <th className="text-left px-5 py-3 font-medium text-gray-500">Departamento</th>
-                      <th className="text-right px-5 py-3 font-medium text-gray-500">Budget</th>
-                      <th className="text-right px-5 py-3 font-medium text-gray-500">Razão</th>
-                      <th className="text-right px-5 py-3 font-medium text-gray-500">Variação</th>
-                      <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>
-                    </tr></thead>
-                    <tbody>
-                      {Object.entries(medidaByDept).map(([dept, vals], i) => {
-                        const variacao = vals.razao - vals.budget
-                        const pct = vals.budget ? (variacao / Math.abs(vals.budget)) * 100 : 0
-                        return (
-                          <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
-                            <td className="px-5 py-3 font-medium text-gray-900">{dept || '—'}</td>
-                            <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(vals.budget)}</td>
-                            <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(vals.razao)}</td>
-                            <td className={cn('px-5 py-3 text-right font-semibold', colorForVariance(variacao))}>{formatCurrency(variacao)}</td>
-                            <td className="px-5 py-3 text-right"><span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(variacao))}>{formatPct(pct)}</span></td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+              {/* Medida controls */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* GroupBy */}
+                <div className="flex bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5">
+                  {([
+                    ['departamento', 'Por Departamento'],
+                    ['centro_custo', 'Por Centro de Custo'],
+                    ['periodo',      'Por Período'],
+                  ] as const).map(([g, label]) => (
+                    <button key={g} onClick={() => setMedidaGroupBy(g)}
+                      className={cn('px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                        medidaGroupBy === g ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+                      {label}
+                    </button>
+                  ))}
                 </div>
-              </Card>
+
+                {/* Period filter for medida */}
+                <div className="relative group">
+                  <button className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-600 bg-white hover:bg-gray-50">
+                    <Filter size={11} />
+                    {medidaSelPeriods.length > 0 ? `${medidaSelPeriods.length} período(s)` : 'Todos os períodos'}
+                    <ChevronDown size={11} />
+                  </button>
+                  <div className="absolute top-full left-0 z-20 mt-1 bg-white border border-gray-100 rounded-xl shadow-lg min-w-[160px] p-2 hidden group-focus-within:block group-hover:block">
+                    <p className="text-xs font-semibold text-gray-400 px-2 mb-1">Filtrar por período</p>
+                    {periodos.map(p => (
+                      <label key={p} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" checked={medidaSelPeriods.includes(p)}
+                          onChange={e => setMedidaSelPeriods(prev =>
+                            e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}
+                          className="w-3 h-3 accent-indigo-600" />
+                        <span className="text-xs text-gray-600">{p}</span>
+                      </label>
+                    ))}
+                    {medidaSelPeriods.length > 0 && (
+                      <button onClick={() => setMedidaSelPeriods([])}
+                        className="w-full text-left text-xs text-red-400 hover:text-red-600 px-2 py-1 mt-1 border-t border-gray-50">
+                        <X size={9} className="inline mr-1" />Limpar
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {medidaLoading && <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />}
+              </div>
+
+              {/* Active period badges */}
+              {medidaSelPeriods.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {medidaSelPeriods.map(p => (
+                    <Badge key={p} variant="outline" className="gap-1">{p}
+                      <button onClick={() => setMedidaSelPeriods(prev => prev.filter(x => x !== p))}><X size={9} /></button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
+              {/* Medida table */}
+              {!medidaLoading && (
+                <Card>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead><tr className="border-b bg-gray-50">
+                        <th className="text-left px-5 py-3 font-medium text-gray-500">
+                          {medidaGroupBy === 'departamento' ? 'Departamento'
+                            : medidaGroupBy === 'centro_custo' ? 'Centro de Custo'
+                            : 'Período'}
+                        </th>
+                        <th className="text-right px-5 py-3 font-medium text-gray-500">Budget</th>
+                        <th className="text-right px-5 py-3 font-medium text-gray-500">Razão</th>
+                        <th className="text-right px-5 py-3 font-medium text-gray-500">Variação</th>
+                        <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>
+                      </tr></thead>
+                      <tbody>
+                        {Object.entries(medidaAgg).map(([label, vals], i) => {
+                          const variacao = vals.razao - vals.budget
+                          const pct = vals.budget ? (variacao / Math.abs(vals.budget)) * 100 : 0
+                          return (
+                            <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
+                              <td className="px-5 py-3 font-medium text-gray-900">{label}</td>
+                              <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(vals.budget)}</td>
+                              <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(vals.razao)}</td>
+                              <td className={cn('px-5 py-3 text-right font-semibold', colorForVariance(variacao))}>{formatCurrency(variacao)}</td>
+                              <td className="px-5 py-3 text-right"><span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(variacao))}>{formatPct(pct)}</span></td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                      <tfoot><tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
+                        <td className="px-5 py-3">Total</td>
+                        <td className="px-5 py-3 text-right">{formatCurrency(medidaTotals.budget)}</td>
+                        <td className="px-5 py-3 text-right">{formatCurrency(medidaTotals.razao)}</td>
+                        <td className={cn('px-5 py-3 text-right', colorForVariance(medidaTotals.razao - medidaTotals.budget))}>{formatCurrency(medidaTotals.razao - medidaTotals.budget)}</td>
+                        <td className="px-5 py-3 text-right">
+                          <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(medidaTotals.razao - medidaTotals.budget))}>
+                            {formatPct(medidaTotals.budget ? ((medidaTotals.razao - medidaTotals.budget) / Math.abs(medidaTotals.budget)) * 100 : 0)}
+                          </span>
+                        </td>
+                      </tr></tfoot>
+                    </table>
+                  </div>
+                </Card>
+              )}
             </div>
           )}
         </div>
