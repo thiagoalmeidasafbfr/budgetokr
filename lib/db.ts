@@ -11,6 +11,8 @@ if (!fs.existsSync(DATA_DIR)) {
 
 let db: Database.Database | null = null;
 
+const SCHEMA_VERSION = 2;
+
 export function getDb(): Database.Database {
   if (!db) {
     db = new Database(DB_PATH);
@@ -22,50 +24,84 @@ export function getDb(): Database.Database {
 }
 
 function initSchema(db: Database.Database) {
+  db.exec(`CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL DEFAULT 1)`);
+
+  const row = db.prepare('SELECT version FROM schema_version').get() as { version: number } | undefined;
+  const version = row?.version ?? 0;
+
+  if (version < SCHEMA_VERSION) {
+    // Migrate: drop old v1 tables
+    db.exec(`
+      DROP TABLE IF EXISTS data_rows;
+      DROP TABLE IF EXISTS datasets;
+      DROP TABLE IF EXISTS metrics;
+      DROP TABLE IF EXISTS active_dataset;
+    `);
+    if (!row) {
+      db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(SCHEMA_VERSION);
+    } else {
+      db.prepare('UPDATE schema_version SET version = ?').run(SCHEMA_VERSION);
+    }
+  }
+
   db.exec(`
-    CREATE TABLE IF NOT EXISTS datasets (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      filename TEXT NOT NULL,
-      columns TEXT NOT NULL,        -- JSON array of column names
-      column_mapping TEXT NOT NULL, -- JSON: { department, group, account, period, budget, actual, ... }
-      row_count INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    -- ─── Fato: Lançamentos (Budget + Razão no mesmo lugar) ───────────────────
+    CREATE TABLE IF NOT EXISTS lancamentos (
+      id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+      tipo                      TEXT    NOT NULL CHECK (tipo IN ('budget','razao')),
+      data_lancamento           TEXT,
+      nome_conta_contabil       TEXT,
+      numero_conta_contabil     TEXT,
+      centro_custo              TEXT,
+      nome_conta_contrapartida  TEXT,
+      fonte                     TEXT,
+      observacao                TEXT,
+      debito_credito            REAL    NOT NULL DEFAULT 0,
+      created_at                DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at                DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    CREATE TABLE IF NOT EXISTS data_rows (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      dataset_id INTEGER NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
-      department TEXT,
-      grp TEXT,
-      account TEXT,
-      period TEXT,
-      budget REAL DEFAULT 0,
-      actual REAL DEFAULT 0,
-      extra TEXT  -- JSON for unmapped columns
+    CREATE INDEX IF NOT EXISTS idx_lanc_tipo        ON lancamentos(tipo);
+    CREATE INDEX IF NOT EXISTS idx_lanc_cc          ON lancamentos(centro_custo);
+    CREATE INDEX IF NOT EXISTS idx_lanc_conta       ON lancamentos(numero_conta_contabil);
+    CREATE INDEX IF NOT EXISTS idx_lanc_data        ON lancamentos(data_lancamento);
+    CREATE INDEX IF NOT EXISTS idx_lanc_tipo_cc     ON lancamentos(tipo, centro_custo);
+    CREATE INDEX IF NOT EXISTS idx_lanc_tipo_conta  ON lancamentos(tipo, numero_conta_contabil);
+
+    -- ─── Dimensão: Centros de Custo ──────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS centros_custo (
+      centro_custo        TEXT PRIMARY KEY,
+      nome_centro_custo   TEXT,
+      departamento        TEXT,
+      nome_departamento   TEXT,
+      area                TEXT,
+      nome_area           TEXT
     );
 
-    CREATE INDEX IF NOT EXISTS idx_data_rows_dataset ON data_rows(dataset_id);
-    CREATE INDEX IF NOT EXISTS idx_data_rows_dept ON data_rows(dataset_id, department);
-    CREATE INDEX IF NOT EXISTS idx_data_rows_grp ON data_rows(dataset_id, grp);
-    CREATE INDEX IF NOT EXISTS idx_data_rows_period ON data_rows(dataset_id, period);
+    CREATE INDEX IF NOT EXISTS idx_cc_depto ON centros_custo(departamento);
+    CREATE INDEX IF NOT EXISTS idx_cc_area  ON centros_custo(area);
 
-    CREATE TABLE IF NOT EXISTS metrics (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      description TEXT,
-      color TEXT DEFAULT '#6366f1',
-      filters TEXT NOT NULL DEFAULT '[]',  -- JSON array of filter conditions
-      dataset_id INTEGER REFERENCES datasets(id) ON DELETE CASCADE,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    -- ─── Dimensão: Contas Contábeis ──────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS contas_contabeis (
+      numero_conta_contabil TEXT PRIMARY KEY,
+      nome_conta_contabil   TEXT,
+      agrupamento_arvore    TEXT,
+      dre                   TEXT
     );
 
-    CREATE TABLE IF NOT EXISTS active_dataset (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      dataset_id INTEGER REFERENCES datasets(id)
-    );
+    CREATE INDEX IF NOT EXISTS idx_ca_arvore ON contas_contabeis(agrupamento_arvore);
+    CREATE INDEX IF NOT EXISTS idx_ca_dre    ON contas_contabeis(dre);
 
-    INSERT OR IGNORE INTO active_dataset (id, dataset_id) VALUES (1, NULL);
+    -- ─── Medidas (como "measures" do Power BI) ───────────────────────────────
+    CREATE TABLE IF NOT EXISTS medidas (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome        TEXT    NOT NULL,
+      descricao   TEXT,
+      cor         TEXT    DEFAULT '#6366f1',
+      tipo_fonte  TEXT    DEFAULT 'ambos',   -- 'budget' | 'razao' | 'ambos'
+      filtros     TEXT    NOT NULL DEFAULT '[]',
+      created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 }

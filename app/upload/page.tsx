@@ -1,144 +1,137 @@
 'use client'
 import { useState, useCallback } from 'react'
-import { Upload, FileSpreadsheet, CheckCircle, ArrowRight, X, AlertCircle } from 'lucide-react'
+import { Upload, FileSpreadsheet, CheckCircle, ArrowRight, X, AlertCircle, ChevronDown } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
+import {
+  LANCAMENTO_COLUMNS, CENTRO_CUSTO_COLUMNS, CONTA_CONTABIL_COLUMNS,
+  type UploadTipo
+} from '@/lib/types'
 
-type Step = 'upload' | 'mapping' | 'importing' | 'done'
+type Step = 'choose' | 'upload' | 'mapping' | 'importing' | 'done'
 
-const REQUIRED_FIELDS = [
-  { key: 'department', label: 'Departamento', required: true },
-  { key: 'grp', label: 'Grupo / Categoria', required: false },
-  { key: 'account', label: 'Conta / Centro de Custo', required: false },
-  { key: 'period', label: 'Período (mês/ano)', required: false },
-  { key: 'budget', label: 'Budget (valor)', required: true },
-  { key: 'actual', label: 'Realizado (valor)', required: true },
-] as const
+const TIPO_OPTIONS: Array<{ value: UploadTipo; label: string; desc: string; color: string }> = [
+  { value: 'lancamentos_budget',  label: 'Lançamentos — Budget',       desc: 'Valores orçados por conta e centro de custo',     color: 'indigo' },
+  { value: 'lancamentos_razao',   label: 'Lançamentos — Razão (Real)', desc: 'Valores realizados / movimentos contábeis reais', color: 'emerald' },
+  { value: 'centros_custo',       label: 'Centros de Custo',            desc: 'Dimensão: CC → Departamento → Área',             color: 'amber' },
+  { value: 'contas_contabeis',    label: 'Contas Contábeis',            desc: 'Dimensão: Conta → Agrupamento → DRE',            color: 'purple' },
+]
 
-type FieldKey = typeof REQUIRED_FIELDS[number]['key']
+function getColumns(tipo: UploadTipo) {
+  if (tipo === 'lancamentos_budget' || tipo === 'lancamentos_razao') return LANCAMENTO_COLUMNS
+  if (tipo === 'centros_custo') return CENTRO_CUSTO_COLUMNS
+  return CONTA_CONTABIL_COLUMNS
+}
 
 export default function UploadPage() {
   const router = useRouter()
-  const [step, setStep] = useState<Step>('upload')
-  const [file, setFile] = useState<File | null>(null)
-  const [name, setName] = useState('')
-  const [dragging, setDragging] = useState(false)
-  const [error, setError] = useState('')
-  const [columns, setColumns] = useState<string[]>([])
-  const [sampleData, setSampleData] = useState<Record<string, unknown>[]>([])
+  const [step, setStep]           = useState<Step>('choose')
+  const [tipo, setTipo]           = useState<UploadTipo | null>(null)
+  const [mode, setMode]           = useState<'append' | 'replace'>('append')
+  const [file, setFile]           = useState<File | null>(null)
+  const [dragging, setDragging]   = useState(false)
+  const [error, setError]         = useState('')
+  const [columns, setColumns]     = useState<string[]>([])
+  const [sample, setSample]       = useState<Record<string, unknown>[]>([])
   const [totalRows, setTotalRows] = useState(0)
-  const [mapping, setMapping] = useState<Record<FieldKey, string>>({
-    department: '',
-    grp: '',
-    account: '',
-    period: '',
-    budget: '',
-    actual: '',
-  })
-  const [progress, setProgress] = useState(0)
+  const [mapping, setMapping]     = useState<Record<string, string>>({})
+  const [progress, setProgress]   = useState(0)
+  const [result, setResult]       = useState<{ rowCount: number } | null>(null)
 
-  const onDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setDragging(false)
-    const f = e.dataTransfer.files[0]
-    if (f) handleFile(f)
+  const fieldCols = tipo ? getColumns(tipo) : []
+
+  const handleFile = useCallback((f: File) => {
+    if (!f.name.match(/\.(xlsx|xls|csv)$/i)) { setError('Formato inválido (.xlsx, .xls, .csv)'); return }
+    setFile(f)
+    setError('')
   }, [])
 
-  const handleFile = (f: File) => {
-    if (!f.name.match(/\.(xlsx|xls|csv)$/i)) {
-      setError('Formato inválido. Use .xlsx, .xls ou .csv')
-      return
-    }
-    setFile(f)
-    setName(f.name.replace(/\.[^.]+$/, ''))
-    setError('')
-  }
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault(); setDragging(false)
+    const f = e.dataTransfer.files[0]
+    if (f) handleFile(f)
+  }, [handleFile])
 
   const analyzeFile = async () => {
-    if (!file) return
-    setError('')
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('name', name)
-
-    const res = await fetch('/api/upload', { method: 'POST', body: formData })
+    if (!file || !tipo) return
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('tipo', tipo)
+    const res = await fetch('/api/upload', { method: 'POST', body: fd })
     const data = await res.json()
-
     if (!res.ok) { setError(data.error); return }
 
     setColumns(data.columns)
-    setSampleData(data.sample)
+    setSample(data.sample)
     setTotalRows(data.total)
-    setStep('mapping')
 
-    // Auto-detect columns by name
-    const autoMap: Partial<Record<FieldKey, string>> = {}
-    for (const col of data.columns as string[]) {
-      const lower = col.toLowerCase()
-      if (lower.includes('departamento') || lower.includes('department') || lower.includes('depto')) autoMap.department = col
-      else if (lower.includes('grupo') || lower.includes('group') || lower.includes('categoria')) autoMap.grp = col
-      else if (lower.includes('conta') || lower.includes('account') || lower.includes('centro')) autoMap.account = col
-      else if (lower.includes('periodo') || lower.includes('period') || lower.includes('mes') || lower.includes('month') || lower.includes('data') || lower.includes('date')) autoMap.period = col
-      else if (lower.includes('budget') || lower.includes('orcado') || lower.includes('orçado') || lower.includes('planejado')) autoMap.budget = col
-      else if (lower.includes('realizado') || lower.includes('actual') || lower.includes('real')) autoMap.actual = col
+    // Auto-detect by exact or partial name match
+    const autoMap: Record<string, string> = {}
+    for (const fc of fieldCols) {
+      const match = data.columns.find((c: string) =>
+        c.toLowerCase().replace(/[\s_-]/g, '') === fc.key.toLowerCase().replace(/[\s_-]/g, '') ||
+        c.toLowerCase().includes(fc.key.toLowerCase().replace(/_/g, ' '))
+      )
+      if (match) autoMap[fc.key] = match
     }
-    setMapping(prev => ({ ...prev, ...autoMap }))
+    setMapping(autoMap)
+    setStep('mapping')
   }
 
   const importData = async () => {
-    if (!file) return
-    const missing = REQUIRED_FIELDS.filter(f => f.required && !mapping[f.key])
-    if (missing.length) { setError(`Mapeie os campos obrigatórios: ${missing.map(f => f.label).join(', ')}`); return }
+    if (!file || !tipo) return
+    const required = fieldCols.filter(f => f.required)
+    const missing  = required.filter(f => !mapping[f.key])
+    if (missing.length) { setError(`Mapeie: ${missing.map(f => f.label).join(', ')}`); return }
 
-    setStep('importing')
-    setProgress(10)
+    setStep('importing'); setProgress(10)
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('tipo', tipo)
+    fd.append('mapping', JSON.stringify(mapping))
+    fd.append('mode', mode)
 
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('name', name)
-    formData.append('mapping', JSON.stringify(mapping))
-
-    const interval = setInterval(() => setProgress(p => Math.min(p + 5, 85)), 500)
-
-    const res = await fetch('/api/upload', { method: 'POST', body: formData })
-    clearInterval(interval)
-    setProgress(100)
+    const interval = setInterval(() => setProgress(p => Math.min(p + 6, 88)), 400)
+    const res  = await fetch('/api/upload', { method: 'POST', body: fd })
+    clearInterval(interval); setProgress(100)
 
     const data = await res.json()
     if (!res.ok) { setError(data.error); setStep('mapping'); return }
-
+    setResult({ rowCount: data.rowCount })
     setTimeout(() => setStep('done'), 300)
   }
 
+  const reset = () => {
+    setStep('choose'); setTipo(null); setFile(null); setMapping({})
+    setColumns([]); setSample([]); setError(''); setProgress(0); setResult(null)
+  }
+
+  const tipoInfo = TIPO_OPTIONS.find(t => t.value === tipo)
+
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Importar Dados</h1>
-        <p className="text-gray-500 text-sm mt-0.5">Importe sua planilha Excel e mapeie as colunas</p>
+        <p className="text-gray-500 text-sm mt-0.5">Importe cada tabela separadamente via Excel</p>
       </div>
 
       {/* Stepper */}
-      <div className="flex items-center gap-2">
-        {['Upload', 'Mapeamento', 'Importando', 'Concluído'].map((s, i) => {
-          const stepKeys: Step[] = ['upload', 'mapping', 'importing', 'done']
-          const idx = stepKeys.indexOf(step)
-          const done = i < idx
-          const current = i === idx
+      <div className="flex items-center gap-2 text-sm">
+        {(['choose','upload','mapping','importing','done'] as Step[]).map((s, i) => {
+          const labels = ['Tipo','Arquivo','Colunas','Importando','Pronto']
+          const idx = (['choose','upload','mapping','importing','done'] as Step[]).indexOf(step)
+          const done = i < idx; const current = i === idx
           return (
-            <div key={s} className="flex items-center gap-2">
-              <div className={cn(
-                'w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold',
-                done && 'bg-indigo-600 text-white',
-                current && 'bg-indigo-100 text-indigo-700 ring-2 ring-indigo-300',
-                !done && !current && 'bg-gray-100 text-gray-400'
-              )}>
-                {done ? <CheckCircle size={14} /> : i + 1}
+            <div key={s} className="flex items-center gap-1.5">
+              <div className={cn('w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold',
+                done ? 'bg-indigo-600 text-white' : current ? 'bg-indigo-100 text-indigo-700 ring-2 ring-indigo-300' : 'bg-gray-100 text-gray-400')}>
+                {done ? <CheckCircle size={12} /> : i + 1}
               </div>
-              <span className={cn('text-sm', current ? 'text-gray-900 font-medium' : 'text-gray-400')}>{s}</span>
-              {i < 3 && <ArrowRight size={14} className="text-gray-200" />}
+              <span className={cn(current ? 'text-gray-900 font-medium' : 'text-gray-400')}>{labels[i]}</span>
+              {i < 4 && <ArrowRight size={12} className="text-gray-200" />}
             </div>
           )
         })}
@@ -146,132 +139,135 @@ export default function UploadPage() {
 
       {error && (
         <div className="flex items-center gap-2 bg-red-50 text-red-700 px-4 py-3 rounded-lg text-sm">
-          <AlertCircle size={16} /> {error}
-          <button onClick={() => setError('')} className="ml-auto"><X size={14} /></button>
+          <AlertCircle size={15} />{error}
+          <button onClick={() => setError('')} className="ml-auto"><X size={13} /></button>
         </div>
       )}
 
-      {/* Step: Upload */}
-      {step === 'upload' && (
-        <Card>
-          <CardContent className="p-6 space-y-4">
-            <div
-              onDrop={onDrop}
-              onDragOver={e => { e.preventDefault(); setDragging(true) }}
-              onDragLeave={() => setDragging(false)}
-              onClick={() => document.getElementById('file-input')?.click()}
-              className={cn(
-                'border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors',
-                dragging ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 hover:border-indigo-300 hover:bg-gray-50'
-              )}
-            >
-              <input
-                id="file-input"
-                type="file"
-                className="hidden"
-                accept=".xlsx,.xls,.csv"
-                onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])}
-              />
-              <FileSpreadsheet size={40} className="mx-auto text-gray-300 mb-3" />
-              {file ? (
-                <div>
-                  <p className="font-semibold text-gray-900">{file.name}</p>
-                  <p className="text-sm text-gray-400">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                </div>
-              ) : (
-                <div>
-                  <p className="font-medium text-gray-600">Arraste seu arquivo ou clique para selecionar</p>
-                  <p className="text-sm text-gray-400 mt-1">Suporte: .xlsx, .xls, .csv</p>
-                </div>
-              )}
-            </div>
-
-            {file && (
-              <div className="space-y-3">
-                <div>
-                  <label className="text-sm font-medium text-gray-700 block mb-1">Nome do dataset</label>
-                  <input
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                    placeholder="Ex: Budget 2024"
-                  />
-                </div>
-                <Button onClick={analyzeFile} className="w-full">
-                  <Upload size={16} /> Analisar Arquivo
-                </Button>
+      {/* Step: Choose type */}
+      {step === 'choose' && (
+        <div className="grid grid-cols-2 gap-3">
+          {TIPO_OPTIONS.map(opt => (
+            <button key={opt.value} onClick={() => { setTipo(opt.value); setStep('upload') }}
+              className={cn('text-left p-4 rounded-xl border-2 transition-all hover:shadow-md',
+                `border-gray-100 hover:border-${opt.color}-200 bg-white`)}>
+              <div className={cn('w-8 h-8 rounded-lg mb-3 flex items-center justify-center text-white text-xs font-bold',
+                opt.color === 'indigo' && 'bg-indigo-500',
+                opt.color === 'emerald' && 'bg-emerald-500',
+                opt.color === 'amber' && 'bg-amber-500',
+                opt.color === 'purple' && 'bg-purple-500',
+              )}>
+                {opt.value === 'lancamentos_budget' ? 'B' : opt.value === 'lancamentos_razao' ? 'R' : opt.value === 'centros_custo' ? 'CC' : 'CA'}
               </div>
-            )}
-          </CardContent>
-        </Card>
+              <p className="font-semibold text-gray-900 text-sm">{opt.label}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{opt.desc}</p>
+            </button>
+          ))}
+        </div>
       )}
 
-      {/* Step: Mapping */}
+      {/* Step: Upload file */}
+      {step === 'upload' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Badge variant="default">{tipoInfo?.label}</Badge>
+            <button onClick={reset} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
+              <X size={11} /> Mudar tipo
+            </button>
+          </div>
+
+          {/* Mode for lancamentos */}
+          {(tipo === 'lancamentos_budget' || tipo === 'lancamentos_razao') && (
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-sm font-medium text-gray-700 mb-2">Modo de importação</p>
+                <div className="flex gap-3">
+                  {(['append','replace'] as const).map(m => (
+                    <label key={m} className={cn('flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border text-sm transition-colors',
+                      mode === m ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50')}>
+                      <input type="radio" name="mode" value={m} checked={mode === m} onChange={() => setMode(m)} className="accent-indigo-600" />
+                      {m === 'append' ? 'Adicionar (manter dados existentes)' : 'Substituir (apagar e reimportar)'}
+                    </label>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card>
+            <CardContent className="p-6">
+              <div
+                onDrop={onDrop}
+                onDragOver={e => { e.preventDefault(); setDragging(true) }}
+                onDragLeave={() => setDragging(false)}
+                onClick={() => document.getElementById('file-input')?.click()}
+                className={cn('border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors',
+                  dragging ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 hover:border-indigo-300 hover:bg-gray-50')}>
+                <input id="file-input" type="file" className="hidden" accept=".xlsx,.xls,.csv"
+                  onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+                <FileSpreadsheet size={36} className="mx-auto text-gray-300 mb-2" />
+                {file
+                  ? <><p className="font-semibold text-gray-800">{file.name}</p><p className="text-xs text-gray-400">{(file.size/1024/1024).toFixed(2)} MB</p></>
+                  : <><p className="text-gray-500 font-medium">Arraste ou clique para selecionar</p><p className="text-xs text-gray-400 mt-1">.xlsx, .xls, .csv</p></>}
+              </div>
+
+              <div className="flex gap-3 mt-4">
+                <Button variant="outline" onClick={reset}>Voltar</Button>
+                <Button onClick={analyzeFile} disabled={!file} className="flex-1">
+                  Analisar Arquivo <ArrowRight size={15} />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Step: Column mapping */}
       {step === 'mapping' && (
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Mapeamento de Colunas</CardTitle>
-              <CardDescription>
-                Encontramos {columns.length} colunas e {totalRows.toLocaleString()} linhas.
-                Associe cada campo ao campo correspondente da sua planilha.
-              </CardDescription>
+              <CardTitle>Mapear Colunas</CardTitle>
+              <CardDescription>{totalRows.toLocaleString()} linhas · {columns.length} colunas detectadas</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {REQUIRED_FIELDS.map(field => (
-                <div key={field.key} className="flex items-center gap-3">
-                  <div className="w-48 flex-shrink-0">
-                    <p className="text-sm font-medium text-gray-700">{field.label}</p>
-                    {field.required && <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Obrigatório</Badge>}
+            <CardContent className="space-y-2.5">
+              {fieldCols.map(fc => (
+                <div key={fc.key} className="flex items-center gap-3">
+                  <div className="w-52 flex-shrink-0">
+                    <p className="text-sm font-medium text-gray-700">{fc.label}</p>
+                    {'required' in fc && fc.required && <Badge variant="destructive" className="text-[10px] px-1.5 py-0 mt-0.5">Obrigatório</Badge>}
                   </div>
                   <select
-                    value={mapping[field.key]}
-                    onChange={e => setMapping(prev => ({ ...prev, [field.key]: e.target.value }))}
-                    className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
-                  >
+                    value={mapping[fc.key] ?? ''}
+                    onChange={e => setMapping(m => ({ ...m, [fc.key]: e.target.value }))}
+                    className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
                     <option value="">— Não mapeado —</option>
-                    {columns.map(col => (
-                      <option key={col} value={col}>{col}</option>
-                    ))}
+                    {columns.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
               ))}
             </CardContent>
           </Card>
 
-          {/* Sample preview */}
-          {sampleData.length > 0 && (
+          {/* Sample */}
+          {sample.length > 0 && (
             <Card>
-              <CardHeader>
-                <CardTitle>Prévia dos Dados</CardTitle>
-                <CardDescription>Primeiras {sampleData.length} linhas</CardDescription>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-sm">Prévia</CardTitle></CardHeader>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b bg-gray-50">
-                        {columns.map(col => (
-                          <th key={col} className="text-left px-3 py-2 font-medium text-gray-500 whitespace-nowrap">
-                            {col}
-                            {Object.entries(mapping).find(([, v]) => v === col) && (
-                              <span className="ml-1 text-indigo-500">●</span>
-                            )}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sampleData.map((row, i) => (
-                        <tr key={i} className="border-b border-gray-50">
-                          {columns.map(col => (
-                            <td key={col} className="px-3 py-2 text-gray-600 whitespace-nowrap max-w-32 truncate">
-                              {String(row[col] ?? '')}
-                            </td>
-                          ))}
-                        </tr>
+                    <thead><tr className="border-b bg-gray-50">
+                      {columns.map(c => (
+                        <th key={c} className="text-left px-3 py-2 font-medium text-gray-500 whitespace-nowrap">
+                          {c}{Object.values(mapping).includes(c) && <span className="text-indigo-500 ml-1">●</span>}
+                        </th>
                       ))}
-                    </tbody>
+                    </tr></thead>
+                    <tbody>{sample.map((r, i) => (
+                      <tr key={i} className="border-b border-gray-50">
+                        {columns.map(c => <td key={c} className="px-3 py-1.5 text-gray-600 max-w-28 truncate whitespace-nowrap">{String(r[c] ?? '')}</td>)}
+                      </tr>
+                    ))}</tbody>
                   </table>
                 </div>
               </CardContent>
@@ -281,7 +277,7 @@ export default function UploadPage() {
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setStep('upload')}>Voltar</Button>
             <Button onClick={importData} className="flex-1">
-              Importar {totalRows.toLocaleString()} linhas <ArrowRight size={16} />
+              Importar {totalRows.toLocaleString()} linhas <ArrowRight size={15} />
             </Button>
           </div>
         </div>
@@ -289,45 +285,31 @@ export default function UploadPage() {
 
       {/* Step: Importing */}
       {step === 'importing' && (
-        <Card>
-          <CardContent className="p-10 text-center space-y-4">
-            <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto">
-              <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-            </div>
-            <p className="font-semibold text-gray-900">Importando dados...</p>
-            <p className="text-sm text-gray-400">Processando {totalRows.toLocaleString()} linhas</p>
-            <div className="w-full bg-gray-100 rounded-full h-2">
-              <div
-                className="bg-indigo-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <p className="text-xs text-gray-400">{progress}%</p>
-          </CardContent>
-        </Card>
+        <Card><CardContent className="p-10 text-center space-y-4">
+          <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto">
+            <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+          </div>
+          <p className="font-semibold text-gray-900">Importando {totalRows.toLocaleString()} linhas...</p>
+          <div className="w-full bg-gray-100 rounded-full h-2">
+            <div className="bg-indigo-600 h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+          </div>
+          <p className="text-xs text-gray-400">{progress}%</p>
+        </CardContent></Card>
       )}
 
       {/* Step: Done */}
       {step === 'done' && (
-        <Card>
-          <CardContent className="p-10 text-center space-y-4">
-            <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto">
-              <CheckCircle size={32} className="text-emerald-500" />
-            </div>
-            <p className="font-bold text-gray-900 text-lg">Importação concluída!</p>
-            <p className="text-sm text-gray-400">
-              {totalRows.toLocaleString()} linhas importadas com sucesso
-            </p>
-            <div className="flex gap-3 justify-center pt-2">
-              <Button variant="outline" onClick={() => { setStep('upload'); setFile(null) }}>
-                Importar outro arquivo
-              </Button>
-              <Button onClick={() => router.push('/')}>
-                Ver Dashboard <ArrowRight size={16} />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <Card><CardContent className="p-10 text-center space-y-4">
+          <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto">
+            <CheckCircle size={28} className="text-emerald-500" />
+          </div>
+          <p className="font-bold text-gray-900 text-lg">Importação concluída!</p>
+          <p className="text-sm text-gray-400">{result?.rowCount.toLocaleString()} linhas de <strong>{tipoInfo?.label}</strong> importadas</p>
+          <div className="flex gap-3 justify-center pt-2">
+            <Button variant="outline" onClick={reset}>Importar outro arquivo</Button>
+            <Button onClick={() => router.push('/')}>Ver Dashboard <ArrowRight size={15} /></Button>
+          </div>
+        </CardContent></Card>
       )}
     </div>
   )
