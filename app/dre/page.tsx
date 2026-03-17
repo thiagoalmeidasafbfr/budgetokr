@@ -614,28 +614,19 @@ function buildTreeFromLinhas(
     if (h.agrupamento_arvore) hierMap.get(h.dre)!.add(h.agrupamento_arvore)
   }
 
-  // 4. Construir nós de grupos no budget de grupos calculados (para subtotais)
-  const groupBudgets = new Map<string, { budget: number; razao: number; byPeriod: Record<string, { budget: number; razao: number }> }>()
-  for (const [dre, agg] of dreAgg) {
-    groupBudgets.set(dre, { budget: agg.budget * 1, razao: agg.razao * 1, byPeriod: { ...agg.byPeriod } })
-  }
-
-  // 5. Percorrer dre_linhas em ordem e construir a lista flat de nós
+  // 4. Percorrer dre_linhas em ordem e construir a lista flat de nós
   const result: TreeNode[] = []
   for (const linha of dreLinhas) {
     if (linha.tipo === 'subtotal') {
-      // Calcular subtotal somando grupos definidos na fórmula
+      // Calcular subtotal somando todos os grupos com ordem < ordem deste subtotal
       let subBudget = 0, subRazao = 0
       const subByPeriod: Record<string, { budget: number; razao: number }> = {}
-      let fGrupos: string[] = []
-      let fSinais: number[] = []
-      try { fGrupos = JSON.parse(linha.formula_grupos) } catch { fGrupos = [] }
-      try { fSinais = JSON.parse(linha.formula_sinais) } catch { fSinais = [] }
 
-      fGrupos.forEach((g, i) => {
-        const sinal = fSinais[i] ?? 1
-        const agg = groupBudgets.get(g)
-        if (!agg) return
+      for (const prevLinha of dreLinhas) {
+        if (prevLinha.tipo !== 'grupo' || prevLinha.ordem >= linha.ordem) continue
+        const agg = dreAgg.get(prevLinha.nome)
+        if (!agg) continue
+        const sinal = prevLinha.sinal ?? 1
         subBudget += agg.budget * sinal
         subRazao  += agg.razao  * sinal
         for (const [p, v] of Object.entries(agg.byPeriod)) {
@@ -643,7 +634,7 @@ function buildTreeFromLinhas(
           subByPeriod[p].budget += v.budget * sinal
           subByPeriod[p].razao  += v.razao  * sinal
         }
-      })
+      }
 
       // Aplicar sinal da linha (para apresentação)
       subBudget *= linha.sinal
