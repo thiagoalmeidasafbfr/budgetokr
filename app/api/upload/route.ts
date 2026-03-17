@@ -66,7 +66,7 @@ function parseNumber(v: unknown): number {
   return negative ? -result : result
 }
 
-function parseDate(v: unknown): string {
+function parseDate(v: unknown, preferAmerican = false): string {
   if (!v) return ''
 
   // JavaScript Date object (cellDates: true)
@@ -85,8 +85,8 @@ function parseDate(v: unknown): string {
   // Excel serial number as plain integer string (4-6 digits)
   if (/^\d{4,6}$/.test(s)) {
     try {
-      const d = XLSX.SSF.parse_date_code(parseInt(s))
-      if (d && d.y > 1900) return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`
+      const dd = XLSX.SSF.parse_date_code(parseInt(s))
+      if (dd && dd.y > 1900) return `${dd.y}-${String(dd.m).padStart(2,'0')}-${String(dd.d).padStart(2,'0')}`
     } catch { /* not a serial */ }
   }
 
@@ -94,15 +94,25 @@ function parseDate(v: unknown): string {
   const iso = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/)
   if (iso) return `${iso[1]}-${iso[2].padStart(2,'0')}-${iso[3].padStart(2,'0')}`
 
-  // Brazilian: dd/mm/yyyy or dd-mm-yyyy  ← export padrão Excel pt-BR
-  const br = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/)
-  if (br) return `${br[3]}-${br[2].padStart(2,'0')}-${br[1].padStart(2,'0')}`
+  // DD/MM/YYYY or MM/DD/YYYY — resolve ambiguity
+  const dmY = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/)
+  if (dmY) {
+    const a = parseInt(dmY[1]), b = parseInt(dmY[2])
+    // Unambiguous: first part > 12 → must be a day → Brazilian DD/MM/YYYY
+    if (a > 12) return `${dmY[3]}-${dmY[2].padStart(2,'0')}-${dmY[1].padStart(2,'0')}`
+    // Unambiguous: second part > 12 → must be a day → American MM/DD/YYYY
+    if (b > 12) return `${dmY[3]}-${dmY[1].padStart(2,'0')}-${dmY[2].padStart(2,'0')}`
+    // Both ≤ 12: use auto-detected format
+    if (preferAmerican) return `${dmY[3]}-${dmY[1].padStart(2,'0')}-${dmY[2].padStart(2,'0')}` // MM/DD
+    return `${dmY[3]}-${dmY[2].padStart(2,'0')}-${dmY[1].padStart(2,'0')}` // DD/MM (default)
+  }
 
   // Brazilian short: dd/mm/yy
   const brShort = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2})$/)
   if (brShort) {
     const yr = parseInt(brShort[3])
     const y4 = yr + (yr <= 30 ? 2000 : 1900)
+    if (preferAmerican) return `${y4}-${brShort[1].padStart(2,'0')}-${brShort[2].padStart(2,'0')}`
     return `${y4}-${brShort[2].padStart(2,'0')}-${brShort[1].padStart(2,'0')}`
   }
 
@@ -122,14 +132,12 @@ export async function POST(req: NextRequest) {
     const workbook = XLSX.read(bytes, { type: 'array', cellDates: true })
     const sheet    = workbook.Sheets[workbook.SheetNames[0]]
 
-    // Sem rawNumbers:false para que cellDates:true entregue Date objects reais
-    // para células de data — evita o problema de o formato da célula Excel
-    // (ex: MM/DD/YYYY) fazer "02/01/2025" (fevereiro) ser parseado como
-    // "01 de janeiro" pelo regex brasileiro.
-    // Células numéricas vêm como float nativo; parseNumber lida com ambos
-    // (float nativo e string pt-BR).
+    // rawNumbers: false → células numéricas chegam como string formatada
+    // (ex: "-4.425,04"), essencial para preservar o formato pt-BR.
+    // cellDates: true garante que células de data reais virem como Date objects.
     const raw = XLSX.utils.sheet_to_json(sheet, {
-      defval: '',
+      defval:     '',
+      rawNumbers: false,
     }) as Record<string, unknown>[]
 
     if (!raw.length) return NextResponse.json({ error: 'Arquivo vazio' }, { status: 400 })
@@ -176,11 +184,33 @@ export async function POST(req: NextRequest) {
         VALUES (?,?,?,?,?,?,?,?,?)
       `)
 
+      // ── Detecta formato de data: American (MM/DD) vs Brazilian (DD/MM) ────
+      // Varre até 30 linhas do campo mapeado para data_lancamento.
+      // Se o primeiro segmento variar mais que o segundo (ex: 01,02,...,12
+      // no primeiro e 01 fixo no segundo) → formato American (mês vem primeiro).
+      let preferAmericanDates = false
+      const dateColKey = map['data_lancamento']
+      if (dateColKey) {
+        const firstSet = new Set<number>()
+        const secondSet = new Set<number>()
+        for (const row of raw.slice(0, 30)) {
+          const s = String(row[dateColKey] ?? '').trim()
+          const m = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/)
+          if (m) {
+            const a = parseInt(m[1]), b = parseInt(m[2])
+            if (a >= 1 && a <= 12) firstSet.add(a)
+            if (b >= 1 && b <= 12) secondSet.add(b)
+          }
+        }
+        // first segment varies across more distinct values → it's the MONTH → American format
+        if (firstSet.size > secondSet.size && secondSet.size <= 1) preferAmericanDates = true
+      }
+
       const insertMany = db.transaction((rows: Record<string, unknown>[]) => {
         for (const row of rows) {
           insert.run(
             tipoVal,
-            parseDate(get(row, 'data_lancamento')),
+            parseDate(get(row, 'data_lancamento'), preferAmericanDates),
             String(get(row, 'nome_conta_contabil')      ?? ''),
             String(get(row, 'numero_conta_contabil')    ?? ''),
             String(get(row, 'centro_custo')             ?? ''),
