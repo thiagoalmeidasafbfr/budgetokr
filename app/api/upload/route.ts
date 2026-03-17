@@ -69,14 +69,6 @@ function parseNumber(v: unknown): number {
 function parseDate(v: unknown): string {
   if (!v) return ''
 
-  // JavaScript Date object (de cellDates:true no xlsx).
-  // O xlsx cria Date objects em UTC midnight, então toISOString() retorna
-  // a data correta independente do fuso horário do servidor.
-  if (v instanceof Date) {
-    if (isNaN(v.getTime())) return ''
-    return v.toISOString().substring(0, 10) // "YYYY-MM-DD"
-  }
-
   const s = String(v).trim()
   if (!s) return ''
 
@@ -117,12 +109,12 @@ export async function POST(req: NextRequest) {
     if (!file) return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
 
     const bytes    = await file.arrayBuffer()
-    const workbook = XLSX.read(bytes, { type: 'array', cellDates: true })
+    const workbook = XLSX.read(bytes, { type: 'array' })
     const sheet    = workbook.Sheets[workbook.SheetNames[0]]
 
-    // rawNumbers: false → células numéricas chegam como string formatada
-    // (ex: "-4.425,04"), essencial para preservar o formato pt-BR.
-    // cellDates: true garante que células de data reais virem como Date objects.
+    // rawNumbers: false → todas as células chegam como string formatada,
+    // incluindo datas (ex: "01/03/2025") e números pt-BR (ex: "-4.425,04").
+    // Isso garante tratamento idêntico para budget e razão.
     const raw = XLSX.utils.sheet_to_json(sheet, {
       defval:     '',
       rawNumbers: false,
@@ -133,22 +125,7 @@ export async function POST(req: NextRequest) {
     const columns = Object.keys(raw[0])
 
     if (!mapping) {
-      // Convert Date objects to legible strings for the preview table
-      const preview = raw.slice(0, 5).map(row => {
-        const clean: Record<string, unknown> = {}
-        for (const [k, v] of Object.entries(row)) {
-          if (v instanceof Date) {
-            const y = v.getFullYear()
-            const mo = String(v.getMonth() + 1).padStart(2, '0')
-            const d = String(v.getDate()).padStart(2, '0')
-            clean[k] = `${d}/${mo}/${y}`
-          } else {
-            clean[k] = v
-          }
-        }
-        return clean
-      })
-      return NextResponse.json({ columns, sample: preview, total: raw.length })
+      return NextResponse.json({ columns, sample: raw.slice(0, 5), total: raw.length })
     }
 
     const map: Record<string, string> = JSON.parse(mapping)
