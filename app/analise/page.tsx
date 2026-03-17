@@ -11,6 +11,8 @@ import type { Medida } from '@/lib/types'
 interface AnaliseRow {
   departamento: string
   nome_departamento: string
+  centro_custo?: string
+  nome_centro_custo?: string
   periodo: string
   budget: number
   razao: number
@@ -32,7 +34,7 @@ interface MedidaResult {
 }
 
 type ViewMode = 'table' | 'chart' | 'medida'
-type GroupBy = 'departamento' | 'periodo'
+type GroupBy = 'departamento' | 'centro_custo' | 'periodo'
 
 export default function AnalisePage() {
   const [data,          setData]          = useState<AnaliseRow[]>([])
@@ -65,17 +67,18 @@ export default function AnalisePage() {
     })
   }, [])
 
-  // Auto-apply filters whenever selection changes
+  // Auto-apply filters whenever selection or groupBy changes
   useEffect(() => {
-    loadData(selDepts, selPeriods)
+    loadData(selDepts, selPeriods, groupBy)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selDepts, selPeriods])
+  }, [selDepts, selPeriods, groupBy])
 
-  const loadData = useCallback(async (depts: string[], prds: string[]) => {
+  const loadData = useCallback(async (depts: string[], prds: string[], gb: GroupBy) => {
     setLoading(true)
     const params = new URLSearchParams()
-    if (depts.length)  params.set('departamentos', depts.join(','))
-    if (prds.length)   params.set('periodos', prds.join(','))
+    if (depts.length)        params.set('departamentos', depts.join(','))
+    if (prds.length)         params.set('periodos', prds.join(','))
+    if (gb === 'centro_custo') params.set('groupByCentro', 'true')
     const res = await fetch(`/api/analise?${params}`, { cache: 'no-store' })
     if (res.ok) setData(await res.json())
     setLoading(false)
@@ -108,7 +111,7 @@ export default function AnalisePage() {
     loadMedidaResults(id, 'departamento', [])
   }
 
-  const applyFilters = () => loadData(selDepts, selPeriods)
+  const applyFilters = () => loadData(selDepts, selPeriods, groupBy)
 
   // Re-fetch medida when groupBy or period filter changes
   useEffect(() => {
@@ -118,34 +121,37 @@ export default function AnalisePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [medidaGroupBy, medidaSelPeriods])
 
-  // Aggregate by groupBy key — usa nome_departamento para exibição
-  const grouped = data.reduce<Record<string, { budget: number; razao: number; variacao: number; sub: Set<string>; codigo: string }>>((acc, row) => {
+  // Aggregate by groupBy key
+  const grouped = data.reduce<Record<string, { budget: number; razao: number; variacao: number; sub: Set<string>; codigo: string; dept?: string }>>((acc, row) => {
     let key: string
     if (groupBy === 'departamento') {
       key = (row.nome_departamento && row.nome_departamento.trim())
         ? row.nome_departamento.trim()
         : (row.departamento || '—')
+    } else if (groupBy === 'centro_custo') {
+      key = (row.nome_centro_custo && row.nome_centro_custo.trim())
+        ? row.nome_centro_custo.trim()
+        : (row.centro_custo || '—')
     } else {
-      key = row.periodo // armazena yyyy-mm como chave de agrupamento
+      key = row.periodo
     }
-    if (!acc[key]) acc[key] = { budget: 0, razao: 0, variacao: 0, sub: new Set(), codigo: row.departamento }
+    if (!acc[key]) acc[key] = { budget: 0, razao: 0, variacao: 0, sub: new Set(), codigo: groupBy === 'centro_custo' ? (row.centro_custo || '') : row.departamento, dept: row.nome_departamento || row.departamento }
     acc[key].budget   += row.budget
     acc[key].razao    += row.razao
     acc[key].variacao += row.variacao
-    acc[key].sub.add(groupBy === 'departamento' ? row.periodo : row.departamento)
+    acc[key].sub.add(row.periodo)
     return acc
   }, {})
 
   const tableRows = Object.entries(grouped)
     .map(([key, vals]) => ({
       key,
-      // Exibição: período vira mm/yyyy; departamento fica como está
       label: groupBy === 'periodo' ? formatPeriodo(key) : key,
       ...vals,
       variacao_pct: vals.budget ? (vals.variacao / Math.abs(vals.budget)) * 100 : 0,
     }))
     .sort((a, b) => groupBy === 'periodo'
-      ? a.key.localeCompare(b.key)       // ordena pelo yyyy-mm original
+      ? a.key.localeCompare(b.key)
       : Math.abs(b.variacao) - Math.abs(a.variacao))
 
   const totals = tableRows.reduce((a, r) => ({ budget: a.budget + r.budget, razao: a.razao + r.razao, variacao: a.variacao + r.variacao }), { budget: 0, razao: 0, variacao: 0 })
@@ -196,9 +202,14 @@ export default function AnalisePage() {
   const medidaTotals = resolveAgg(medidaTotalsRaw)
 
   const exportCSV = () => {
+    const colLabel = groupBy === 'departamento' ? 'Departamento' : groupBy === 'centro_custo' ? 'Centro de Custo' : 'Período'
     const rows = [
-      [groupBy === 'departamento' ? 'Departamento' : 'Período', 'Budget', 'Razão', 'Variação', '%'],
-      ...tableRows.map(r => [r.key, r.budget, r.razao, r.variacao, r.variacao_pct.toFixed(2)])
+      groupBy === 'centro_custo'
+        ? [colLabel, 'Departamento', 'Budget', 'Razão', 'Variação', '%']
+        : [colLabel, 'Budget', 'Razão', 'Variação', '%'],
+      ...tableRows.map(r => groupBy === 'centro_custo'
+        ? [r.key, r.dept ?? '', r.budget, r.razao, r.variacao, r.variacao_pct.toFixed(2)]
+        : [r.key, r.budget, r.razao, r.variacao, r.variacao_pct.toFixed(2)])
     ]
     const csv  = rows.map(r => r.join(';')).join('\n')
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
@@ -302,11 +313,15 @@ export default function AnalisePage() {
             </div>
             {viewMode !== 'medida' && (
               <div className="flex bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5 ml-auto">
-                {(['departamento','periodo'] as const).map(g => (
+                {([
+                  ['departamento', 'Departamento'],
+                  ['centro_custo', 'Centro de Custo'],
+                  ['periodo',      'Período'],
+                ] as const).map(([g, label]) => (
                   <button key={g} onClick={() => setGroupBy(g)}
                     className={cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
                       groupBy === g ? 'bg-gray-100 text-gray-800' : 'text-gray-500 hover:bg-gray-50')}>
-                    Por {g === 'departamento' ? 'Departamento' : 'Período'}
+                    Por {label}
                   </button>
                 ))}
               </div>
@@ -326,10 +341,20 @@ export default function AnalisePage() {
           {/* TABLE VIEW */}
           {!loading && viewMode === 'table' && (
             <Card>
+              {groupBy === 'centro_custo' && selDepts.length === 0 && (
+                <div className="px-5 pt-3 pb-0">
+                  <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    Dica: filtre por um departamento na sidebar para ver apenas os centros de custo daquele departamento.
+                  </p>
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead><tr className="border-b bg-gray-50">
-                    <th className="text-left px-5 py-3 font-medium text-gray-500">{groupBy === 'departamento' ? 'Departamento' : 'Período'}</th>
+                    <th className="text-left px-5 py-3 font-medium text-gray-500">
+                      {groupBy === 'departamento' ? 'Departamento' : groupBy === 'centro_custo' ? 'Centro de Custo' : 'Período'}
+                    </th>
+                    {groupBy === 'centro_custo' && <th className="text-left px-5 py-3 font-medium text-gray-400 text-xs">Departamento</th>}
                     <th className="text-right px-5 py-3 font-medium text-gray-500">Budget</th>
                     <th className="text-right px-5 py-3 font-medium text-gray-500">Razão</th>
                     <th className="text-right px-5 py-3 font-medium text-gray-500">Variação</th>
@@ -340,10 +365,13 @@ export default function AnalisePage() {
                       <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
                         <td className="px-5 py-3 font-medium text-gray-900">
                           {row.label}
-                          {groupBy === 'departamento' && row.codigo && row.codigo !== row.label && (
+                          {groupBy !== 'centro_custo' && row.codigo && row.codigo !== row.label && (
                             <span className="ml-2 text-xs text-gray-400 font-normal">{row.codigo}</span>
                           )}
                         </td>
+                        {groupBy === 'centro_custo' && (
+                          <td className="px-5 py-3 text-xs text-gray-400">{row.dept}</td>
+                        )}
                         <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.budget)}</td>
                         <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.razao)}</td>
                         <td className={cn('px-5 py-3 text-right font-semibold', colorForVariance(row.variacao))}>{formatCurrency(row.variacao)}</td>
@@ -352,7 +380,7 @@ export default function AnalisePage() {
                     ))}
                   </tbody>
                   <tfoot><tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
-                    <td className="px-5 py-3">Total</td>
+                    <td className="px-5 py-3" colSpan={groupBy === 'centro_custo' ? 2 : 1}>Total</td>
                     <td className="px-5 py-3 text-right">{formatCurrency(totals.budget)}</td>
                     <td className="px-5 py-3 text-right">{formatCurrency(totals.razao)}</td>
                     <td className={cn('px-5 py-3 text-right', colorForVariance(totals.variacao))}>{formatCurrency(totals.variacao)}</td>

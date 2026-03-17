@@ -10,6 +10,27 @@ import {
   ResponsiveContainer, ReferenceLine,
 } from 'recharts'
 
+// ── Export helper ──────────────────────────────────────────────────────────────
+function exportDetalhamento(rows: DetalhamentoLinha[], title: string) {
+  const header = ['Data', 'Tipo', 'Centro de Custo', 'DRE', 'Agrupamento', 'Conta Contábil', 'Valor', 'Conta Contrapartida', 'Observação']
+  const csvRows = rows.map(r => [
+    r.data_lancamento,
+    r.tipo,
+    `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}`,
+    r.dre,
+    r.agrupamento_arvore,
+    `${r.numero_conta_contabil} — ${r.nome_conta_contabil}`,
+    r.debito_credito,
+    r.nome_conta_contrapartida,
+    r.observacao,
+  ])
+  const csv = [header, ...csvRows].map(row => row.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')).join('\n')
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url; a.download = `dre-lancamentos-${Date.now()}.csv`; a.click()
+}
+
 // ── Context menu + Drill-down modal ──────────────────────────────────────────
 
 interface ContextMenuState {
@@ -76,9 +97,17 @@ function DetalhamentoModal({
             <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">DRE — Lançamentos</p>
             <h2 className="text-base font-bold text-gray-900 mt-0.5">{title}</h2>
           </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600">
-            <X size={16} />
-          </button>
+          <div className="flex items-center gap-2">
+            {!loading && rows.length > 0 && (
+              <button onClick={() => exportDetalhamento(rows, title)}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-indigo-50 hover:text-indigo-700 text-gray-600 transition-colors font-medium">
+                <Download size={13} /> Exportar CSV
+              </button>
+            )}
+            <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600">
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
         {/* Body */}
@@ -318,6 +347,7 @@ export default function DREPage() {
   const [expanded,      setExpanded]      = useState<Set<string>>(new Set())
   const [loading,       setLoading]       = useState(false)
   const [viewMode,      setViewMode]      = useState<'total' | 'periodo' | 'cascata'>('total')
+  const [periodView,    setPeriodView]    = useState<'compact' | 'full'>('compact')
   const [ctxMenu,       setCtxMenu]       = useState<ContextMenuState | null>(null)
   const [detModal,      setDetModal]      = useState<ContextMenuState | null>(null)
   const ctxRef = useRef<HTMLDivElement>(null)
@@ -603,77 +633,188 @@ export default function DREPage() {
 
           {!loading && viewMode === 'periodo' && (
             <Card>
+              {/* Compact/Full toggle */}
+              <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-gray-100">
+                <p className="text-xs text-gray-400">{dataPeriods.length} período(s)</p>
+                <div className="flex bg-gray-100 rounded-md p-0.5 gap-0.5">
+                  {([['compact', 'Compacto'], ['full', 'Completo']] as const).map(([v, l]) => (
+                    <button key={v} onClick={() => setPeriodView(v)}
+                      className={cn('px-2.5 py-1 rounded text-xs font-medium transition-colors',
+                        periodView === v ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700')}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-gray-50">
-                      <th className="text-left px-4 py-2 font-medium text-gray-500 sticky left-0 bg-gray-50 z-10 min-w-[240px]">
-                        Demonstrativo Gerencial
-                      </th>
-                      {dataPeriods.map(p => (
-                        <th key={p} colSpan={3} className="text-center px-1 py-2 font-medium text-gray-500 border-l border-gray-200">
-                          {formatPeriodo(p)}
+                {periodView === 'compact' ? (
+                  /* ── COMPACT: Linha | [Var% pill per period] | totais ── */
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="text-left px-4 py-2 font-medium text-gray-500 sticky left-0 bg-gray-50 z-10 min-w-[220px]">
+                          Demonstrativo
                         </th>
-                      ))}
-                    </tr>
-                    <tr className="border-b bg-gray-50/50">
-                      <th className="sticky left-0 bg-gray-50/50 z-10" />
-                      {dataPeriods.map(p => (
-                        <React.Fragment key={p}>
-                          <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Orçado</th>
-                          <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs">Realizado</th>
-                          <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs">Var.</th>
-                        </React.Fragment>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {flatRows.map((row, i) => (
-                      <tr key={i}
-                        onContextMenu={e => openCtxMenu(e, row, undefined, 'ambos')}
-                        className={cn(
-                          'border-b transition-colors cursor-context-menu',
-                          row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50',
-                        )}>
-                        <td className={cn('px-4 py-2 sticky left-0 bg-white z-10',
-                          row.isSubtotal ? 'font-bold text-gray-900 bg-gray-50/80'
-                            : row.isGroup ? 'font-medium text-gray-800 bg-gray-50/80'
-                            : 'text-gray-700')}
-                          style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
-                          <div className="flex items-center gap-1">
-                            {row.isGroup && !row.isSubtotal ? (
-                              <button onClick={() => toggleExpand(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
-                                {expanded.has(row.name)
-                                  ? <ChevronDown size={13} className="text-gray-400" />
-                                  : <ChevronRight size={13} className="text-gray-400" />}
-                              </button>
-                            ) : <span className="w-4" />}
-                            <span className="truncate">{row.name}</span>
-                          </div>
-                        </td>
-                        {dataPeriods.map(p => {
-                          const cell = row.byPeriod[p] ?? { budget: 0, razao: 0 }
-                          const v = cell.razao - cell.budget
-                          return (
-                            <React.Fragment key={p}>
-                              <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'budget') }}
-                                className={cn('px-2 py-2 text-right text-xs border-l border-gray-100', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
-                                {formatCurrency(cell.budget)}
-                              </td>
-                              <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'razao') }}
-                                className={cn('px-2 py-2 text-right text-xs', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
-                                {formatCurrency(cell.razao)}
-                              </td>
-                              <td className={cn('px-2 py-2 text-right text-xs font-semibold', colorForVariance(v))}>
-                                {formatCurrency(v)}
-                              </td>
-                            </React.Fragment>
-                          )
-                        })}
+                        {dataPeriods.map(p => (
+                          <th key={p} className="text-center px-1.5 py-2 font-medium text-gray-400 text-xs border-l border-gray-100 min-w-[68px]">
+                            {formatPeriodo(p).replace(' ', '\u00a0')}
+                          </th>
+                        ))}
+                        <th className="text-right px-3 py-2 font-medium text-gray-500 text-xs border-l border-gray-200 bg-gray-50">Orçado</th>
+                        <th className="text-right px-3 py-2 font-medium text-gray-500 text-xs">Realizado</th>
+                        <th className="text-right px-3 py-2 font-medium text-gray-500 text-xs">Var.</th>
+                        <th className="text-right px-3 py-2 font-medium text-gray-500 text-xs">%</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {flatRows.map((row, i) => {
+                        const rowTotBudget = dataPeriods.reduce((s, p) => s + (row.byPeriod[p]?.budget ?? 0), 0)
+                        const rowTotRazao  = dataPeriods.reduce((s, p) => s + (row.byPeriod[p]?.razao  ?? 0), 0)
+                        const rowTotVar    = rowTotRazao - rowTotBudget
+                        const rowTotPct    = rowTotBudget ? (rowTotVar / Math.abs(rowTotBudget)) * 100 : 0
+                        return (
+                          <tr key={i}
+                            onContextMenu={e => openCtxMenu(e, row, undefined, 'ambos')}
+                            className={cn(
+                              'border-b transition-colors cursor-context-menu',
+                              row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50',
+                            )}>
+                            <td className={cn('px-4 py-2 sticky left-0 bg-white z-10',
+                              row.isSubtotal ? 'font-bold text-gray-900 bg-gray-50/80'
+                                : row.isGroup ? 'font-medium text-gray-800 bg-gray-50/80'
+                                : 'text-gray-700')}
+                              style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
+                              <div className="flex items-center gap-1">
+                                {row.isGroup && !row.isSubtotal ? (
+                                  <button onClick={() => toggleExpand(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                    {expanded.has(row.name)
+                                      ? <ChevronDown size={13} className="text-gray-400" />
+                                      : <ChevronRight size={13} className="text-gray-400" />}
+                                  </button>
+                                ) : <span className="w-4" />}
+                                <span className="truncate">{row.name}</span>
+                              </div>
+                            </td>
+                            {dataPeriods.map(p => {
+                              const cell = row.byPeriod[p] ?? { budget: 0, razao: 0 }
+                              const v    = cell.razao - cell.budget
+                              const pct  = cell.budget ? (v / Math.abs(cell.budget)) * 100 : 0
+                              const hasData = cell.budget !== 0 || cell.razao !== 0
+                              return (
+                                <td key={p}
+                                  onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'ambos') }}
+                                  className="px-1 py-2 text-center border-l border-gray-100 group/cell">
+                                  {hasData ? (
+                                    <span title={`Orç: ${formatCurrency(cell.budget)}\nReal: ${formatCurrency(cell.razao)}\nVar: ${formatCurrency(v)}`}
+                                      className={cn(
+                                        'inline-block text-xs font-semibold px-1.5 py-0.5 rounded-full min-w-[52px] text-center',
+                                        bgColorForVariance(v),
+                                        colorForVariance(v),
+                                      )}>
+                                      {formatPct(pct)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-200 text-xs">—</span>
+                                  )}
+                                </td>
+                              )
+                            })}
+                            {/* Totais consolidados */}
+                            <td className={cn('px-3 py-2 text-right text-xs border-l border-gray-200',
+                              row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                              {formatCurrency(rowTotBudget)}
+                            </td>
+                            <td className={cn('px-3 py-2 text-right text-xs',
+                              row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                              {formatCurrency(rowTotRazao)}
+                            </td>
+                            <td className={cn('px-3 py-2 text-right text-xs font-semibold', colorForVariance(rowTotVar))}>
+                              {formatCurrency(rowTotVar)}
+                            </td>
+                            <td className="px-3 py-2 text-right text-xs">
+                              <span className={cn('text-xs font-medium px-1.5 py-0.5 rounded-full', bgColorForVariance(rowTotVar))}>
+                                {formatPct(rowTotPct)}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                ) : (
+                  /* ── FULL: 3 colunas por período (comportamento original) ── */
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="text-left px-4 py-2 font-medium text-gray-500 sticky left-0 bg-gray-50 z-10 min-w-[240px]">
+                          Demonstrativo Gerencial
+                        </th>
+                        {dataPeriods.map(p => (
+                          <th key={p} colSpan={3} className="text-center px-1 py-2 font-medium text-gray-500 border-l border-gray-200">
+                            {formatPeriodo(p)}
+                          </th>
+                        ))}
+                      </tr>
+                      <tr className="border-b bg-gray-50/50">
+                        <th className="sticky left-0 bg-gray-50/50 z-10" />
+                        {dataPeriods.map(p => (
+                          <React.Fragment key={p}>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Orçado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs">Realizado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs">Var.</th>
+                          </React.Fragment>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {flatRows.map((row, i) => (
+                        <tr key={i}
+                          onContextMenu={e => openCtxMenu(e, row, undefined, 'ambos')}
+                          className={cn(
+                            'border-b transition-colors cursor-context-menu',
+                            row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50',
+                          )}>
+                          <td className={cn('px-4 py-2 sticky left-0 bg-white z-10',
+                            row.isSubtotal ? 'font-bold text-gray-900 bg-gray-50/80'
+                              : row.isGroup ? 'font-medium text-gray-800 bg-gray-50/80'
+                              : 'text-gray-700')}
+                            style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
+                            <div className="flex items-center gap-1">
+                              {row.isGroup && !row.isSubtotal ? (
+                                <button onClick={() => toggleExpand(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                  {expanded.has(row.name)
+                                    ? <ChevronDown size={13} className="text-gray-400" />
+                                    : <ChevronRight size={13} className="text-gray-400" />}
+                                </button>
+                              ) : <span className="w-4" />}
+                              <span className="truncate">{row.name}</span>
+                            </div>
+                          </td>
+                          {dataPeriods.map(p => {
+                            const cell = row.byPeriod[p] ?? { budget: 0, razao: 0 }
+                            const v = cell.razao - cell.budget
+                            return (
+                              <React.Fragment key={p}>
+                                <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'budget') }}
+                                  className={cn('px-2 py-2 text-right text-xs border-l border-gray-100', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                  {formatCurrency(cell.budget)}
+                                </td>
+                                <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'razao') }}
+                                  className={cn('px-2 py-2 text-right text-xs', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                  {formatCurrency(cell.razao)}
+                                </td>
+                                <td className={cn('px-2 py-2 text-right text-xs font-semibold', colorForVariance(v))}>
+                                  {formatCurrency(v)}
+                                </td>
+                              </React.Fragment>
+                            )
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </Card>
           )}

@@ -37,12 +37,13 @@ export async function GET(req: NextRequest) {
     }
 
     // Default: full comparison
-    const departamentos = sp.get('departamentos')?.split(',').filter(Boolean)
-    const periodos      = sp.get('periodos')?.split(',').filter(Boolean)
-    const filtersRaw    = sp.get('filtros')
+    const departamentos  = sp.get('departamentos')?.split(',').filter(Boolean)
+    const periodos       = sp.get('periodos')?.split(',').filter(Boolean)
+    const filtersRaw     = sp.get('filtros')
     const filtros: FilterCondition[] = filtersRaw ? JSON.parse(filtersRaw) : []
+    const groupByCentro  = sp.get('groupByCentro') === 'true'
 
-    const data = getAnalise(filtros, departamentos, periodos)
+    const data = getAnalise(filtros, departamentos, periodos, groupByCentro)
     return NextResponse.json(data)
   } catch (e) {
     console.error(e)

@@ -289,7 +289,8 @@ function runStarQueryWithPeriodo(
 export function getAnalise(
   filters: FilterCondition[],
   departamentos?: string[],
-  periodos?: string[]
+  periodos?: string[],
+  groupByCentro = false
 ) {
   const db = getDb()
   const { where, params } = buildFilterSQL(filters)
@@ -308,7 +309,20 @@ export function getAnalise(
   const allExtra = [...(where ? [where] : []), ...extraConditions].join(' AND ')
   const whereClause = allExtra ? `AND ${allExtra}` : ''
 
-  const sql = `
+  const sql = groupByCentro ? `
+    SELECT
+      cc.departamento,
+      cc.nome_departamento,
+      l.centro_custo,
+      cc.nome_centro_custo,
+      strftime('%Y-%m', l.data_lancamento) as periodo,
+      SUM(CASE WHEN l.tipo = 'budget' THEN l.debito_credito ELSE 0 END) as budget,
+      SUM(CASE WHEN l.tipo = 'razao'  THEN l.debito_credito ELSE 0 END) as razao
+    ${STAR_SCHEMA_JOIN}
+    WHERE 1=1 ${whereClause}
+    GROUP BY l.centro_custo, cc.nome_centro_custo, cc.departamento, cc.nome_departamento, periodo
+    ORDER BY cc.nome_departamento, l.centro_custo, periodo
+  ` : `
     SELECT
       cc.departamento,
       cc.nome_departamento,
@@ -322,8 +336,9 @@ export function getAnalise(
   `
 
   const rows = db.prepare(sql).all(...(params as unknown[]), ...extraParams) as Array<{
-    departamento: string; nome_departamento: string; periodo: string
-    budget: number; razao: number
+    departamento: string; nome_departamento: string
+    centro_custo?: string; nome_centro_custo?: string
+    periodo: string; budget: number; razao: number
   }>
 
   return rows.map(r => ({
