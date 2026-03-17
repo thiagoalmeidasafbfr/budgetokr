@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BarChart3, Upload, Target, GitCompare, TrendingUp, FileText, Database, Layers } from 'lucide-react'
+import { BarChart3, Upload, Target, GitCompare, TrendingUp, FileText, Database, Layers, LineChart } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type NavItem =
@@ -11,6 +11,7 @@ type NavItem =
 const nav: NavItem[] = [
   { href: '/',            icon: BarChart3,   label: 'Dashboard'  },
   { href: '/analise',     icon: GitCompare,  label: 'Análise'    },
+  { href: '/dre',         icon: LineChart,   label: 'DRE'        },
   { href: '/medidas',     icon: Target,      label: 'Medidas'    },
   {
     label: 'Lançamentos', icon: FileText, children: [

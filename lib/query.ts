@@ -371,3 +371,57 @@ export function getSummary() {
     qtd_centros: number; qtd_contas: number
   }
 }
+
+// ─── DRE (P&L) ───────────────────────────────────────────────────────────────
+export interface DRERow {
+  dre: string
+  agrupamento_arvore: string
+  periodo: string
+  budget: number
+  razao: number
+}
+
+export function getDRE(
+  periodos?: string[],
+  departamentos?: string[]
+): DRERow[] {
+  const db = getDb()
+  const conditions: string[] = []
+  const params: unknown[] = []
+
+  if (periodos?.length) {
+    conditions.push(`strftime('%Y-%m', l.data_lancamento) IN (${periodos.map(() => '?').join(',')})`)
+    params.push(...periodos)
+  }
+  if (departamentos?.length) {
+    conditions.push(`cc.nome_departamento IN (${departamentos.map(() => '?').join(',')})`)
+    params.push(...departamentos)
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+
+  const sql = `
+    SELECT
+      COALESCE(ca.dre, 'Sem classificação') as dre,
+      COALESCE(ca.agrupamento_arvore, '') as agrupamento_arvore,
+      strftime('%Y-%m', l.data_lancamento) as periodo,
+      SUM(CASE WHEN l.tipo = 'budget' THEN l.debito_credito ELSE 0 END) as budget,
+      SUM(CASE WHEN l.tipo = 'razao'  THEN l.debito_credito ELSE 0 END) as razao
+    ${STAR_SCHEMA_JOIN}
+    ${whereClause}
+    GROUP BY ca.dre, ca.agrupamento_arvore, periodo
+    ORDER BY ca.agrupamento_arvore, ca.dre, periodo
+  `
+
+  return db.prepare(sql).all(...params) as DRERow[]
+}
+
+export function getDREHierarchy(): Array<{ agrupamento_arvore: string; dre: string }> {
+  const db = getDb()
+  return db.prepare(`
+    SELECT DISTINCT agrupamento_arvore, dre
+    FROM contas_contabeis
+    WHERE dre IS NOT NULL AND dre != ''
+    ORDER BY agrupamento_arvore, dre
+  `).all() as Array<{ agrupamento_arvore: string; dre: string }>
+}

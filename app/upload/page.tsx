@@ -93,7 +93,7 @@ export default function UploadPage() {
         const pool = candidates.length > 0 ? candidates : data.columns
         const scored = pool
           .map((c: string) => ({ c, isValor: norm(c).includes('valor'), count: countNumericInSample(c) }))
-          .sort((a, b) => b.count - a.count || (b.isValor ? 1 : 0) - (a.isValor ? 1 : 0))
+          .sort((a: { c: string; isValor: boolean; count: number }, b: { c: string; isValor: boolean; count: number }) => b.count - a.count || (b.isValor ? 1 : 0) - (a.isValor ? 1 : 0))
         if (scored.length > 0) autoMap[fc.key] = scored[0].c
         continue
       }
