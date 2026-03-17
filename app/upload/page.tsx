@@ -68,21 +68,39 @@ export default function UploadPage() {
     setSample(data.sample)
     setTotalRows(data.total)
 
-    // Auto-detect by normalized name match (removes accents, spaces, dashes)
+    // Normalize: remove accents, lowercase, strip punctuation
     const norm = (s: string) =>
-      s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[\s_\-./]/g, '')
+      s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[\s_\-./()]/g, '')
+
+    // Count how many sample rows have an actual numeric value in a column
+    const countNumericInSample = (col: string): number =>
+      data.sample.filter((row: Record<string, unknown>) => {
+        const raw = String(row[col] ?? '').trim()
+          .replace(/[^\d,.+\-]/g, '') // keep only numeric chars
+        return raw.length > 0 && raw !== '-' && raw !== '+' && !isNaN(parseFloat(raw.replace(',', '.')))
+      }).length
+
     const autoMap: Record<string, string> = {}
     for (const fc of fieldCols) {
+      if (fc.key === 'debito_credito') {
+        // For the value column, pick the candidate with the most actual numeric values in the
+        // sample — this reliably chooses "Valor" over "Débito/ Crédito" (which has "–" dashes)
+        const candidates = data.columns.filter((c: string) => {
+          const n = norm(c)
+          return n.includes('valor') || n.includes('debito') || n.includes('credito') ||
+                 n.includes('amount') || n.includes('montante') || n.includes('debitocredito')
+        })
+        const pool = candidates.length > 0 ? candidates : data.columns
+        const scored = pool
+          .map((c: string) => ({ c, isValor: norm(c).includes('valor'), count: countNumericInSample(c) }))
+          .sort((a, b) => b.count - a.count || (b.isValor ? 1 : 0) - (a.isValor ? 1 : 0))
+        if (scored.length > 0) autoMap[fc.key] = scored[0].c
+        continue
+      }
       const normKey = norm(fc.key)
       const match = data.columns.find((c: string) => {
-        const normCol = norm(c)
-        // exact normalized match
-        if (normCol === normKey) return true
-        // normalized key is a substring of the column name
-        if (normCol.includes(normKey)) return true
-        // "debito_credito" also matches columns containing "valor"
-        if (fc.key === 'debito_credito' && normCol.includes('valor')) return true
-        return false
+        const n = norm(c)
+        return n === normKey || n.includes(normKey)
       })
       if (match) autoMap[fc.key] = match
     }

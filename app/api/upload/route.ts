@@ -33,6 +33,11 @@ function parseNumber(v: unknown): number {
     // Remove espaços e caracteres invisíveis
     .replace(/[\s\u00A0\u202F\u2009]/g, '')
 
+  // Formato contábil: (1.234,56) → -1.234,56
+  if (s.startsWith('(') && s.endsWith(')')) {
+    s = '-' + s.slice(1, -1)
+  }
+
   if (s === '' || s === '-' || s === '') return 0
 
   const negative = s.startsWith('-')

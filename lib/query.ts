@@ -110,31 +110,33 @@ export function getMedidaResultados(
   const db = getDb()
   const raw = db.prepare('SELECT * FROM medidas WHERE id = ?').get(medidaId) as {
     id: number; nome: string; descricao: string; cor: string
-    tipo_fonte: string; filtros: string; created_at: string; updated_at: string
+    tipo_fonte: string; tipo_medida: string; filtros: string
+    denominador_filtros: string; denominador_tipo_fonte: string
+    created_at: string; updated_at: string
   } | undefined
   if (!raw) return []
 
   const medida: Medida = {
     ...raw,
-    tipo_fonte: raw.tipo_fonte as 'budget' | 'razao' | 'ambos',
-    filtros: JSON.parse(raw.filtros || '[]'),
-  }
-
-  // Monta filtros extras de período
-  const extraFilters: FilterCondition[] = [...medida.filtros]
-  if (periodos.length) {
-    extraFilters.push({
-      column: 'data_lancamento',
-      operator: 'in',
-      value: periodos.join(','),
-    } as FilterCondition)
+    tipo_fonte:             raw.tipo_fonte as 'budget' | 'razao' | 'ambos',
+    tipo_medida:            (raw.tipo_medida || 'simples') as 'simples' | 'ratio',
+    filtros:                JSON.parse(raw.filtros || '[]'),
+    denominador_filtros:    JSON.parse(raw.denominador_filtros || '[]'),
+    denominador_tipo_fonte: (raw.denominador_tipo_fonte || 'ambos') as 'budget' | 'razao' | 'ambos',
   }
 
   const groupBy: string[] = []
-  if (groupByDept)          groupBy.push('cc.departamento', 'cc.nome_departamento')
-  if (groupByCentroCusto)   groupBy.push('l.centro_custo', 'cc.nome_centro_custo')
-  if (groupByPeriod)        groupBy.push("strftime('%Y-%m', l.data_lancamento) as periodo")
+  if (groupByDept)        groupBy.push('cc.departamento', 'cc.nome_departamento')
+  if (groupByCentroCusto) groupBy.push('l.centro_custo', 'cc.nome_centro_custo')
+  if (groupByPeriod)      groupBy.push("strftime('%Y-%m', l.data_lancamento) as periodo")
 
+  const periodoClause = periodos.length ? buildPeriodoWhere(periodos) : null
+
+  if (medida.tipo_medida === 'ratio') {
+    return computeRatioMedida(medida, groupBy, periodoClause)
+  }
+
+  // ── Medida simples ────────────────────────────────────────────────────────
   const tiposToRun: Array<'budget' | 'razao'> =
     medida.tipo_fonte === 'ambos' ? ['budget', 'razao'] : [medida.tipo_fonte]
 
@@ -144,20 +146,14 @@ export function getMedidaResultados(
   }> = {}
 
   for (const tipo of tiposToRun) {
-    // Se filtro de período usa 'in' com valores YYYY-MM, converte para
-    // comparação strftime na query manualmente
-    const periodoFilters = periodos.length
-      ? buildPeriodoWhere(periodos)
-      : null
-
-    const rows = runStarQueryWithPeriodo(tipo, medida.filtros, groupBy, periodoFilters)
+    const rows = runStarQueryWithPeriodo(tipo, medida.filtros, groupBy, periodoClause)
     for (const r of rows) {
-      const dept      = (r['departamento']     ?? r['cc.departamento']     ?? '') as string
-      const nomeDept  = (r['nome_departamento'] ?? r['cc.nome_departamento'] ?? '') as string
-      const cc        = (r['centro_custo']      ?? r['l.centro_custo']       ?? '') as string
-      const nomeCc    = (r['nome_centro_custo'] ?? r['cc.nome_centro_custo'] ?? '') as string
-      const periodo   = (r['periodo'] ?? '') as string
-      const key       = `${dept}||${cc}||${periodo}`
+      const dept     = (r['departamento']     ?? '') as string
+      const nomeDept = (r['nome_departamento'] ?? '') as string
+      const cc       = (r['centro_custo']     ?? '') as string
+      const nomeCc   = (r['nome_centro_custo'] ?? '') as string
+      const periodo  = (r['periodo'] ?? '') as string
+      const key      = `${dept}||${cc}||${periodo}`
       if (!byKey[key]) byKey[key] = { budget: 0, razao: 0, nome_dept: nomeDept, centro_custo: cc, nome_cc: nomeCc }
       if (tipo === 'budget') byKey[key].budget += (r['valor'] as number) ?? 0
       if (tipo === 'razao')  byKey[key].razao  += (r['valor'] as number) ?? 0
@@ -178,6 +174,72 @@ export function getMedidaResultados(
       razao:  vals.razao,
       variacao,
       variacao_pct: vals.budget ? (variacao / Math.abs(vals.budget)) * 100 : 0,
+    }
+  })
+}
+
+// ── Ratio medida: numerador / denominador ────────────────────────────────────
+function computeRatioMedida(
+  medida: Medida,
+  groupBy: string[],
+  periodoClause: { where: string; params: unknown[] } | null
+): MedidaResultado[] {
+  type RawBucket = { num_budget: number; num_razao: number; den_budget: number; den_razao: number; nome_dept: string; nome_cc: string }
+  const byKey: Record<string, RawBucket> = {}
+
+  const runAndAccumulate = (
+    filtros: FilterCondition[],
+    tipo_fonte: 'budget' | 'razao' | 'ambos',
+    isNumerator: boolean
+  ) => {
+    const tipos: Array<'budget'|'razao'> = tipo_fonte === 'ambos' ? ['budget','razao'] : [tipo_fonte]
+    for (const tipo of tipos) {
+      const rows = runStarQueryWithPeriodo(tipo, filtros, groupBy, periodoClause)
+      for (const r of rows) {
+        const dept     = (r['departamento']      ?? '') as string
+        const nomeDept = (r['nome_departamento'] ?? '') as string
+        const cc       = (r['centro_custo']      ?? '') as string
+        const nomeCc   = (r['nome_centro_custo'] ?? '') as string
+        const periodo  = (r['periodo'] ?? '') as string
+        const key      = `${dept}||${cc}||${periodo}`
+        if (!byKey[key]) byKey[key] = { num_budget: 0, num_razao: 0, den_budget: 0, den_razao: 0, nome_dept: nomeDept, nome_cc: nomeCc }
+        const val = (r['valor'] as number) ?? 0
+        if (isNumerator) {
+          if (tipo === 'budget') byKey[key].num_budget += val
+          else                   byKey[key].num_razao  += val
+        } else {
+          if (tipo === 'budget') byKey[key].den_budget += val
+          else                   byKey[key].den_razao  += val
+        }
+      }
+    }
+  }
+
+  runAndAccumulate(medida.filtros,             medida.tipo_fonte,             true)
+  runAndAccumulate(medida.denominador_filtros, medida.denominador_tipo_fonte, false)
+
+  return Object.entries(byKey).map(([key, v]) => {
+    const [departamento, centro_custo, periodo] = key.split('||')
+    // ratio in %, e.g. 5.2 means 5.2%
+    const budget = v.den_budget ? (v.num_budget / Math.abs(v.den_budget)) * 100 : 0
+    const razao  = v.den_razao  ? (v.num_razao  / Math.abs(v.den_razao))  * 100 : 0
+    const variacao = razao - budget
+    return {
+      medida,
+      departamento,
+      nome_departamento: v.nome_dept,
+      centro_custo,
+      nome_centro_custo: v.nome_cc,
+      periodo,
+      budget,
+      razao,
+      variacao,
+      variacao_pct: budget ? (variacao / Math.abs(budget)) * 100 : 0,
+      is_ratio: true,
+      numerador_budget:  v.num_budget,
+      numerador_razao:   v.num_razao,
+      denominador_budget: v.den_budget,
+      denominador_razao:  v.den_razao,
     }
   })
 }

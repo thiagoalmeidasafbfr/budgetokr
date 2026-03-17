@@ -11,7 +11,7 @@ if (!fs.existsSync(DATA_DIR)) {
 
 let db: Database.Database | null = null;
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 export function getDb(): Database.Database {
   if (!db) {
@@ -30,13 +30,21 @@ function initSchema(db: Database.Database) {
   const version = row?.version ?? 0;
 
   if (version < SCHEMA_VERSION) {
-    // Migrate: drop old v1 tables
-    db.exec(`
-      DROP TABLE IF EXISTS data_rows;
-      DROP TABLE IF EXISTS datasets;
-      DROP TABLE IF EXISTS metrics;
-      DROP TABLE IF EXISTS active_dataset;
-    `);
+    if (version < 2) {
+      // v0/v1 → drop old tables
+      db.exec(`
+        DROP TABLE IF EXISTS data_rows;
+        DROP TABLE IF EXISTS datasets;
+        DROP TABLE IF EXISTS metrics;
+        DROP TABLE IF EXISTS active_dataset;
+      `);
+    }
+    if (version >= 2) {
+      // v2 → v3: add new columns to medidas (idempotent: ignore if already exists)
+      try { db.exec(`ALTER TABLE medidas ADD COLUMN tipo_medida TEXT DEFAULT 'simples'`) } catch { /* ok */ }
+      try { db.exec(`ALTER TABLE medidas ADD COLUMN denominador_filtros TEXT DEFAULT '[]'`) } catch { /* ok */ }
+      try { db.exec(`ALTER TABLE medidas ADD COLUMN denominador_tipo_fonte TEXT DEFAULT 'ambos'`) } catch { /* ok */ }
+    }
     if (!row) {
       db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(SCHEMA_VERSION);
     } else {
@@ -94,14 +102,17 @@ function initSchema(db: Database.Database) {
 
     -- ─── Medidas (como "measures" do Power BI) ───────────────────────────────
     CREATE TABLE IF NOT EXISTS medidas (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      nome        TEXT    NOT NULL,
-      descricao   TEXT,
-      cor         TEXT    DEFAULT '#6366f1',
-      tipo_fonte  TEXT    DEFAULT 'ambos',   -- 'budget' | 'razao' | 'ambos'
-      filtros     TEXT    NOT NULL DEFAULT '[]',
-      created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+      id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome                    TEXT    NOT NULL,
+      descricao               TEXT,
+      cor                     TEXT    DEFAULT '#6366f1',
+      tipo_fonte              TEXT    DEFAULT 'ambos',   -- 'budget' | 'razao' | 'ambos'
+      tipo_medida             TEXT    DEFAULT 'simples', -- 'simples' | 'ratio'
+      filtros                 TEXT    NOT NULL DEFAULT '[]',
+      denominador_filtros     TEXT    DEFAULT '[]',      -- só para tipo_medida='ratio'
+      denominador_tipo_fonte  TEXT    DEFAULT 'ambos',
+      created_at              DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at              DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
 }

@@ -148,6 +148,7 @@ export default function AnalisePage() {
 
   // Medida view aggregation
   const activeMedida = medidas.find(m => m.id === selMedida)
+  const isRatioMedida = (medidaResults[0] as MedidaResult & { is_ratio?: boolean } | undefined)?.is_ratio === true
 
   // Label helper for medida rows
   const medidaRowLabel = (r: MedidaResult) => {
@@ -156,15 +157,37 @@ export default function AnalisePage() {
     return r.periodo || '—'
   }
 
-  const medidaAgg = medidaResults.reduce<Record<string, { budget: number; razao: number }>>((acc, r) => {
+  // For ratio medidas: aggregate raw numerador/denominador so the total ratio is correct
+  type AggBucket = { budget: number; razao: number; num_b: number; num_r: number; den_b: number; den_r: number }
+  const medidaAgg = medidaResults.reduce<Record<string, AggBucket>>((acc, r) => {
     const k = medidaRowLabel(r)
-    if (!acc[k]) acc[k] = { budget: 0, razao: 0 }
-    acc[k].budget += r.budget
-    acc[k].razao  += r.razao
+    if (!acc[k]) acc[k] = { budget: 0, razao: 0, num_b: 0, num_r: 0, den_b: 0, den_r: 0 }
+    const rx = r as MedidaResult & { numerador_budget?: number; numerador_razao?: number; denominador_budget?: number; denominador_razao?: number }
+    if (isRatioMedida) {
+      acc[k].num_b += rx.numerador_budget ?? 0
+      acc[k].num_r += rx.numerador_razao  ?? 0
+      acc[k].den_b += rx.denominador_budget ?? 0
+      acc[k].den_r += rx.denominador_razao  ?? 0
+    } else {
+      acc[k].budget += r.budget
+      acc[k].razao  += r.razao
+    }
     return acc
   }, {})
 
-  const medidaTotals = Object.values(medidaAgg).reduce((a, v) => ({ budget: a.budget + v.budget, razao: a.razao + v.razao }), { budget: 0, razao: 0 })
+  // Resolve display values for each bucket
+  const resolveAgg = (v: AggBucket) => isRatioMedida
+    ? {
+        budget: v.den_b ? (v.num_b / Math.abs(v.den_b)) * 100 : 0,
+        razao:  v.den_r ? (v.num_r / Math.abs(v.den_r)) * 100 : 0,
+      }
+    : { budget: v.budget, razao: v.razao }
+
+  const medidaTotalsRaw = Object.values(medidaAgg).reduce(
+    (a, v) => ({ num_b: a.num_b + v.num_b, num_r: a.num_r + v.num_r, den_b: a.den_b + v.den_b, den_r: a.den_r + v.den_r, budget: a.budget + v.budget, razao: a.razao + v.razao }),
+    { num_b: 0, num_r: 0, den_b: 0, den_r: 0, budget: 0, razao: 0 }
+  )
+  const medidaTotals = resolveAgg(medidaTotalsRaw)
 
   const exportCSV = () => {
     const rows = [
@@ -396,9 +419,13 @@ export default function AnalisePage() {
                   </div>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(medidaTotals.razao)}</p>
-                  <p className="text-xs text-gray-500">Razão Total</p>
-                  <p className="text-xs text-gray-400">Budget: {formatCurrency(medidaTotals.budget)}</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {isRatioMedida ? formatPct(medidaTotals.razao) : formatCurrency(medidaTotals.razao)}
+                  </p>
+                  <p className="text-xs text-gray-500">{isRatioMedida ? 'Ratio Razão' : 'Razão Total'}</p>
+                  <p className="text-xs text-gray-400">
+                    Budget: {isRatioMedida ? formatPct(medidaTotals.budget) : formatCurrency(medidaTotals.budget)}
+                  </p>
                 </div>
               </div>
 
@@ -471,36 +498,48 @@ export default function AnalisePage() {
                             : medidaGroupBy === 'centro_custo' ? 'Centro de Custo'
                             : 'Período'}
                         </th>
-                        <th className="text-right px-5 py-3 font-medium text-gray-500">Budget</th>
-                        <th className="text-right px-5 py-3 font-medium text-gray-500">Razão</th>
-                        <th className="text-right px-5 py-3 font-medium text-gray-500">Variação</th>
-                        <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>
+                        <th className="text-right px-5 py-3 font-medium text-gray-500">{isRatioMedida ? 'Budget %' : 'Budget'}</th>
+                        <th className="text-right px-5 py-3 font-medium text-gray-500">{isRatioMedida ? 'Razão %' : 'Razão'}</th>
+                        <th className="text-right px-5 py-3 font-medium text-gray-500">{isRatioMedida ? 'Δ pp' : 'Variação'}</th>
+                        {!isRatioMedida && <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>}
                       </tr></thead>
                       <tbody>
-                        {Object.entries(medidaAgg).map(([label, vals], i) => {
-                          const variacao = vals.razao - vals.budget
-                          const pct = vals.budget ? (variacao / Math.abs(vals.budget)) * 100 : 0
+                        {Object.entries(medidaAgg).map(([label, bucket], i) => {
+                          const { budget, razao } = resolveAgg(bucket)
+                          const variacao = razao - budget
+                          const pct = budget ? (variacao / Math.abs(budget)) * 100 : 0
+                          const fmt = (v: number) => isRatioMedida ? formatPct(v) : formatCurrency(v)
                           return (
                             <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
                               <td className="px-5 py-3 font-medium text-gray-900">{label}</td>
-                              <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(vals.budget)}</td>
-                              <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(vals.razao)}</td>
-                              <td className={cn('px-5 py-3 text-right font-semibold', colorForVariance(variacao))}>{formatCurrency(variacao)}</td>
-                              <td className="px-5 py-3 text-right"><span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(variacao))}>{formatPct(pct)}</span></td>
+                              <td className="px-5 py-3 text-right text-gray-600">{fmt(budget)}</td>
+                              <td className="px-5 py-3 text-right text-gray-600">{fmt(razao)}</td>
+                              <td className={cn('px-5 py-3 text-right font-semibold', colorForVariance(variacao))}>
+                                {isRatioMedida ? `${variacao >= 0 ? '+' : ''}${variacao.toFixed(1)} pp` : formatCurrency(variacao)}
+                              </td>
+                              {!isRatioMedida && (
+                                <td className="px-5 py-3 text-right"><span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(variacao))}>{formatPct(pct)}</span></td>
+                              )}
                             </tr>
                           )
                         })}
                       </tbody>
                       <tfoot><tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
                         <td className="px-5 py-3">Total</td>
-                        <td className="px-5 py-3 text-right">{formatCurrency(medidaTotals.budget)}</td>
-                        <td className="px-5 py-3 text-right">{formatCurrency(medidaTotals.razao)}</td>
-                        <td className={cn('px-5 py-3 text-right', colorForVariance(medidaTotals.razao - medidaTotals.budget))}>{formatCurrency(medidaTotals.razao - medidaTotals.budget)}</td>
-                        <td className="px-5 py-3 text-right">
-                          <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(medidaTotals.razao - medidaTotals.budget))}>
-                            {formatPct(medidaTotals.budget ? ((medidaTotals.razao - medidaTotals.budget) / Math.abs(medidaTotals.budget)) * 100 : 0)}
-                          </span>
+                        <td className="px-5 py-3 text-right">{isRatioMedida ? formatPct(medidaTotals.budget) : formatCurrency(medidaTotals.budget)}</td>
+                        <td className="px-5 py-3 text-right">{isRatioMedida ? formatPct(medidaTotals.razao) : formatCurrency(medidaTotals.razao)}</td>
+                        <td className={cn('px-5 py-3 text-right', colorForVariance(medidaTotals.razao - medidaTotals.budget))}>
+                          {isRatioMedida
+                            ? `${(medidaTotals.razao - medidaTotals.budget) >= 0 ? '+' : ''}${(medidaTotals.razao - medidaTotals.budget).toFixed(1)} pp`
+                            : formatCurrency(medidaTotals.razao - medidaTotals.budget)}
                         </td>
+                        {!isRatioMedida && (
+                          <td className="px-5 py-3 text-right">
+                            <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(medidaTotals.razao - medidaTotals.budget))}>
+                              {formatPct(medidaTotals.budget ? ((medidaTotals.razao - medidaTotals.budget) / Math.abs(medidaTotals.budget)) * 100 : 0)}
+                            </span>
+                          </td>
+                        )}
                       </tr></tfoot>
                     </table>
                   </div>

@@ -60,7 +60,10 @@ export interface Medida {
   descricao?: string
   cor: string
   tipo_fonte: 'budget' | 'razao' | 'ambos'
+  tipo_medida: 'simples' | 'ratio'
   filtros: FilterCondition[]
+  denominador_filtros: FilterCondition[]
+  denominador_tipo_fonte: 'budget' | 'razao' | 'ambos'
   created_at: string
   updated_at: string
 }
@@ -69,11 +72,20 @@ export interface Medida {
 export interface MedidaResultado {
   medida: Medida
   departamento: string
+  nome_departamento: string
+  centro_custo: string
+  nome_centro_custo: string
   periodo: string
   budget: number
   razao: number
   variacao: number
   variacao_pct: number
+  // Ratio measures only
+  is_ratio?: boolean
+  numerador_budget?: number
+  numerador_razao?: number
+  denominador_budget?: number
+  denominador_razao?: number
 }
 
 export interface AnaliseRow {

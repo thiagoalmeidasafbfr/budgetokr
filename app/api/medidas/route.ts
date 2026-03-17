@@ -1,14 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
 
+function parseRow(m: {
+  id: number; nome: string; descricao: string; cor: string
+  tipo_fonte: string; tipo_medida: string; filtros: string
+  denominador_filtros: string; denominador_tipo_fonte: string
+  created_at: string; updated_at: string
+}) {
+  return {
+    ...m,
+    tipo_medida: m.tipo_medida || 'simples',
+    filtros: JSON.parse(m.filtros || '[]'),
+    denominador_filtros: JSON.parse(m.denominador_filtros || '[]'),
+    denominador_tipo_fonte: m.denominador_tipo_fonte || 'ambos',
+  }
+}
+
+type RawRow = Parameters<typeof parseRow>[0]
+
 export async function GET() {
   try {
     const db = getDb()
-    const rows = db.prepare('SELECT * FROM medidas ORDER BY created_at DESC').all() as Array<{
-      id: number; nome: string; descricao: string; cor: string
-      tipo_fonte: string; filtros: string; created_at: string; updated_at: string
-    }>
-    return NextResponse.json(rows.map(m => ({ ...m, filtros: JSON.parse(m.filtros || '[]') })))
+    const rows = db.prepare('SELECT * FROM medidas ORDER BY created_at DESC').all() as RawRow[]
+    return NextResponse.json(rows.map(parseRow))
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
@@ -16,18 +30,21 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { nome, descricao, cor, tipo_fonte, filtros } = await req.json()
+    const { nome, descricao, cor, tipo_fonte, tipo_medida, filtros, denominador_filtros, denominador_tipo_fonte } = await req.json()
     if (!nome) return NextResponse.json({ error: 'Nome obrigatório' }, { status: 400 })
     const db = getDb()
     const r = db.prepare(`
-      INSERT INTO medidas (nome, descricao, cor, tipo_fonte, filtros)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(nome, descricao ?? '', cor ?? '#6366f1', tipo_fonte ?? 'ambos', JSON.stringify(filtros ?? []))
-    const m = db.prepare('SELECT * FROM medidas WHERE id = ?').get(r.lastInsertRowid) as {
-      id: number; nome: string; descricao: string; cor: string
-      tipo_fonte: string; filtros: string; created_at: string; updated_at: string
-    }
-    return NextResponse.json({ ...m, filtros: JSON.parse(m.filtros) })
+      INSERT INTO medidas (nome, descricao, cor, tipo_fonte, tipo_medida, filtros, denominador_filtros, denominador_tipo_fonte)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      nome, descricao ?? '', cor ?? '#6366f1',
+      tipo_fonte ?? 'ambos', tipo_medida ?? 'simples',
+      JSON.stringify(filtros ?? []),
+      JSON.stringify(denominador_filtros ?? []),
+      denominador_tipo_fonte ?? 'ambos'
+    )
+    const m = db.prepare('SELECT * FROM medidas WHERE id = ?').get(r.lastInsertRowid) as RawRow
+    return NextResponse.json(parseRow(m))
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
@@ -35,17 +52,22 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const { id, nome, descricao, cor, tipo_fonte, filtros } = await req.json()
+    const { id, nome, descricao, cor, tipo_fonte, tipo_medida, filtros, denominador_filtros, denominador_tipo_fonte } = await req.json()
     const db = getDb()
     db.prepare(`
-      UPDATE medidas SET nome=?, descricao=?, cor=?, tipo_fonte=?, filtros=?, updated_at=CURRENT_TIMESTAMP
+      UPDATE medidas SET nome=?, descricao=?, cor=?, tipo_fonte=?, tipo_medida=?,
+        filtros=?, denominador_filtros=?, denominador_tipo_fonte=?, updated_at=CURRENT_TIMESTAMP
       WHERE id=?
-    `).run(nome, descricao ?? '', cor ?? '#6366f1', tipo_fonte ?? 'ambos', JSON.stringify(filtros ?? []), id)
-    const m = db.prepare('SELECT * FROM medidas WHERE id = ?').get(id) as {
-      id: number; nome: string; descricao: string; cor: string
-      tipo_fonte: string; filtros: string; created_at: string; updated_at: string
-    }
-    return NextResponse.json({ ...m, filtros: JSON.parse(m.filtros) })
+    `).run(
+      nome, descricao ?? '', cor ?? '#6366f1',
+      tipo_fonte ?? 'ambos', tipo_medida ?? 'simples',
+      JSON.stringify(filtros ?? []),
+      JSON.stringify(denominador_filtros ?? []),
+      denominador_tipo_fonte ?? 'ambos',
+      id
+    )
+    const m = db.prepare('SELECT * FROM medidas WHERE id = ?').get(id) as RawRow
+    return NextResponse.json(parseRow(m))
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
