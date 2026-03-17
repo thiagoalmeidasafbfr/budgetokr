@@ -29,6 +29,7 @@ export interface ContaContabil {
   nome_conta_contabil: string
   agrupamento_arvore: string
   dre: string
+  ordem_dre: number
 }
 
 // ─── Medidas ──────────────────────────────────────────────────────────────────
@@ -126,4 +127,5 @@ export const CONTA_CONTABIL_COLUMNS = [
   { key: 'nome_conta_contabil',   label: 'Nome Conta Contábil',   required: false },
   { key: 'agrupamento_arvore',    label: 'Agrupamento Árvore',    required: false },
   { key: 'dre',                   label: 'DRE',                   required: false },
+  { key: 'ordem_dre',             label: 'Ordem DRE',             required: false },
 ] as const

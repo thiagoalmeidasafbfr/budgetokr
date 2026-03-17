@@ -376,6 +376,7 @@ export function getSummary() {
 export interface DRERow {
   dre: string
   agrupamento_arvore: string
+  ordem_dre: number
   periodo: string
   budget: number
   razao: number
@@ -404,24 +405,26 @@ export function getDRE(
     SELECT
       COALESCE(ca.dre, 'Sem classificação') as dre,
       COALESCE(ca.agrupamento_arvore, '') as agrupamento_arvore,
+      COALESCE(MIN(ca.ordem_dre), 999) as ordem_dre,
       strftime('%Y-%m', l.data_lancamento) as periodo,
       SUM(CASE WHEN l.tipo = 'budget' THEN l.debito_credito ELSE 0 END) as budget,
       SUM(CASE WHEN l.tipo = 'razao'  THEN l.debito_credito ELSE 0 END) as razao
     ${STAR_SCHEMA_JOIN}
     ${whereClause}
     GROUP BY ca.dre, ca.agrupamento_arvore, periodo
-    ORDER BY ca.dre, ca.agrupamento_arvore, periodo
+    ORDER BY COALESCE(MIN(ca.ordem_dre), 999), ca.dre, ca.agrupamento_arvore, periodo
   `
 
   return db.prepare(sql).all(...params) as DRERow[]
 }
 
-export function getDREHierarchy(): Array<{ agrupamento_arvore: string; dre: string }> {
+export function getDREHierarchy(): Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }> {
   const db = getDb()
   return db.prepare(`
-    SELECT DISTINCT agrupamento_arvore, dre
+    SELECT DISTINCT agrupamento_arvore, dre, MIN(ordem_dre) as ordem_dre
     FROM contas_contabeis
     WHERE dre IS NOT NULL AND dre != ''
-    ORDER BY agrupamento_arvore, dre
-  `).all() as Array<{ agrupamento_arvore: string; dre: string }>
+    GROUP BY dre, agrupamento_arvore
+    ORDER BY MIN(ordem_dre), dre, agrupamento_arvore
+  `).all() as Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }>
 }

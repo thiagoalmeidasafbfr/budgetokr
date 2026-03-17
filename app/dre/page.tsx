@@ -1,14 +1,144 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
-import { ChevronRight, ChevronDown, Filter, X, Download, RefreshCw } from 'lucide-react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { ChevronRight, ChevronDown, Filter, X, Download, RefreshCw, ExternalLink } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
 
+// ── Context menu + Drill-down modal ──────────────────────────────────────────
+
+interface ContextMenuState {
+  x: number
+  y: number
+  node: TreeNode
+  periodo?: string  // se direito-clicou numa célula de período específico
+  tipo: 'budget' | 'razao' | 'ambos'
+}
+
+interface DetalhamentoLinha {
+  id: number
+  tipo: string
+  data_lancamento: string
+  numero_conta_contabil: string
+  nome_conta_contabil: string
+  centro_custo: string
+  nome_centro_custo: string
+  agrupamento_arvore: string
+  dre: string
+  nome_conta_contrapartida: string
+  debito_credito: number
+  observacao: string
+  fonte: string
+}
+
+function DetalhamentoModal({
+  ctx,
+  onClose,
+}: {
+  ctx: ContextMenuState
+  onClose: () => void
+}) {
+  const [rows, setRows] = useState<DetalhamentoLinha[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const p = new URLSearchParams()
+    if (ctx.node.dre)        p.set('dre',         ctx.node.dre)
+    if (ctx.node.agrupamento) p.set('agrupamento', ctx.node.agrupamento)
+    if (ctx.periodo)          p.set('periodo',     ctx.periodo)
+    if (ctx.tipo !== 'ambos') p.set('tipo',        ctx.tipo)
+    fetch(`/api/dre/detalhamento?${p}`)
+      .then(r => r.json())
+      .then(data => { setRows(data); setLoading(false) })
+  }, [ctx])
+
+  const title = [
+    ctx.node.dre,
+    ctx.node.agrupamento !== ctx.node.dre ? ctx.node.agrupamento : null,
+    ctx.periodo ? `· ${formatPeriodo(ctx.periodo)}` : null,
+    ctx.tipo !== 'ambos' ? `· ${ctx.tipo === 'budget' ? 'Budget' : 'Realizado'}` : null,
+  ].filter(Boolean).join(' › ')
+
+  const total = rows.reduce((s, r) => s + r.debito_credito, 0)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-10 px-4 overflow-auto"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[85vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b">
+          <div>
+            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">DRE — Lançamentos</p>
+            <h2 className="text-base font-bold text-gray-900 mt-0.5">{title}</h2>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Body */}
+        {loading ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <div className="flex-1 overflow-auto">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-gray-700 text-white">
+                <tr>
+                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Data Lançamento</th>
+                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Tipo</th>
+                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Centro de Custo</th>
+                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">DRE Gerencial</th>
+                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Agrupamento</th>
+                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Conta Contábil</th>
+                  <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Valor</th>
+                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Conta Contrapartida</th>
+                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Observação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={r.id} className={cn('border-b border-gray-100', i % 2 === 0 ? 'bg-white' : 'bg-gray-50/60')}>
+                    <td className="px-3 py-1.5 whitespace-nowrap font-mono">{r.data_lancamento}</td>
+                    <td className="px-3 py-1.5">
+                      <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium',
+                        r.tipo === 'budget' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700')}>
+                        {r.tipo === 'budget' ? 'Budget' : 'Real'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-1.5 whitespace-nowrap">{r.centro_custo}{r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap">{r.dre}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap">{r.agrupamento_arvore}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap">{r.numero_conta_contabil} — {r.nome_conta_contabil}</td>
+                    <td className={cn('px-3 py-1.5 text-right whitespace-nowrap font-semibold', r.debito_credito < 0 ? 'text-red-600' : 'text-gray-800')}>
+                      {formatCurrency(r.debito_credito)}
+                    </td>
+                    <td className="px-3 py-1.5 whitespace-nowrap text-gray-500">{r.nome_conta_contrapartida}</td>
+                    <td className="px-3 py-1.5 max-w-xs truncate text-gray-500">{r.observacao}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="sticky bottom-0 bg-gray-800 text-white font-bold">
+                <tr>
+                  <td colSpan={6} className="px-3 py-2 text-right">Total ({rows.length} lançamentos)</td>
+                  <td className={cn('px-3 py-2 text-right', total < 0 ? 'text-red-300' : 'text-emerald-300')}>{formatCurrency(total)}</td>
+                  <td colSpan={2} />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 interface DRERow {
   dre: string
   agrupamento_arvore: string
+  ordem_dre: number
   periodo: string
   budget: number
   razao: number
@@ -18,17 +148,21 @@ interface TreeNode {
   name: string
   isGroup: boolean
   depth: number
+  ordem: number
   budget: number
   razao: number
   variacao: number
   variacao_pct: number
   children: TreeNode[]
   byPeriod: Record<string, { budget: number; razao: number }>
+  // for drill-down
+  dre?: string
+  agrupamento?: string
 }
 
 export default function DREPage() {
   const [rawData,       setRawData]       = useState<DRERow[]>([])
-  const [hierarchy,     setHierarchy]     = useState<Array<{ agrupamento_arvore: string; dre: string }>>([])
+  const [hierarchy,     setHierarchy]     = useState<Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }>>([])
   const [departamentos, setDepartamentos] = useState<string[]>([])
   const [periodos,      setPeriodos]      = useState<string[]>([])
   const [selDepts,      setSelDepts]      = useState<string[]>([])
@@ -36,6 +170,23 @@ export default function DREPage() {
   const [expanded,      setExpanded]      = useState<Set<string>>(new Set())
   const [loading,       setLoading]       = useState(false)
   const [viewMode,      setViewMode]      = useState<'total' | 'periodo'>('total')
+  const [ctxMenu,       setCtxMenu]       = useState<ContextMenuState | null>(null)
+  const [detModal,      setDetModal]      = useState<ContextMenuState | null>(null)
+  const ctxRef = useRef<HTMLDivElement>(null)
+
+  // Fecha context menu ao clicar fora
+  useEffect(() => {
+    if (!ctxMenu) return
+    const handler = () => setCtxMenu(null)
+    window.addEventListener('click', handler)
+    return () => window.removeEventListener('click', handler)
+  }, [ctxMenu])
+
+  const openCtxMenu = (e: React.MouseEvent, node: TreeNode, periodo?: string, tipo: 'budget' | 'razao' | 'ambos' = 'ambos') => {
+    e.preventDefault()
+    e.stopPropagation()
+    setCtxMenu({ x: e.clientX, y: e.clientY, node, periodo, tipo })
+  }
 
   useEffect(() => {
     Promise.all([
@@ -126,10 +277,34 @@ export default function DREPage() {
 
   return (
     <div className="space-y-4">
+      {/* Context menu (botão direito) */}
+      {ctxMenu && (
+        <div ref={ctxRef}
+          className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-xl py-1 min-w-[180px]"
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+          onClick={e => e.stopPropagation()}>
+          <button
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2"
+            onClick={() => { setDetModal(ctxMenu); setCtxMenu(null) }}>
+            <ExternalLink size={13} /> Abrir detalhamento
+          </button>
+          {ctxMenu.tipo !== 'ambos' && (
+            <button
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2"
+              onClick={() => { setDetModal({ ...ctxMenu, tipo: 'ambos' }); setCtxMenu(null) }}>
+              <ExternalLink size={13} /> Detalhamento (Budget + Real)
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Modal de detalhamento */}
+      {detModal && <DetalhamentoModal ctx={detModal} onClose={() => setDetModal(null)} />}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">DRE — Demonstrativo de Resultados</h1>
-          <p className="text-gray-500 text-sm mt-0.5">P&L por linha contábil · Budget vs Razão</p>
+          <p className="text-gray-500 text-sm mt-0.5">P&L por linha contábil · Budget vs Razão · Clique direito para detalhamento</p>
         </div>
         <Button variant="outline" size="sm" onClick={exportCSV}><Download size={13} /> CSV</Button>
       </div>
@@ -229,8 +404,9 @@ export default function DREPage() {
                   <tbody>
                     {flatRows.map((row, i) => (
                       <tr key={i}
+                        onContextMenu={e => openCtxMenu(e, row, undefined, 'ambos')}
                         className={cn(
-                          'border-b transition-colors',
+                          'border-b transition-colors cursor-context-menu',
                           row.isGroup
                             ? 'bg-gray-50/80 hover:bg-gray-100/80'
                             : 'border-gray-50 hover:bg-gray-50',
@@ -250,10 +426,12 @@ export default function DREPage() {
                             {row.name}
                           </div>
                         </td>
-                        <td className={cn('px-5 py-2.5 text-right', row.isGroup ? 'font-bold text-gray-900' : 'text-gray-600')}>
+                        <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, undefined, 'budget') }}
+                          className={cn('px-5 py-2.5 text-right', row.isGroup ? 'font-bold text-gray-900' : 'text-gray-600')}>
                           {formatCurrency(row.budget)}
                         </td>
-                        <td className={cn('px-5 py-2.5 text-right', row.isGroup ? 'font-bold text-gray-900' : 'text-gray-600')}>
+                        <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, undefined, 'razao') }}
+                          className={cn('px-5 py-2.5 text-right', row.isGroup ? 'font-bold text-gray-900' : 'text-gray-600')}>
                           {formatCurrency(row.razao)}
                         </td>
                         <td className={cn('px-5 py-2.5 text-right font-semibold', colorForVariance(row.variacao))}>
@@ -316,8 +494,9 @@ export default function DREPage() {
                   <tbody>
                     {flatRows.map((row, i) => (
                       <tr key={i}
+                        onContextMenu={e => openCtxMenu(e, row, undefined, 'ambos')}
                         className={cn(
-                          'border-b transition-colors',
+                          'border-b transition-colors cursor-context-menu',
                           row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50',
                         )}>
                         <td className={cn('px-4 py-2 sticky left-0 bg-white z-10', row.isGroup ? 'font-bold text-gray-900 bg-gray-50/80' : 'text-gray-700')}
@@ -338,10 +517,12 @@ export default function DREPage() {
                           const v = cell.razao - cell.budget
                           return (
                             <React.Fragment key={p}>
-                              <td className={cn('px-2 py-2 text-right text-xs border-l border-gray-100', row.isGroup ? 'font-bold' : 'text-gray-600')}>
+                              <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'budget') }}
+                                className={cn('px-2 py-2 text-right text-xs border-l border-gray-100', row.isGroup ? 'font-bold' : 'text-gray-600')}>
                                 {formatCurrency(cell.budget)}
                               </td>
-                              <td className={cn('px-2 py-2 text-right text-xs', row.isGroup ? 'font-bold' : 'text-gray-600')}>
+                              <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'razao') }}
+                                className={cn('px-2 py-2 text-right text-xs', row.isGroup ? 'font-bold' : 'text-gray-600')}>
                                 {formatCurrency(cell.razao)}
                               </td>
                               <td className={cn('px-2 py-2 text-right text-xs font-semibold', colorForVariance(v))}>
@@ -367,24 +548,29 @@ export default function DREPage() {
 
 function buildTree(
   data: DRERow[],
-  hierarchy: Array<{ agrupamento_arvore: string; dre: string }>
+  hierarchy: Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }>
 ): TreeNode[] {
-  // Hierarchy: dre = parent group (e.g. "Revenue"), agrupamento_arvore = child (e.g. "Broadcast Revenue")
-  // Group hierarchy entries by dre (parent)
-  const groupMap = new Map<string, Set<string>>()
+  // Hierarchy: dre = parent group, agrupamento_arvore = child
+  // Map: dre → { ordem, children: Set<agrupamento_arvore> }
+  const groupMap = new Map<string, { ordem: number; children: Set<string> }>()
   for (const h of hierarchy) {
     const parent = h.dre || ''
     if (!parent) continue
-    if (!groupMap.has(parent)) groupMap.set(parent, new Set())
-    if (h.agrupamento_arvore) groupMap.get(parent)!.add(h.agrupamento_arvore)
+    if (!groupMap.has(parent)) groupMap.set(parent, { ordem: h.ordem_dre ?? 999, children: new Set() })
+    else if ((h.ordem_dre ?? 999) < groupMap.get(parent)!.ordem) {
+      groupMap.get(parent)!.ordem = h.ordem_dre ?? 999
+    }
+    if (h.agrupamento_arvore) groupMap.get(parent)!.children.add(h.agrupamento_arvore)
   }
 
-  // Aggregate data by agrupamento_arvore (child line) — this is the detail level
-  // Key: "dre||agrupamento_arvore"
-  const lineAgg = new Map<string, { budget: number; razao: number; byPeriod: Record<string, { budget: number; razao: number }> }>()
+  // Aggregate data by (dre + agrupamento_arvore)
+  const lineAgg = new Map<string, {
+    budget: number; razao: number; ordem_dre: number
+    byPeriod: Record<string, { budget: number; razao: number }>
+  }>()
   for (const row of data) {
     const key = `${row.dre}||${row.agrupamento_arvore}`
-    if (!lineAgg.has(key)) lineAgg.set(key, { budget: 0, razao: 0, byPeriod: {} })
+    if (!lineAgg.has(key)) lineAgg.set(key, { budget: 0, razao: 0, ordem_dre: row.ordem_dre ?? 999, byPeriod: {} })
     const agg = lineAgg.get(key)!
     agg.budget += row.budget
     agg.razao += row.razao
@@ -395,11 +581,10 @@ function buildTree(
     }
   }
 
-  // Build tree: dre as group, agrupamento_arvore as children
   const tree: TreeNode[] = []
   const usedKeys = new Set<string>()
 
-  for (const [parent, childSet] of groupMap) {
+  for (const [parent, { ordem: groupOrdem, children: childSet }] of groupMap) {
     const children: TreeNode[] = []
     let groupBudget = 0
     let groupRazao = 0
@@ -408,31 +593,32 @@ function buildTree(
     for (const child of childSet) {
       const key = `${parent}||${child}`
       usedKeys.add(key)
-      const agg = lineAgg.get(key) ?? { budget: 0, razao: 0, byPeriod: {} }
+      const agg = lineAgg.get(key) ?? { budget: 0, razao: 0, ordem_dre: 999, byPeriod: {} }
       groupBudget += agg.budget
       groupRazao += agg.razao
-
       for (const [p, vals] of Object.entries(agg.byPeriod)) {
         if (!groupByPeriod[p]) groupByPeriod[p] = { budget: 0, razao: 0 }
         groupByPeriod[p].budget += vals.budget
         groupByPeriod[p].razao += vals.razao
       }
-
       const variacao = agg.razao - agg.budget
       children.push({
         name: child,
         isGroup: false,
         depth: 1,
+        ordem: agg.ordem_dre,
         budget: agg.budget,
         razao: agg.razao,
         variacao,
         variacao_pct: agg.budget ? (variacao / Math.abs(agg.budget)) * 100 : 0,
         children: [],
         byPeriod: agg.byPeriod,
+        dre: parent,
+        agrupamento: child,
       })
     }
 
-    // Also include rows where agrupamento_arvore is empty but dre matches
+    // rows where agrupamento_arvore is empty
     const bareKey = `${parent}||`
     if (lineAgg.has(bareKey)) {
       usedKeys.add(bareKey)
@@ -451,16 +637,18 @@ function buildTree(
       name: parent,
       isGroup: true,
       depth: 0,
+      ordem: groupOrdem,
       budget: groupBudget,
       razao: groupRazao,
       variacao,
       variacao_pct: groupBudget ? (variacao / Math.abs(groupBudget)) * 100 : 0,
-      children: children.sort((a, b) => a.name.localeCompare(b.name)),
+      children: children.sort((a, b) => (a.ordem - b.ordem) || a.name.localeCompare(b.name)),
       byPeriod: groupByPeriod,
+      dre: parent,
     })
   }
 
-  // Add unassigned lines (no matching hierarchy entry)
+  // Unassigned lines
   for (const [key, agg] of lineAgg) {
     if (usedKeys.has(key)) continue
     const [dre, agrup] = key.split('||')
@@ -470,16 +658,19 @@ function buildTree(
       name,
       isGroup: false,
       depth: 0,
+      ordem: agg.ordem_dre,
       budget: agg.budget,
       razao: agg.razao,
       variacao,
       variacao_pct: agg.budget ? (variacao / Math.abs(agg.budget)) * 100 : 0,
       children: [],
       byPeriod: agg.byPeriod,
+      dre,
+      agrupamento: agrup,
     })
   }
 
-  return tree.sort((a, b) => a.name.localeCompare(b.name))
+  return tree.sort((a, b) => (a.ordem - b.ordem) || a.name.localeCompare(b.name))
 }
 
 function flattenTree(tree: TreeNode[], expanded: Set<string>): TreeNode[] {
@@ -495,5 +686,4 @@ function flattenTree(tree: TreeNode[], expanded: Set<string>): TreeNode[] {
   return result
 }
 
-// React import needed for Fragment
-import React from 'react'
+

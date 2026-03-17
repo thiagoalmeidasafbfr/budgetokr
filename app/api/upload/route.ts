@@ -118,12 +118,35 @@ export async function POST(req: NextRequest) {
     if (!file) return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
 
     const bytes    = await file.arrayBuffer()
-    const workbook = XLSX.read(bytes, { type: 'array' })
+    // cellNF:true → preserva o format code (cell.z) para detectarmos datas
+    const workbook = XLSX.read(bytes, { type: 'array', cellNF: true })
     const sheet    = workbook.Sheets[workbook.SheetNames[0]]
 
-    // rawNumbers: false → TODAS as células (incluindo datas) vêm como string
-    // formatada pelo Excel (ex: "01/02/2025", "-4.425,04"). Sem cellDates,
-    // não há conversão para Date objects nem problemas de timezone.
+    // ── Pré-processa células de data ─────────────────────────────────────────
+    // Problema: rawNumbers:false usa o valor formatado (.w) que depende do
+    // formato da célula no Excel (pode ser M/D/YY americano = "12/31/24"
+    // em vez de "01/01/2025"). A solução é detectar células numéricas com
+    // formato de data pelo código de formato (.z), extrair o número serial
+    // e converter para ISO via parse_date_code — completamente independente
+    // de locale e timezone.
+    for (const key of Object.keys(sheet)) {
+      if (key.startsWith('!')) continue
+      const cell = sheet[key]
+      if (!cell || cell.t !== 'n') continue
+      const fmt = String(cell.z ?? '')
+      // Formato de data contém d/m/y (fora de texto entre aspas e colchetes)
+      const fmtClean = fmt.replace(/"[^"]*"/g, '').replace(/\[[^\]]*\]/g, '')
+      if (!/[yYdD]/.test(fmtClean)) continue
+      try {
+        const dd = XLSX.SSF.parse_date_code(cell.v as number)
+        if (dd && dd.y > 1900 && dd.y < 2200) {
+          // Substitui o valor formatado pelo ISO — sem locale, sem timezone
+          cell.w = `${dd.y}-${String(dd.m).padStart(2,'0')}-${String(dd.d).padStart(2,'0')}`
+        }
+      } catch { /* não é serial de data */ }
+    }
+
+    // rawNumbers: false → células numéricas não-data chegam como string pt-BR
     const raw = XLSX.utils.sheet_to_json(sheet, {
       defval:     '',
       rawNumbers: false,
@@ -211,22 +234,28 @@ export async function POST(req: NextRequest) {
     // ── Contas Contábeis ─────────────────────────────────────────────────────
     if (tipo === 'contas_contabeis') {
       const upsert = db.prepare(`
-        INSERT INTO contas_contabeis (numero_conta_contabil, nome_conta_contabil, agrupamento_arvore, dre)
-        VALUES (?,?,?,?)
+        INSERT INTO contas_contabeis (numero_conta_contabil, nome_conta_contabil, agrupamento_arvore, dre, ordem_dre)
+        VALUES (?,?,?,?,?)
         ON CONFLICT(numero_conta_contabil) DO UPDATE SET
           nome_conta_contabil=excluded.nome_conta_contabil,
           agrupamento_arvore=excluded.agrupamento_arvore,
-          dre=excluded.dre
+          dre=excluded.dre,
+          ordem_dre=excluded.ordem_dre
       `)
       const upsertMany = db.transaction((rows: Record<string, unknown>[]) => {
         for (const row of rows) {
           const num = String(get(row, 'numero_conta_contabil') ?? '').trim()
           if (!num) continue
+          const ordemRaw = get(row, 'ordem_dre')
+          const ordem = ordemRaw !== '' && ordemRaw !== null && ordemRaw !== undefined
+            ? parseInt(String(ordemRaw), 10) || 999
+            : 999
           upsert.run(
             num,
             String(get(row, 'nome_conta_contabil') ?? ''),
             String(get(row, 'agrupamento_arvore')  ?? ''),
             String(get(row, 'dre')                 ?? ''),
+            ordem,
           )
         }
       })

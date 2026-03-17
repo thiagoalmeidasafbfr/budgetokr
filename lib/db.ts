@@ -11,7 +11,7 @@ if (!fs.existsSync(DATA_DIR)) {
 
 let db: Database.Database | null = null;
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 export function getDb(): Database.Database {
   if (!db) {
@@ -44,6 +44,10 @@ function initSchema(db: Database.Database) {
       try { db.exec(`ALTER TABLE medidas ADD COLUMN tipo_medida TEXT DEFAULT 'simples'`) } catch { /* ok */ }
       try { db.exec(`ALTER TABLE medidas ADD COLUMN denominador_filtros TEXT DEFAULT '[]'`) } catch { /* ok */ }
       try { db.exec(`ALTER TABLE medidas ADD COLUMN denominador_tipo_fonte TEXT DEFAULT 'ambos'`) } catch { /* ok */ }
+    }
+    if (version >= 3) {
+      // v3 → v4: add ordem_dre to contas_contabeis for DRE sorting
+      try { db.exec(`ALTER TABLE contas_contabeis ADD COLUMN ordem_dre INTEGER DEFAULT 999`) } catch { /* ok */ }
     }
     if (!row) {
       db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(SCHEMA_VERSION);
@@ -94,7 +98,8 @@ function initSchema(db: Database.Database) {
       numero_conta_contabil TEXT PRIMARY KEY,
       nome_conta_contabil   TEXT,
       agrupamento_arvore    TEXT,
-      dre                   TEXT
+      dre                   TEXT,
+      ordem_dre             INTEGER DEFAULT 999
     );
 
     CREATE INDEX IF NOT EXISTS idx_ca_arvore ON contas_contabeis(agrupamento_arvore);
