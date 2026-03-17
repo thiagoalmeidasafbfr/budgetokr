@@ -183,9 +183,26 @@ export async function POST(req: NextRequest) {
 
       const insertMany = db.transaction((rows: Record<string, unknown>[]) => {
         for (const row of rows) {
+          // Se os campos Ano e Mês estão mapeados, constrói a data como
+          // YYYY-MM-01 — mais confiável que a célula de data do Excel,
+          // que pode ter seriais deslocados (ex.: 31/12/2024 para Janeiro).
+          const anoRaw = get(row, 'data_ano')
+          const mesRaw = get(row, 'data_mes')
+          let dataFinal: string
+          if (anoRaw && mesRaw) {
+            const ano = parseInt(String(anoRaw), 10)
+            const mes = parseInt(String(mesRaw), 10)
+            if (ano > 1900 && mes >= 1 && mes <= 12) {
+              dataFinal = `${ano}-${String(mes).padStart(2, '0')}-01`
+            } else {
+              dataFinal = parseDate(get(row, 'data_lancamento'))
+            }
+          } else {
+            dataFinal = parseDate(get(row, 'data_lancamento'))
+          }
           insert.run(
             tipoVal,
-            parseDate(get(row, 'data_lancamento')),
+            dataFinal,
             String(get(row, 'nome_conta_contabil')      ?? ''),
             String(get(row, 'numero_conta_contabil')    ?? ''),
             String(get(row, 'centro_custo')             ?? ''),
@@ -256,6 +273,44 @@ export async function POST(req: NextRequest) {
             String(get(row, 'agrupamento_arvore')  ?? ''),
             String(get(row, 'dre')                 ?? ''),
             ordem,
+          )
+        }
+      })
+      upsertMany(raw)
+      return NextResponse.json({ success: true, rowCount: raw.length, tipo })
+    }
+
+    // ── Estrutura DRE (linhas + subtotais) ───────────────────────────────────
+    if (tipo === 'dre_linhas') {
+      const modeRaw = (formData.get('mode') as string) ?? 'replace'
+      if (modeRaw === 'replace') {
+        db.prepare(`DELETE FROM dre_linhas`).run()
+      }
+      const upsert = db.prepare(`
+        INSERT INTO dre_linhas (ordem, nome, tipo, sinal, formula_grupos, formula_sinais, negrito, separador)
+        VALUES (?,?,?,?,?,?,?,?)
+        ON CONFLICT(nome) DO UPDATE SET
+          ordem=excluded.ordem,
+          tipo=excluded.tipo,
+          sinal=excluded.sinal,
+          formula_grupos=excluded.formula_grupos,
+          formula_sinais=excluded.formula_sinais,
+          negrito=excluded.negrito,
+          separador=excluded.separador
+      `)
+      const upsertMany = db.transaction((rows: Record<string, unknown>[]) => {
+        for (const row of rows) {
+          const nome = String(get(row, 'nome') ?? '').trim()
+          if (!nome) continue
+          upsert.run(
+            parseInt(String(get(row, 'ordem') ?? '999'), 10) || 999,
+            nome,
+            String(get(row, 'tipo') ?? 'grupo').trim() || 'grupo',
+            parseInt(String(get(row, 'sinal') ?? '1'), 10) || 1,
+            String(get(row, 'formula_grupos') ?? '[]').trim() || '[]',
+            String(get(row, 'formula_sinais') ?? '[]').trim() || '[]',
+            parseInt(String(get(row, 'negrito') ?? '0'), 10) ? 1 : 0,
+            parseInt(String(get(row, 'separador') ?? '0'), 10) ? 1 : 0,
           )
         }
       })

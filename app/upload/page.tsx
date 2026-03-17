@@ -7,22 +7,24 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 import {
-  LANCAMENTO_COLUMNS, CENTRO_CUSTO_COLUMNS, CONTA_CONTABIL_COLUMNS,
+  LANCAMENTO_COLUMNS, CENTRO_CUSTO_COLUMNS, CONTA_CONTABIL_COLUMNS, DRE_LINHAS_COLUMNS,
   type UploadTipo
 } from '@/lib/types'
 
 type Step = 'choose' | 'upload' | 'mapping' | 'importing' | 'done'
 
 const TIPO_OPTIONS: Array<{ value: UploadTipo; label: string; desc: string; color: string }> = [
-  { value: 'lancamentos_budget',  label: 'Lançamentos — Budget',       desc: 'Valores orçados por conta e centro de custo',     color: 'indigo' },
-  { value: 'lancamentos_razao',   label: 'Lançamentos — Razão (Real)', desc: 'Valores realizados / movimentos contábeis reais', color: 'emerald' },
-  { value: 'centros_custo',       label: 'Centros de Custo',            desc: 'Dimensão: CC → Departamento → Área',             color: 'amber' },
-  { value: 'contas_contabeis',    label: 'Contas Contábeis',            desc: 'Dimensão: Conta → Agrupamento → DRE',            color: 'purple' },
+  { value: 'lancamentos_budget',  label: 'Lançamentos — Budget',       desc: 'Valores orçados por conta e centro de custo',      color: 'indigo' },
+  { value: 'lancamentos_razao',   label: 'Lançamentos — Razão (Real)', desc: 'Valores realizados / movimentos contábeis reais',  color: 'emerald' },
+  { value: 'centros_custo',       label: 'Centros de Custo',           desc: 'Dimensão: CC → Departamento → Área',              color: 'amber' },
+  { value: 'contas_contabeis',    label: 'Contas Contábeis',           desc: 'Dimensão: Conta → Agrupamento → DRE (com ordem)', color: 'purple' },
+  { value: 'dre_linhas',          label: 'Estrutura da DRE',           desc: 'Ordem, subtotais e sinais da DRE gerencial',      color: 'rose' },
 ]
 
 function getColumns(tipo: UploadTipo) {
   if (tipo === 'lancamentos_budget' || tipo === 'lancamentos_razao') return LANCAMENTO_COLUMNS
-  if (tipo === 'centros_custo') return CENTRO_CUSTO_COLUMNS
+  if (tipo === 'centros_custo')   return CENTRO_CUSTO_COLUMNS
+  if (tipo === 'dre_linhas')      return DRE_LINHAS_COLUMNS
   return CONTA_CONTABIL_COLUMNS
 }
 

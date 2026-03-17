@@ -147,6 +147,9 @@ interface DRERow {
 interface TreeNode {
   name: string
   isGroup: boolean
+  isSubtotal?: boolean   // linha calculada (subtotal), não clicável para drill-down
+  isSeparator?: boolean  // linha com borda superior extra
+  isBold?: boolean       // negrito forçado (independente de isGroup)
   depth: number
   ordem: number
   budget: number
@@ -160,9 +163,16 @@ interface TreeNode {
   agrupamento?: string
 }
 
+interface DRELinha {
+  id: number; ordem: number; nome: string; tipo: 'grupo' | 'subtotal'
+  sinal: number; formula_grupos: string; formula_sinais: string
+  negrito: number; separador: number
+}
+
 export default function DREPage() {
   const [rawData,       setRawData]       = useState<DRERow[]>([])
   const [hierarchy,     setHierarchy]     = useState<Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }>>([])
+  const [dreLinhas,     setDreLinhas]     = useState<DRELinha[]>([])
   const [departamentos, setDepartamentos] = useState<string[]>([])
   const [periodos,      setPeriodos]      = useState<string[]>([])
   const [selDepts,      setSelDepts]      = useState<string[]>([])
@@ -191,10 +201,12 @@ export default function DREPage() {
   useEffect(() => {
     Promise.all([
       fetch('/api/dre?type=hierarchy').then(r => r.json()),
+      fetch('/api/dre?type=linhas').then(r => r.json()),
       fetch('/api/dre?type=distinct&col=nome_departamento').then(r => r.json()),
       fetch('/api/dre?type=distinct&col=data_lancamento').then(r => r.json()),
-    ]).then(([hier, depts, dates]) => {
+    ]).then(([hier, linhas, depts, dates]) => {
       setHierarchy(Array.isArray(hier) ? hier : [])
+      setDreLinhas(Array.isArray(linhas) ? linhas : [])
       setDepartamentos(Array.isArray(depts) ? depts : [])
       const uniquePeriods = [...new Set(
         (Array.isArray(dates) ? dates : [])
@@ -237,7 +249,10 @@ export default function DREPage() {
   const collapseAll = () => setExpanded(new Set())
 
   // Build tree from raw data
-  const tree = buildTree(rawData, hierarchy)
+  // Se há estrutura dre_linhas cadastrada, usa ela para definir ordem, subtotais e sinais
+  const tree = dreLinhas.length > 0
+    ? buildTreeFromLinhas(rawData, hierarchy, dreLinhas)
+    : buildTree(rawData, hierarchy)
 
   // Get all periods from data
   const dataPeriods = [...new Set(rawData.map(r => r.periodo).filter(Boolean))].sort()
@@ -245,12 +260,12 @@ export default function DREPage() {
   // Flatten tree for table rendering
   const flatRows = flattenTree(tree, expanded)
 
-  // Totals
-  const totals = flatRows
-    .filter(r => r.depth === 0 && r.isGroup)
+  // Totals — only real groups (não subtotais calculados que já somam os grupos)
+  const totals = tree
+    .filter(r => r.isGroup && !r.isSubtotal)
     .reduce((acc, r) => ({
       budget: acc.budget + r.budget,
-      razao: acc.razao + r.razao,
+      razao:  acc.razao  + r.razao,
     }), { budget: 0, razao: 0 })
 
   const exportCSV = () => {
@@ -544,7 +559,172 @@ export default function DREPage() {
   )
 }
 
-// ── Tree building ─────────────────────────────────────────────────────────────
+// ── Tree building com estrutura dre_linhas ─────────────────────────────────
+
+function buildTreeFromLinhas(
+  data: DRERow[],
+  hierarchy: Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }>,
+  dreLinhas: DRELinha[]
+): TreeNode[] {
+  // 1. Agregar dados por (dre, agrupamento_arvore) igual ao buildTree normal
+  const lineAgg = new Map<string, {
+    budget: number; razao: number
+    byPeriod: Record<string, { budget: number; razao: number }>
+  }>()
+  for (const row of data) {
+    const key = `${row.dre}||${row.agrupamento_arvore}`
+    if (!lineAgg.has(key)) lineAgg.set(key, { budget: 0, razao: 0, byPeriod: {} })
+    const agg = lineAgg.get(key)!
+    agg.budget += row.budget
+    agg.razao  += row.razao
+    if (row.periodo) {
+      if (!agg.byPeriod[row.periodo]) agg.byPeriod[row.periodo] = { budget: 0, razao: 0 }
+      agg.byPeriod[row.periodo].budget += row.budget
+      agg.byPeriod[row.periodo].razao  += row.razao
+    }
+  }
+
+  // 2. Agregar por dre (grupo pai)
+  const dreAgg = new Map<string, {
+    budget: number; razao: number
+    byPeriod: Record<string, { budget: number; razao: number }>
+    children: Array<{ agrupamento: string; budget: number; razao: number; byPeriod: Record<string, { budget: number; razao: number }> }>
+  }>()
+  for (const [key, agg] of lineAgg) {
+    const [dre, agrup] = key.split('||')
+    if (!dreAgg.has(dre)) dreAgg.set(dre, { budget: 0, razao: 0, byPeriod: {}, children: [] })
+    const g = dreAgg.get(dre)!
+    g.budget += agg.budget
+    g.razao  += agg.razao
+    for (const [p, v] of Object.entries(agg.byPeriod)) {
+      if (!g.byPeriod[p]) g.byPeriod[p] = { budget: 0, razao: 0 }
+      g.byPeriod[p].budget += v.budget
+      g.byPeriod[p].razao  += v.razao
+    }
+    if (agrup) {
+      g.children.push({ agrupamento: agrup, budget: agg.budget, razao: agg.razao, byPeriod: agg.byPeriod })
+    }
+  }
+
+  // 3. Mapa de filhos por dre (para expand/collapse)
+  const hierMap = new Map<string, Set<string>>()
+  for (const h of hierarchy) {
+    if (!h.dre) continue
+    if (!hierMap.has(h.dre)) hierMap.set(h.dre, new Set())
+    if (h.agrupamento_arvore) hierMap.get(h.dre)!.add(h.agrupamento_arvore)
+  }
+
+  // 4. Construir nós de grupos no budget de grupos calculados (para subtotais)
+  const groupBudgets = new Map<string, { budget: number; razao: number; byPeriod: Record<string, { budget: number; razao: number }> }>()
+  for (const [dre, agg] of dreAgg) {
+    groupBudgets.set(dre, { budget: agg.budget * 1, razao: agg.razao * 1, byPeriod: { ...agg.byPeriod } })
+  }
+
+  // 5. Percorrer dre_linhas em ordem e construir a lista flat de nós
+  const result: TreeNode[] = []
+  for (const linha of dreLinhas) {
+    if (linha.tipo === 'subtotal') {
+      // Calcular subtotal somando grupos definidos na fórmula
+      let subBudget = 0, subRazao = 0
+      const subByPeriod: Record<string, { budget: number; razao: number }> = {}
+      let fGrupos: string[] = []
+      let fSinais: number[] = []
+      try { fGrupos = JSON.parse(linha.formula_grupos) } catch { fGrupos = [] }
+      try { fSinais = JSON.parse(linha.formula_sinais) } catch { fSinais = [] }
+
+      fGrupos.forEach((g, i) => {
+        const sinal = fSinais[i] ?? 1
+        const agg = groupBudgets.get(g)
+        if (!agg) return
+        subBudget += agg.budget * sinal
+        subRazao  += agg.razao  * sinal
+        for (const [p, v] of Object.entries(agg.byPeriod)) {
+          if (!subByPeriod[p]) subByPeriod[p] = { budget: 0, razao: 0 }
+          subByPeriod[p].budget += v.budget * sinal
+          subByPeriod[p].razao  += v.razao  * sinal
+        }
+      })
+
+      // Aplicar sinal da linha (para apresentação)
+      subBudget *= linha.sinal
+      subRazao  *= linha.sinal
+      for (const p of Object.keys(subByPeriod)) {
+        subByPeriod[p].budget *= linha.sinal
+        subByPeriod[p].razao  *= linha.sinal
+      }
+
+      const var_ = subRazao - subBudget
+      result.push({
+        name: linha.nome,
+        isGroup: true,
+        isSubtotal: true,
+        isBold: true,
+        isSeparator: linha.separador === 1,
+        depth: 0,
+        ordem: linha.ordem,
+        budget: subBudget,
+        razao: subRazao,
+        variacao: var_,
+        variacao_pct: subBudget ? (var_ / Math.abs(subBudget)) * 100 : 0,
+        children: [],
+        byPeriod: subByPeriod,
+      })
+    } else {
+      // Linha de grupo normal
+      const agg = dreAgg.get(linha.nome)
+      const budget = (agg?.budget ?? 0) * linha.sinal
+      const razao  = (agg?.razao  ?? 0) * linha.sinal
+      const byPeriod: Record<string, { budget: number; razao: number }> = {}
+      if (agg) {
+        for (const [p, v] of Object.entries(agg.byPeriod)) {
+          byPeriod[p] = { budget: v.budget * linha.sinal, razao: v.razao * linha.sinal }
+        }
+      }
+
+      // Filhos (agrupamentos) a partir da hierarquia
+      const childSet = hierMap.get(linha.nome) ?? new Set<string>()
+      const children: TreeNode[] = []
+      for (const child of childSet) {
+        const cAgg = lineAgg.get(`${linha.nome}||${child}`)
+        if (!cAgg) continue
+        const cb = cAgg.budget * linha.sinal
+        const cr = cAgg.razao  * linha.sinal
+        const cByP: Record<string, { budget: number; razao: number }> = {}
+        for (const [p, v] of Object.entries(cAgg.byPeriod)) {
+          cByP[p] = { budget: v.budget * linha.sinal, razao: v.razao * linha.sinal }
+        }
+        const cv = cr - cb
+        children.push({
+          name: child, isGroup: false, depth: 1, ordem: 999,
+          budget: cb, razao: cr, variacao: cv,
+          variacao_pct: cb ? (cv / Math.abs(cb)) * 100 : 0,
+          children: [], byPeriod: cByP, dre: linha.nome, agrupamento: child,
+        })
+      }
+
+      const var_ = razao - budget
+      result.push({
+        name: linha.nome,
+        isGroup: true,
+        isBold: linha.negrito === 1,
+        isSeparator: linha.separador === 1,
+        depth: 0,
+        ordem: linha.ordem,
+        budget,
+        razao,
+        variacao: var_,
+        variacao_pct: budget ? (var_ / Math.abs(budget)) * 100 : 0,
+        children: children.sort((a, b) => a.name.localeCompare(b.name)),
+        byPeriod,
+        dre: linha.nome,
+      })
+    }
+  }
+
+  return result
+}
+
+// ── Tree building (fallback sem dre_linhas) ───────────────────────────────────
 
 function buildTree(
   data: DRERow[],

@@ -428,3 +428,24 @@ export function getDREHierarchy(): Array<{ agrupamento_arvore: string; dre: stri
     ORDER BY MIN(ordem_dre), dre, agrupamento_arvore
   `).all() as Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }>
 }
+
+export interface DRELinha {
+  id: number
+  ordem: number
+  nome: string
+  tipo: 'grupo' | 'subtotal'
+  sinal: number
+  formula_grupos: string   // JSON array
+  formula_sinais: string   // JSON array
+  negrito: number
+  separador: number
+}
+
+export function getDRELinhas(): DRELinha[] {
+  const db = getDb()
+  return db.prepare(`
+    SELECT id, ordem, nome, tipo, sinal, formula_grupos, formula_sinais, negrito, separador
+    FROM dre_linhas
+    ORDER BY ordem
+  `).all() as DRELinha[]
+}

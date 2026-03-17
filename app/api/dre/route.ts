@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getDRE, getDREHierarchy, getDistinctValues } from '@/lib/query'
+import { getDRE, getDREHierarchy, getDRELinhas, getDistinctValues } from '@/lib/query'
 import type { FilterColumn } from '@/lib/types'
 
 export async function GET(req: NextRequest) {
@@ -9,6 +9,10 @@ export async function GET(req: NextRequest) {
 
     if (type === 'hierarchy') {
       return NextResponse.json(getDREHierarchy())
+    }
+
+    if (type === 'linhas') {
+      return NextResponse.json(getDRELinhas())
     }
 
     if (type === 'distinct') {

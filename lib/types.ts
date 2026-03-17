@@ -100,10 +100,12 @@ export interface AnaliseRow {
 }
 
 // ─── Upload ───────────────────────────────────────────────────────────────────
-export type UploadTipo = 'lancamentos_budget' | 'lancamentos_razao' | 'centros_custo' | 'contas_contabeis'
+export type UploadTipo = 'lancamentos_budget' | 'lancamentos_razao' | 'centros_custo' | 'contas_contabeis' | 'dre_linhas'
 
 export const LANCAMENTO_COLUMNS = [
   { key: 'data_lancamento',           label: 'Data de Lançamento',         required: false },
+  { key: 'data_ano',                  label: 'Ano (substitui data)',        required: false },
+  { key: 'data_mes',                  label: 'Mês — número (substitui data)', required: false },
   { key: 'nome_conta_contabil',       label: 'Nome Conta Contábil',         required: false },
   { key: 'numero_conta_contabil',     label: 'Número Conta Contábil',       required: true  },
   { key: 'centro_custo',              label: 'Centro de Custo',             required: true  },
@@ -128,4 +130,15 @@ export const CONTA_CONTABIL_COLUMNS = [
   { key: 'agrupamento_arvore',    label: 'Agrupamento Árvore',    required: false },
   { key: 'dre',                   label: 'DRE',                   required: false },
   { key: 'ordem_dre',             label: 'Ordem DRE',             required: false },
+] as const
+
+export const DRE_LINHAS_COLUMNS = [
+  { key: 'ordem',          label: 'Ordem',                    required: true  },
+  { key: 'nome',           label: 'Nome da Linha',            required: true  },
+  { key: 'tipo',           label: 'Tipo (grupo/subtotal)',    required: false },
+  { key: 'sinal',          label: 'Sinal (1 ou -1)',          required: false },
+  { key: 'formula_grupos', label: 'Grupos Fórmula (JSON)',    required: false },
+  { key: 'formula_sinais', label: 'Sinais Fórmula (JSON)',    required: false },
+  { key: 'negrito',        label: 'Negrito (0/1)',            required: false },
+  { key: 'separador',      label: 'Separador acima (0/1)',    required: false },
 ] as const

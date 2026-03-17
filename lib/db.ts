@@ -11,7 +11,7 @@ if (!fs.existsSync(DATA_DIR)) {
 
 let db: Database.Database | null = null;
 
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 export function getDb(): Database.Database {
   if (!db) {
@@ -49,6 +49,8 @@ function initSchema(db: Database.Database) {
       // v3 → v4: add ordem_dre to contas_contabeis for DRE sorting
       try { db.exec(`ALTER TABLE contas_contabeis ADD COLUMN ordem_dre INTEGER DEFAULT 999`) } catch { /* ok */ }
     }
+    // v4 → v5: dre_linhas — estrutura da DRE com subtotais e sinais
+    // (idempotente: CREATE TABLE IF NOT EXISTS já garante isso)
     if (!row) {
       db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(SCHEMA_VERSION);
     } else {
@@ -104,6 +106,25 @@ function initSchema(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_ca_arvore ON contas_contabeis(agrupamento_arvore);
     CREATE INDEX IF NOT EXISTS idx_ca_dre    ON contas_contabeis(dre);
+
+    -- ─── Estrutura da DRE (linhas, subtotais, sinais) ────────────────────────
+    -- tipo: 'grupo' = linha real dos dados | 'subtotal' = linha calculada
+    -- sinal: 1 ou -1 (para inverter sinal de apresentação, ex: custos negativos)
+    -- formula_grupos: JSON array de nomes de grupos que compõem este subtotal
+    --   ex: '["Revenues","(-) Revenue Deductions"]'
+    -- formula_sinais: JSON array de sinais para cada grupo na fórmula
+    --   ex: '[1, 1]'  (soma todos) ou '[1, -1]' (subtrai segundo)
+    CREATE TABLE IF NOT EXISTS dre_linhas (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      ordem         INTEGER NOT NULL DEFAULT 999,
+      nome          TEXT    NOT NULL UNIQUE,
+      tipo          TEXT    NOT NULL DEFAULT 'grupo',   -- 'grupo' | 'subtotal'
+      sinal         INTEGER NOT NULL DEFAULT 1,         -- 1 ou -1
+      formula_grupos TEXT   DEFAULT '[]',               -- JSON array (só subtotal)
+      formula_sinais TEXT   DEFAULT '[]',               -- JSON array de ints
+      negrito       INTEGER NOT NULL DEFAULT 0,         -- 1 = linha em negrito
+      separador     INTEGER NOT NULL DEFAULT 0          -- 1 = linha separadora acima
+    );
 
     -- ─── Medidas (como "measures" do Power BI) ───────────────────────────────
     CREATE TABLE IF NOT EXISTS medidas (
