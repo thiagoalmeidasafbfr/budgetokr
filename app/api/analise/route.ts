@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAnalise, getMedidaResultados, getDistinctValues, getSummary } from '@/lib/query'
 import type { FilterCondition, FilterColumn } from '@/lib/types'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(req: NextRequest) {
   try {
     const sp       = new URL(req.url).searchParams

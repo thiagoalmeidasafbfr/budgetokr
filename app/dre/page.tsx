@@ -69,7 +69,7 @@ function DetalhamentoModal({
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-10 px-4 overflow-auto"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[85vh] flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] max-h-[92vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <div>
@@ -352,9 +352,7 @@ export default function DREPage() {
           .filter(Boolean)
       )].sort() as string[]
       setPeriodos(uniquePeriods)
-      // Expand all DRE groups by default (dre = parent group)
-      const groups = new Set((Array.isArray(hier) ? hier : []).map((h: { dre: string }) => h.dre).filter(Boolean))
-      setExpanded(groups)
+      // Starts collapsed — user expands as needed
     })
     loadData([], [])
   }, [])
@@ -564,7 +562,7 @@ export default function DREPage() {
                             ? 'bg-gray-50/80 hover:bg-gray-100/80'
                             : 'border-gray-50 hover:bg-gray-50',
                         )}>
-                        <td className={cn('px-5 py-2.5', row.isGroup ? 'font-bold text-gray-900' : 'text-gray-700')}
+                        <td className={cn('px-5 py-2.5', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-700')}
                           style={{ paddingLeft: `${20 + row.depth * 24}px` }}>
                           <div className="flex items-center gap-1.5">
                             {row.isGroup && !row.isSubtotal ? (
@@ -580,11 +578,11 @@ export default function DREPage() {
                           </div>
                         </td>
                         <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, undefined, 'budget') }}
-                          className={cn('px-5 py-2.5 text-right', row.isGroup ? 'font-bold text-gray-900' : 'text-gray-600')}>
+                          className={cn('px-5 py-2.5 text-right', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-600')}>
                           {formatCurrency(row.budget)}
                         </td>
                         <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, undefined, 'razao') }}
-                          className={cn('px-5 py-2.5 text-right', row.isGroup ? 'font-bold text-gray-900' : 'text-gray-600')}>
+                          className={cn('px-5 py-2.5 text-right', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-600')}>
                           {formatCurrency(row.razao)}
                         </td>
                         <td className={cn('px-5 py-2.5 text-right font-semibold', colorForVariance(row.variacao))}>
@@ -598,21 +596,6 @@ export default function DREPage() {
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot>
-                    <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
-                      <td className="px-5 py-3">Total Geral</td>
-                      <td className="px-5 py-3 text-right">{formatCurrency(totals.budget)}</td>
-                      <td className="px-5 py-3 text-right">{formatCurrency(totals.razao)}</td>
-                      <td className={cn('px-5 py-3 text-right', colorForVariance(totals.razao - totals.budget))}>
-                        {formatCurrency(totals.razao - totals.budget)}
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(totals.razao - totals.budget))}>
-                          {formatPct(totals.budget ? ((totals.razao - totals.budget) / Math.abs(totals.budget)) * 100 : 0)}
-                        </span>
-                      </td>
-                    </tr>
-                  </tfoot>
                 </table>
               </div>
             </Card>
@@ -652,7 +635,10 @@ export default function DREPage() {
                           'border-b transition-colors cursor-context-menu',
                           row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50',
                         )}>
-                        <td className={cn('px-4 py-2 sticky left-0 bg-white z-10', row.isGroup ? 'font-bold text-gray-900 bg-gray-50/80' : 'text-gray-700')}
+                        <td className={cn('px-4 py-2 sticky left-0 bg-white z-10',
+                          row.isSubtotal ? 'font-bold text-gray-900 bg-gray-50/80'
+                            : row.isGroup ? 'font-medium text-gray-800 bg-gray-50/80'
+                            : 'text-gray-700')}
                           style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
                           <div className="flex items-center gap-1">
                             {row.isGroup && !row.isSubtotal ? (
@@ -671,11 +657,11 @@ export default function DREPage() {
                           return (
                             <React.Fragment key={p}>
                               <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'budget') }}
-                                className={cn('px-2 py-2 text-right text-xs border-l border-gray-100', row.isGroup ? 'font-bold' : 'text-gray-600')}>
+                                className={cn('px-2 py-2 text-right text-xs border-l border-gray-100', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
                                 {formatCurrency(cell.budget)}
                               </td>
                               <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'razao') }}
-                                className={cn('px-2 py-2 text-right text-xs', row.isGroup ? 'font-bold' : 'text-gray-600')}>
+                                className={cn('px-2 py-2 text-right text-xs', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
                                 {formatCurrency(cell.razao)}
                               </td>
                               <td className={cn('px-2 py-2 text-right text-xs font-semibold', colorForVariance(v))}>

@@ -54,24 +54,29 @@ export default function AnalisePage() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/analise?type=distinct&col=nome_departamento').then(r => r.json()),
-      fetch('/api/analise?type=distinct&col=data_lancamento').then(r => r.json()),
-      fetch('/api/medidas').then(r => r.json()),
+      fetch('/api/analise?type=distinct&col=nome_departamento', { cache: 'no-store' }).then(r => r.json()),
+      fetch('/api/analise?type=distinct&col=data_lancamento',   { cache: 'no-store' }).then(r => r.json()),
+      fetch('/api/medidas', { cache: 'no-store' }).then(r => r.json()),
     ]).then(([depts, dates, meds]) => {
       setDepartamentos(Array.isArray(depts) ? depts : [])
       const uniquePeriods = [...new Set((Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean))].sort() as string[]
       setPeriodos(uniquePeriods)
       setMedidas(Array.isArray(meds) ? meds : [])
     })
-    loadData([], [])
   }, [])
+
+  // Auto-apply filters whenever selection changes
+  useEffect(() => {
+    loadData(selDepts, selPeriods)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selDepts, selPeriods])
 
   const loadData = useCallback(async (depts: string[], prds: string[]) => {
     setLoading(true)
     const params = new URLSearchParams()
     if (depts.length)  params.set('departamentos', depts.join(','))
     if (prds.length)   params.set('periodos', prds.join(','))
-    const res = await fetch(`/api/analise?${params}`)
+    const res = await fetch(`/api/analise?${params}`, { cache: 'no-store' })
     if (res.ok) setData(await res.json())
     setLoading(false)
   }, [])
@@ -245,12 +250,9 @@ export default function AnalisePage() {
                   ))}
                 </div>
               </div>
-              <div className="flex gap-1">
-                <Button size="sm" onClick={applyFilters} className="flex-1 text-xs h-7"><RefreshCw size={10} /> Filtrar</Button>
-                {(selDepts.length > 0 || selPeriods.length > 0) && (
-                  <Button size="sm" variant="outline" onClick={() => { setSelDepts([]); setSelPeriods([]); loadData([],[]) }} className="h-7 px-2"><X size={10} /></Button>
-                )}
-              </div>
+              {(selDepts.length > 0 || selPeriods.length > 0) && (
+                <Button size="sm" variant="outline" onClick={() => { setSelDepts([]); setSelPeriods([]) }} className="w-full h-7 text-xs"><X size={10} /> Limpar filtros</Button>
+              )}
             </CardContent>
           </Card>
 
