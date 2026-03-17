@@ -230,7 +230,7 @@ export function getAnalise(
   const extraParams: unknown[] = []
 
   if (departamentos?.length) {
-    extraConditions.push(`cc.departamento IN (${departamentos.map(() => '?').join(',')})`)
+    extraConditions.push(`cc.nome_departamento IN (${departamentos.map(() => '?').join(',')})`)
     extraParams.push(...departamentos)
   }
   if (periodos?.length) {

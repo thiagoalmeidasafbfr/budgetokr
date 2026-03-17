@@ -68,13 +68,22 @@ export default function UploadPage() {
     setSample(data.sample)
     setTotalRows(data.total)
 
-    // Auto-detect by exact or partial name match
+    // Auto-detect by normalized name match (removes accents, spaces, dashes)
+    const norm = (s: string) =>
+      s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[\s_\-./]/g, '')
     const autoMap: Record<string, string> = {}
     for (const fc of fieldCols) {
-      const match = data.columns.find((c: string) =>
-        c.toLowerCase().replace(/[\s_-]/g, '') === fc.key.toLowerCase().replace(/[\s_-]/g, '') ||
-        c.toLowerCase().includes(fc.key.toLowerCase().replace(/_/g, ' '))
-      )
+      const normKey = norm(fc.key)
+      const match = data.columns.find((c: string) => {
+        const normCol = norm(c)
+        // exact normalized match
+        if (normCol === normKey) return true
+        // normalized key is a substring of the column name
+        if (normCol.includes(normKey)) return true
+        // "debito_credito" also matches columns containing "valor"
+        if (fc.key === 'debito_credito' && normCol.includes('valor')) return true
+        return false
+      })
       if (match) autoMap[fc.key] = match
     }
     setMapping(autoMap)

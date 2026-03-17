@@ -53,7 +53,7 @@ export default function AnalisePage() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/analise?type=distinct&col=departamento').then(r => r.json()),
+      fetch('/api/analise?type=distinct&col=nome_departamento').then(r => r.json()),
       fetch('/api/analise?type=distinct&col=data_lancamento').then(r => r.json()),
       fetch('/api/medidas').then(r => r.json()),
     ]).then(([depts, dates, meds]) => {
