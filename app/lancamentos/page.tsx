@@ -4,7 +4,7 @@ import { Plus, Trash2, Search, ChevronLeft, ChevronRight, RefreshCw, AlertCircle
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { formatCurrency, cn } from '@/lib/utils'
+import { formatCurrency, formatDate, dateToISO, cn } from '@/lib/utils'
 import type { Lancamento } from '@/lib/types'
 
 interface PageData {
@@ -61,7 +61,8 @@ export default function LancamentosPage() {
   const startEdit = (id: number, field: string, val: unknown) => {
     if (field === 'departamento') return // readonly
     setEditing({ id, field })
-    setEditVal(String(val ?? ''))
+    // Datas: exibe no formato brasileiro para edição
+    setEditVal(field === 'data_lancamento' ? formatDate(String(val ?? '')) : String(val ?? ''))
   }
 
   const commitEdit = async () => {
@@ -70,7 +71,11 @@ export default function LancamentosPage() {
     setSaving(id)
     setEditing(null)
 
-    const body: Record<string, unknown> = { id, [field]: field === 'debito_credito' ? parseFloat(editVal) || 0 : editVal }
+    let fieldValue: unknown = editVal
+    if (field === 'debito_credito')   fieldValue = parseFloat(editVal) || 0
+    if (field === 'data_lancamento')  fieldValue = dateToISO(editVal) // BR → ISO
+
+    const body: Record<string, unknown> = { id, [field]: fieldValue }
     const res = await fetch('/api/lancamentos', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     if (res.ok) {
       const updated = await res.json()
@@ -209,7 +214,9 @@ export default function LancamentosPage() {
                           >
                             {col.key === 'debito_credito'
                               ? Number(val).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
-                              : String(val ?? '')}
+                              : col.key === 'data_lancamento'
+                                ? formatDate(String(val ?? ''))
+                                : String(val ?? '')}
                           </div>
                         )}
                       </td>

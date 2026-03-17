@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { BarChart3, TrendingDown, TrendingUp, Upload, Target, AlertCircle, Database, FileText } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { formatCurrency, formatPct, cn } from '@/lib/utils'
+import { formatCurrency, formatPct, formatPeriodo, cn } from '@/lib/utils'
 import Link from 'next/link'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts'
 
@@ -97,8 +97,8 @@ export default function Dashboard() {
   }, {})
 
   const periodChartData = Object.entries(byPeriod)
-    .map(([periodo, vals]) => ({ periodo, ...vals }))
-    .sort((a, b) => a.periodo.localeCompare(b.periodo))
+    .map(([periodo, vals]) => ({ raw: periodo, periodo: formatPeriodo(periodo), ...vals }))
+    .sort((a, b) => a.raw.localeCompare(b.raw))
 
   const deptVariance = Object.entries(byDept)
     .map(([dept, vals]) => ({ dept, variacao: vals.razao - vals.budget }))

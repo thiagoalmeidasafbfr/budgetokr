@@ -63,15 +63,46 @@ function parseNumber(v: unknown): number {
 
 function parseDate(v: unknown): string {
   if (!v) return ''
+
+  // JavaScript Date object (XLSX cellDates: true)
+  if (v instanceof Date) {
+    if (isNaN(v.getTime())) return ''
+    return v.toISOString().substring(0, 10)
+  }
+
+  // Legacy: object with toISOString
   if (typeof v === 'object' && v !== null && 'toISOString' in v) {
     return (v as Date).toISOString().substring(0, 10)
   }
+
   const s = String(v).trim()
-  if (/^\d+$/.test(s)) {
-    const d = XLSX.SSF.parse_date_code(parseInt(s))
-    if (d) return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`
+  if (!s) return ''
+
+  // Excel serial number as plain integer string (4-6 digits)
+  if (/^\d{4,6}$/.test(s)) {
+    try {
+      const d = XLSX.SSF.parse_date_code(parseInt(s))
+      if (d && d.y > 1900) return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`
+    } catch { /* not a serial */ }
   }
-  return s
+
+  // ISO: yyyy-mm-dd or yyyy/mm/dd
+  const iso = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/)
+  if (iso) return `${iso[1]}-${iso[2].padStart(2,'0')}-${iso[3].padStart(2,'0')}`
+
+  // Brazilian: dd/mm/yyyy or dd-mm-yyyy  ← export padrão Excel pt-BR
+  const br = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/)
+  if (br) return `${br[3]}-${br[2].padStart(2,'0')}-${br[1].padStart(2,'0')}`
+
+  // Brazilian short: dd/mm/yy
+  const brShort = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2})$/)
+  if (brShort) {
+    const yr = parseInt(brShort[3])
+    const y4 = yr + (yr <= 30 ? 2000 : 1900)
+    return `${y4}-${brShort[2].padStart(2,'0')}-${brShort[1].padStart(2,'0')}`
+  }
+
+  return s // formato desconhecido — mantém como está
 }
 
 export async function POST(req: NextRequest) {

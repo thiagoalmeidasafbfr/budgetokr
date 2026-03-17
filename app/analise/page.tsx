@@ -4,7 +4,7 @@ import { Filter, X, BarChart3, Table2, Download, RefreshCw, Target, ChevronDown 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { formatCurrency, formatPct, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
+import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts'
 import type { Medida } from '@/lib/types'
 
@@ -120,7 +120,7 @@ export default function AnalisePage() {
         ? row.nome_departamento.trim()
         : (row.departamento || '—')
     } else {
-      key = row.periodo
+      key = row.periodo // armazena yyyy-mm como chave de agrupamento
     }
     if (!acc[key]) acc[key] = { budget: 0, razao: 0, variacao: 0, sub: new Set(), codigo: row.departamento }
     acc[key].budget   += row.budget
@@ -131,11 +131,20 @@ export default function AnalisePage() {
   }, {})
 
   const tableRows = Object.entries(grouped)
-    .map(([key, vals]) => ({ key, ...vals, variacao_pct: vals.budget ? (vals.variacao / Math.abs(vals.budget)) * 100 : 0 }))
-    .sort((a, b) => Math.abs(b.variacao) - Math.abs(a.variacao))
+    .map(([key, vals]) => ({
+      key,
+      // Exibição: período vira mm/yyyy; departamento fica como está
+      label: groupBy === 'periodo' ? formatPeriodo(key) : key,
+      ...vals,
+      variacao_pct: vals.budget ? (vals.variacao / Math.abs(vals.budget)) * 100 : 0,
+    }))
+    .sort((a, b) => groupBy === 'periodo'
+      ? a.key.localeCompare(b.key)       // ordena pelo yyyy-mm original
+      : Math.abs(b.variacao) - Math.abs(a.variacao))
 
   const totals = tableRows.reduce((a, r) => ({ budget: a.budget + r.budget, razao: a.razao + r.razao, variacao: a.variacao + r.variacao }), { budget: 0, razao: 0, variacao: 0 })
-  const chartData = tableRows.slice(0, 15)
+  // Chart usa label já formatado
+  const chartData = tableRows.slice(0, 15).map(r => ({ ...r, key: r.label }))
 
   // Medida view aggregation
   const activeMedida = medidas.find(m => m.id === selMedida)
@@ -207,7 +216,7 @@ export default function AnalisePage() {
                       <input type="checkbox" checked={selPeriods.includes(p)}
                         onChange={e => setSelPeriods(prev => e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}
                         className="w-3 h-3 accent-indigo-600" />
-                      <span className="text-xs text-gray-600">{p}</span>
+                      <span className="text-xs text-gray-600">{formatPeriodo(p)}</span>
                     </label>
                   ))}
                 </div>
@@ -282,7 +291,7 @@ export default function AnalisePage() {
           {viewMode !== 'medida' && (selDepts.length > 0 || selPeriods.length > 0) && (
             <div className="flex flex-wrap gap-1">
               {selDepts.map(d => <Badge key={d} variant="secondary" className="gap-1">{d}<button onClick={() => setSelDepts(p => p.filter(x => x !== d))}><X size={9} /></button></Badge>)}
-              {selPeriods.map(p => <Badge key={p} variant="outline" className="gap-1">{p}<button onClick={() => setSelPeriods(prev => prev.filter(x => x !== p))}><X size={9} /></button></Badge>)}
+              {selPeriods.map(p => <Badge key={p} variant="outline" className="gap-1">{formatPeriodo(p)}<button onClick={() => setSelPeriods(prev => prev.filter(x => x !== p))}><X size={9} /></button></Badge>)}
             </div>
           )}
 
@@ -304,8 +313,8 @@ export default function AnalisePage() {
                     {tableRows.map((row, i) => (
                       <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
                         <td className="px-5 py-3 font-medium text-gray-900">
-                          {row.key}
-                          {groupBy === 'departamento' && row.codigo && row.codigo !== row.key && (
+                          {row.label}
+                          {groupBy === 'departamento' && row.codigo && row.codigo !== row.label && (
                             <span className="ml-2 text-xs text-gray-400 font-normal">{row.codigo}</span>
                           )}
                         </td>
@@ -425,7 +434,7 @@ export default function AnalisePage() {
                           onChange={e => setMedidaSelPeriods(prev =>
                             e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}
                           className="w-3 h-3 accent-indigo-600" />
-                        <span className="text-xs text-gray-600">{p}</span>
+                        <span className="text-xs text-gray-600">{formatPeriodo(p)}</span>
                       </label>
                     ))}
                     {medidaSelPeriods.length > 0 && (
@@ -444,7 +453,7 @@ export default function AnalisePage() {
               {medidaSelPeriods.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {medidaSelPeriods.map(p => (
-                    <Badge key={p} variant="outline" className="gap-1">{p}
+                    <Badge key={p} variant="outline" className="gap-1">{formatPeriodo(p)}
                       <button onClick={() => setMedidaSelPeriods(prev => prev.filter(x => x !== p))}><X size={9} /></button>
                     </Badge>
                   ))}
