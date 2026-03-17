@@ -410,7 +410,7 @@ export function getDRE(
     ${STAR_SCHEMA_JOIN}
     ${whereClause}
     GROUP BY ca.dre, ca.agrupamento_arvore, periodo
-    ORDER BY ca.agrupamento_arvore, ca.dre, periodo
+    ORDER BY ca.dre, ca.agrupamento_arvore, periodo
   `
 
   return db.prepare(sql).all(...params) as DRERow[]

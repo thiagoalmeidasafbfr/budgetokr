@@ -51,8 +51,8 @@ export default function DREPage() {
           .filter(Boolean)
       )].sort() as string[]
       setPeriodos(uniquePeriods)
-      // Expand all groups by default
-      const groups = new Set((Array.isArray(hier) ? hier : []).map((h: { agrupamento_arvore: string }) => h.agrupamento_arvore).filter(Boolean))
+      // Expand all DRE groups by default (dre = parent group)
+      const groups = new Set((Array.isArray(hier) ? hier : []).map((h: { dre: string }) => h.dre).filter(Boolean))
       setExpanded(groups)
     })
     loadData([], [])
@@ -80,7 +80,7 @@ export default function DREPage() {
   }
 
   const expandAll = () => {
-    const groups = new Set(hierarchy.map(h => h.agrupamento_arvore).filter(Boolean))
+    const groups = new Set(hierarchy.map(h => h.dre).filter(Boolean))
     setExpanded(groups)
   }
   const collapseAll = () => setExpanded(new Set())
@@ -369,20 +369,23 @@ function buildTree(
   data: DRERow[],
   hierarchy: Array<{ agrupamento_arvore: string; dre: string }>
 ): TreeNode[] {
-  // Group hierarchy entries by agrupamento_arvore
-  const groupMap = new Map<string, string[]>()
+  // Hierarchy: dre = parent group (e.g. "Revenue"), agrupamento_arvore = child (e.g. "Broadcast Revenue")
+  // Group hierarchy entries by dre (parent)
+  const groupMap = new Map<string, Set<string>>()
   for (const h of hierarchy) {
-    const group = h.agrupamento_arvore || ''
-    if (!groupMap.has(group)) groupMap.set(group, [])
-    groupMap.get(group)!.push(h.dre)
+    const parent = h.dre || ''
+    if (!parent) continue
+    if (!groupMap.has(parent)) groupMap.set(parent, new Set())
+    if (h.agrupamento_arvore) groupMap.get(parent)!.add(h.agrupamento_arvore)
   }
 
-  // Aggregate data by dre line
-  const dreAgg = new Map<string, { budget: number; razao: number; byPeriod: Record<string, { budget: number; razao: number }> }>()
+  // Aggregate data by agrupamento_arvore (child line) — this is the detail level
+  // Key: "dre||agrupamento_arvore"
+  const lineAgg = new Map<string, { budget: number; razao: number; byPeriod: Record<string, { budget: number; razao: number }> }>()
   for (const row of data) {
-    const key = row.dre
-    if (!dreAgg.has(key)) dreAgg.set(key, { budget: 0, razao: 0, byPeriod: {} })
-    const agg = dreAgg.get(key)!
+    const key = `${row.dre}||${row.agrupamento_arvore}`
+    if (!lineAgg.has(key)) lineAgg.set(key, { budget: 0, razao: 0, byPeriod: {} })
+    const agg = lineAgg.get(key)!
     agg.budget += row.budget
     agg.razao += row.razao
     if (row.periodo) {
@@ -392,27 +395,23 @@ function buildTree(
     }
   }
 
-  // Build tree nodes
+  // Build tree: dre as group, agrupamento_arvore as children
   const tree: TreeNode[] = []
+  const usedKeys = new Set<string>()
 
-  // DRE lines that belong to a group
-  const assignedDREs = new Set<string>()
-
-  for (const [group, dreLines] of groupMap) {
-    if (!group) continue // skip empty group names
-
+  for (const [parent, childSet] of groupMap) {
     const children: TreeNode[] = []
     let groupBudget = 0
     let groupRazao = 0
     const groupByPeriod: Record<string, { budget: number; razao: number }> = {}
 
-    for (const dre of dreLines) {
-      assignedDREs.add(dre)
-      const agg = dreAgg.get(dre) ?? { budget: 0, razao: 0, byPeriod: {} }
+    for (const child of childSet) {
+      const key = `${parent}||${child}`
+      usedKeys.add(key)
+      const agg = lineAgg.get(key) ?? { budget: 0, razao: 0, byPeriod: {} }
       groupBudget += agg.budget
       groupRazao += agg.razao
 
-      // Merge period data
       for (const [p, vals] of Object.entries(agg.byPeriod)) {
         if (!groupByPeriod[p]) groupByPeriod[p] = { budget: 0, razao: 0 }
         groupByPeriod[p].budget += vals.budget
@@ -421,7 +420,7 @@ function buildTree(
 
       const variacao = agg.razao - agg.budget
       children.push({
-        name: dre,
+        name: child,
         isGroup: false,
         depth: 1,
         budget: agg.budget,
@@ -433,26 +432,42 @@ function buildTree(
       })
     }
 
+    // Also include rows where agrupamento_arvore is empty but dre matches
+    const bareKey = `${parent}||`
+    if (lineAgg.has(bareKey)) {
+      usedKeys.add(bareKey)
+      const agg = lineAgg.get(bareKey)!
+      groupBudget += agg.budget
+      groupRazao += agg.razao
+      for (const [p, vals] of Object.entries(agg.byPeriod)) {
+        if (!groupByPeriod[p]) groupByPeriod[p] = { budget: 0, razao: 0 }
+        groupByPeriod[p].budget += vals.budget
+        groupByPeriod[p].razao += vals.razao
+      }
+    }
+
     const variacao = groupRazao - groupBudget
     tree.push({
-      name: group,
+      name: parent,
       isGroup: true,
       depth: 0,
       budget: groupBudget,
       razao: groupRazao,
       variacao,
       variacao_pct: groupBudget ? (variacao / Math.abs(groupBudget)) * 100 : 0,
-      children,
+      children: children.sort((a, b) => a.name.localeCompare(b.name)),
       byPeriod: groupByPeriod,
     })
   }
 
-  // Add unassigned DRE lines (no group)
-  for (const [dre, agg] of dreAgg) {
-    if (assignedDREs.has(dre)) continue
+  // Add unassigned lines (no matching hierarchy entry)
+  for (const [key, agg] of lineAgg) {
+    if (usedKeys.has(key)) continue
+    const [dre, agrup] = key.split('||')
+    const name = agrup || dre || 'Sem classificação'
     const variacao = agg.razao - agg.budget
     tree.push({
-      name: dre,
+      name,
       isGroup: false,
       depth: 0,
       budget: agg.budget,
@@ -464,7 +479,7 @@ function buildTree(
     })
   }
 
-  return tree
+  return tree.sort((a, b) => a.name.localeCompare(b.name))
 }
 
 function flattenTree(tree: TreeNode[], expanded: Set<string>): TreeNode[] {

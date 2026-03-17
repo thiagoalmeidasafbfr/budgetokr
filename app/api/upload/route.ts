@@ -69,16 +69,6 @@ function parseNumber(v: unknown): number {
 function parseDate(v: unknown): string {
   if (!v) return ''
 
-  // Date object (de cellDates:true no xlsx) — usa hora LOCAL,
-  // pois xlsx cria Date via new Date(y, m, d) em hora local.
-  if (v instanceof Date) {
-    if (isNaN(v.getTime())) return ''
-    const y = v.getFullYear()
-    const m = String(v.getMonth() + 1).padStart(2, '0')
-    const d = String(v.getDate()).padStart(2, '0')
-    return `${y}-${m}-${d}`
-  }
-
   const s = String(v).trim()
   if (!s) return ''
 
@@ -128,11 +118,12 @@ export async function POST(req: NextRequest) {
     if (!file) return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
 
     const bytes    = await file.arrayBuffer()
-    const workbook = XLSX.read(bytes, { type: 'array', cellDates: true })
+    const workbook = XLSX.read(bytes, { type: 'array' })
     const sheet    = workbook.Sheets[workbook.SheetNames[0]]
 
-    // rawNumbers: false → células numéricas chegam como string formatada pt-BR.
-    // cellDates: true → células de data viram Date objects (hora local).
+    // rawNumbers: false → TODAS as células (incluindo datas) vêm como string
+    // formatada pelo Excel (ex: "01/02/2025", "-4.425,04"). Sem cellDates,
+    // não há conversão para Date objects nem problemas de timezone.
     const raw = XLSX.utils.sheet_to_json(sheet, {
       defval:     '',
       rawNumbers: false,
@@ -143,20 +134,7 @@ export async function POST(req: NextRequest) {
     const columns = Object.keys(raw[0])
 
     if (!mapping) {
-      const preview = raw.slice(0, 5).map(row => {
-        const clean: Record<string, unknown> = {}
-        for (const [k, v] of Object.entries(row)) {
-          if (v instanceof Date) {
-            const d = String(v.getDate()).padStart(2, '0')
-            const m = String(v.getMonth() + 1).padStart(2, '0')
-            clean[k] = `${d}/${m}/${v.getFullYear()}`
-          } else {
-            clean[k] = v
-          }
-        }
-        return clean
-      })
-      return NextResponse.json({ columns, sample: preview, total: raw.length })
+      return NextResponse.json({ columns, sample: raw.slice(0, 5), total: raw.length })
     }
 
     const map: Record<string, string> = JSON.parse(mapping)
