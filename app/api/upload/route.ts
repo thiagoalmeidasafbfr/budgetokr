@@ -96,6 +96,15 @@ function parseDate(v: unknown): string {
     return `${y4}-${brShort[2].padStart(2,'0')}-${brShort[1].padStart(2,'0')}`
   }
 
+  // Apenas mês/ano: MM/YYYY ou M/YYYY (orçamento sem dia, ex: "01/2025")
+  // Assume dia 01 para compatibilidade com strftime
+  const mmyyyy = s.match(/^(\d{1,2})[-\/](\d{4})$/)
+  if (mmyyyy) return `${mmyyyy[2]}-${mmyyyy[1].padStart(2,'0')}-01`
+
+  // Apenas ano/mês: YYYY/MM ou YYYY-MM
+  const yyyymm = s.match(/^(\d{4})[-\/](\d{1,2})$/)
+  if (yyyymm) return `${yyyymm[1]}-${yyyymm[2].padStart(2,'0')}-01`
+
   return s
 }
 
