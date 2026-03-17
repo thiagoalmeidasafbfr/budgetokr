@@ -185,16 +185,18 @@ export async function POST(req: NextRequest) {
       `)
 
       // ── Detecta formato de data: American (MM/DD) vs Brazilian (DD/MM) ────
-      // Varre até 30 linhas do campo mapeado para data_lancamento.
-      // Se o primeiro segmento variar mais que o segundo (ex: 01,02,...,12
-      // no primeiro e 01 fixo no segundo) → formato American (mês vem primeiro).
+      // Amostra uniformemente até 200 pontos em TODO o arquivo para capturar
+      // variação de meses mesmo que os dados estejam ordenados cronologicamente
+      // (ex: 14.000 linhas → primeiro mês tem ~1.200 linhas, varredura de
+      // apenas 30 linhas iniciais perderia todos os outros meses).
       let preferAmericanDates = false
       const dateColKey = map['data_lancamento']
       if (dateColKey) {
-        const firstSet = new Set<number>()
+        const firstSet  = new Set<number>()
         const secondSet = new Set<number>()
-        for (const row of raw.slice(0, 30)) {
-          const s = String(row[dateColKey] ?? '').trim()
+        const step = Math.max(1, Math.floor(raw.length / 200))
+        for (let i = 0; i < raw.length; i += step) {
+          const s = String(raw[i][dateColKey] ?? '').trim()
           const m = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/)
           if (m) {
             const a = parseInt(m[1]), b = parseInt(m[2])
@@ -202,7 +204,8 @@ export async function POST(req: NextRequest) {
             if (b >= 1 && b <= 12) secondSet.add(b)
           }
         }
-        // first segment varies across more distinct values → it's the MONTH → American format
+        // Se o primeiro segmento varia bem mais (ex: 1-12) e o segundo é fixo
+        // (ex: só 01 = dia) → formato American (mês vem primeiro: MM/DD/YYYY)
         if (firstSet.size > secondSet.size && secondSet.size <= 1) preferAmericanDates = true
       }
 

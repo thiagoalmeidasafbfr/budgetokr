@@ -66,6 +66,9 @@ export function buildFilterSQL(filters: FilterCondition[]): { where: string; par
 }
 
 // ─── Star schema query ────────────────────────────────────────────────────────
+// Remove "AS alias" suffix from GROUP BY / ORDER BY expressions (keep only in SELECT)
+const stripAlias = (expr: string) => expr.replace(/\s+as\s+\w+\s*$/i, '').trim()
+
 function runStarQuery(
   tipo: 'budget' | 'razao',
   filters: FilterCondition[],
@@ -74,8 +77,9 @@ function runStarQuery(
   const db = getDb()
   const { where, params } = buildFilterSQL(filters)
   const allConditions = [`l.tipo = '${tipo}'`, where].filter(Boolean).join(' AND ')
-  const selectCols = groupBy.join(', ')
-  const groupClause = groupBy.length ? `GROUP BY ${selectCols}` : ''
+  const selectCols  = groupBy.join(', ')
+  const groupExprs  = groupBy.map(stripAlias).join(', ')
+  const groupClause = groupBy.length ? `GROUP BY ${groupExprs}` : ''
 
   const sql = `
     SELECT
@@ -84,7 +88,7 @@ function runStarQuery(
     ${STAR_SCHEMA_JOIN}
     WHERE ${allConditions}
     ${groupClause}
-    ORDER BY ${groupBy.length ? selectCols : '1'}
+    ORDER BY ${groupBy.length ? groupExprs : '1'}
   `
   return db.prepare(sql).all(...(params as unknown[])) as Array<Record<string, unknown>>
 }
@@ -264,9 +268,10 @@ function runStarQueryWithPeriodo(
   const { where, params } = buildFilterSQL(filters)
   const periodoPart = periodoClause?.where ?? ''
   const allConditions = [`l.tipo = '${tipo}'`, where, periodoPart].filter(Boolean).join(' AND ')
-  const allParams = [...(params as unknown[]), ...(periodoClause?.params ?? [])]
-  const selectCols = groupBy.join(', ')
-  const groupClause = groupBy.length ? `GROUP BY ${selectCols}` : ''
+  const allParams    = [...(params as unknown[]), ...(periodoClause?.params ?? [])]
+  const selectCols  = groupBy.join(', ')
+  const groupExprs  = groupBy.map(stripAlias).join(', ')
+  const groupClause = groupBy.length ? `GROUP BY ${groupExprs}` : ''
 
   const sql = `
     SELECT
@@ -275,7 +280,7 @@ function runStarQueryWithPeriodo(
     ${STAR_SCHEMA_JOIN}
     WHERE ${allConditions}
     ${groupClause}
-    ORDER BY ${groupBy.length ? selectCols : '1'}
+    ORDER BY ${groupBy.length ? groupExprs : '1'}
   `
   return db.prepare(sql).all(...allParams) as Array<Record<string, unknown>>
 }
