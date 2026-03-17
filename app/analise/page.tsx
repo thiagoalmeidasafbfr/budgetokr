@@ -47,6 +47,7 @@ export default function AnalisePage() {
   const [medidaGroupBy,    setMedidaGroupBy]    = useState<'departamento' | 'periodo' | 'centro_custo'>('departamento')
   const [medidaSelPeriods, setMedidaSelPeriods] = useState<string[]>([])
   const [medidaLoading,    setMedidaLoading]    = useState(false)
+  const [medidaPeriodView, setMedidaPeriodView] = useState<'mes' | 'acumulado'>('mes')
   const [viewMode,      setViewMode]      = useState<ViewMode>('table')
   const [groupBy,       setGroupBy]       = useState<GroupBy>('departamento')
   const [loading,       setLoading]       = useState(false)
@@ -438,13 +439,26 @@ export default function AnalisePage() {
                     ['centro_custo', 'Por Centro de Custo'],
                     ['periodo',      'Por Período'],
                   ] as const).map(([g, label]) => (
-                    <button key={g} onClick={() => setMedidaGroupBy(g)}
+                    <button key={g} onClick={() => { setMedidaGroupBy(g); setMedidaPeriodView('mes') }}
                       className={cn('px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
                         medidaGroupBy === g ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
                       {label}
                     </button>
                   ))}
                 </div>
+
+                {/* Accumulated toggle — only for period groupBy */}
+                {medidaGroupBy === 'periodo' && (
+                  <div className="flex bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5">
+                    {([['mes', 'Mês a Mês'], ['acumulado', 'Acumulado YTD']] as const).map(([v, label]) => (
+                      <button key={v} onClick={() => setMedidaPeriodView(v)}
+                        className={cn('px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                          medidaPeriodView === v ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 {/* Period filter for medida */}
                 <div className="relative group">
@@ -488,7 +502,14 @@ export default function AnalisePage() {
               )}
 
               {/* Medida table */}
-              {!medidaLoading && (
+              {!medidaLoading && medidaGroupBy === 'periodo' && medidaPeriodView === 'acumulado'
+                ? <MedidaAcumuladoTable
+                    medidaAgg={medidaAgg}
+                    isRatioMedida={isRatioMedida}
+                    resolveAgg={resolveAgg}
+                    medidaTotals={medidaTotals}
+                  />
+                : !medidaLoading && (
                 <Card>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -504,25 +525,28 @@ export default function AnalisePage() {
                         {!isRatioMedida && <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>}
                       </tr></thead>
                       <tbody>
-                        {Object.entries(medidaAgg).map(([label, bucket], i) => {
-                          const { budget, razao } = resolveAgg(bucket)
-                          const variacao = razao - budget
-                          const pct = budget ? (variacao / Math.abs(budget)) * 100 : 0
-                          const fmt = (v: number) => isRatioMedida ? formatPct(v) : formatCurrency(v)
-                          return (
-                            <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
-                              <td className="px-5 py-3 font-medium text-gray-900">{label}</td>
-                              <td className="px-5 py-3 text-right text-gray-600">{fmt(budget)}</td>
-                              <td className="px-5 py-3 text-right text-gray-600">{fmt(razao)}</td>
-                              <td className={cn('px-5 py-3 text-right font-semibold', colorForVariance(variacao))}>
-                                {isRatioMedida ? `${variacao >= 0 ? '+' : ''}${variacao.toFixed(1)} pp` : formatCurrency(variacao)}
-                              </td>
-                              {!isRatioMedida && (
-                                <td className="px-5 py-3 text-right"><span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(variacao))}>{formatPct(pct)}</span></td>
-                              )}
-                            </tr>
-                          )
-                        })}
+                        {Object.entries(medidaAgg)
+                          .sort(([a], [b]) => a.localeCompare(b))
+                          .map(([label, bucket], i) => {
+                            const { budget, razao } = resolveAgg(bucket)
+                            const variacao = razao - budget
+                            const pct = budget ? (variacao / Math.abs(budget)) * 100 : 0
+                            const fmt = (v: number) => isRatioMedida ? formatPct(v) : formatCurrency(v)
+                            const displayLabel = medidaGroupBy === 'periodo' ? formatPeriodo(label) : label
+                            return (
+                              <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
+                                <td className="px-5 py-3 font-medium text-gray-900">{displayLabel}</td>
+                                <td className="px-5 py-3 text-right text-gray-600">{fmt(budget)}</td>
+                                <td className="px-5 py-3 text-right text-gray-600">{fmt(razao)}</td>
+                                <td className={cn('px-5 py-3 text-right font-semibold', colorForVariance(variacao))}>
+                                  {isRatioMedida ? `${variacao >= 0 ? '+' : ''}${variacao.toFixed(1)} pp` : formatCurrency(variacao)}
+                                </td>
+                                {!isRatioMedida && (
+                                  <td className="px-5 py-3 text-right"><span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(variacao))}>{formatPct(pct)}</span></td>
+                                )}
+                              </tr>
+                            )
+                          })}
                       </tbody>
                       <tfoot><tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
                         <td className="px-5 py-3">Total</td>
@@ -550,5 +574,132 @@ export default function AnalisePage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// ── Accumulated period table ──────────────────────────────────────────────────
+type AggBucketPublic = { budget: number; razao: number; num_b: number; num_r: number; den_b: number; den_r: number }
+
+function MedidaAcumuladoTable({
+  medidaAgg, isRatioMedida, resolveAgg, medidaTotals
+}: {
+  medidaAgg: Record<string, AggBucketPublic>
+  isRatioMedida: boolean
+  resolveAgg: (v: AggBucketPublic) => { budget: number; razao: number }
+  medidaTotals: { budget: number; razao: number }
+}) {
+  const sorted = Object.entries(medidaAgg).sort(([a], [b]) => a.localeCompare(b))
+
+  let cumNum_b = 0, cumNum_r = 0, cumDen_b = 0, cumDen_r = 0
+  let cumBudget = 0, cumRazao = 0
+
+  const rows = sorted.map(([period, bucket]) => {
+    const { budget: mBudget, razao: mRazao } = resolveAgg(bucket)
+    if (isRatioMedida) {
+      cumNum_b += bucket.num_b; cumNum_r += bucket.num_r
+      cumDen_b += bucket.den_b; cumDen_r += bucket.den_r
+      const cumBgt = cumDen_b ? (cumNum_b / Math.abs(cumDen_b)) * 100 : 0
+      const cumRaz = cumDen_r ? (cumNum_r / Math.abs(cumDen_r)) * 100 : 0
+      return { period, mBudget, mRazao, monthNum_r: bucket.num_r, monthDen_r: bucket.den_r, cumNum_r, cumDen_r, cumBgt, cumRaz }
+    } else {
+      cumBudget += mBudget; cumRazao += mRazao
+      return { period, mBudget, mRazao, monthNum_r: 0, monthDen_r: 0, cumNum_r: 0, cumDen_r: 0, cumBgt: cumBudget, cumRaz: cumRazao }
+    }
+  })
+
+  if (isRatioMedida) {
+    return (
+      <Card>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-gray-50">
+                <th className="text-left px-4 py-2 font-medium text-gray-500 text-xs" rowSpan={2}>Período</th>
+                <th className="text-center px-2 py-1 font-medium text-gray-400 text-xs border-b border-gray-100 bg-gray-50/80" colSpan={3}>Mês</th>
+                <th className="text-center px-2 py-1 font-medium text-indigo-500 text-xs border-b border-indigo-100 border-l bg-indigo-50/40" colSpan={4}>Acumulado YTD</th>
+              </tr>
+              <tr className="border-b bg-gray-50">
+                <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs">Numerador</th>
+                <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs">Denominador</th>
+                <th className="text-right px-3 py-2 font-medium text-gray-600 text-xs">% Mês</th>
+                <th className="text-right px-3 py-2 font-medium text-indigo-400 text-xs border-l border-indigo-100">Num. Acum.</th>
+                <th className="text-right px-3 py-2 font-medium text-indigo-400 text-xs">Den. Acum.</th>
+                <th className="text-right px-3 py-2 font-medium text-indigo-700 text-xs">% Acum.</th>
+                <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs">Bgd % Acum.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
+                  <td className="px-4 py-3 font-medium text-gray-900">{formatPeriodo(r.period)}</td>
+                  <td className="px-3 py-3 text-right text-gray-500 text-xs">{formatCurrency(r.monthNum_r)}</td>
+                  <td className="px-3 py-3 text-right text-gray-500 text-xs">{formatCurrency(r.monthDen_r)}</td>
+                  <td className="px-3 py-3 text-right text-gray-700 font-medium">{formatPct(r.mRazao)}</td>
+                  <td className="px-3 py-3 text-right text-indigo-500 text-xs border-l border-indigo-50">{formatCurrency(r.cumNum_r)}</td>
+                  <td className="px-3 py-3 text-right text-indigo-500 text-xs">{formatCurrency(r.cumDen_r)}</td>
+                  <td className="px-3 py-3 text-right font-bold text-indigo-700">{formatPct(r.cumRaz)}</td>
+                  <td className="px-3 py-3 text-right text-gray-400 text-xs">{formatPct(r.cumBgt)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
+                <td className="px-4 py-3 text-xs" colSpan={4}>Total Acumulado</td>
+                <td className="px-3 py-3 border-l border-indigo-50" colSpan={2} />
+                <td className="px-3 py-3 text-right text-indigo-700">{formatPct(medidaTotals.razao)}</td>
+                <td className="px-3 py-3 text-right text-gray-400 text-xs">{formatPct(medidaTotals.budget)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </Card>
+    )
+  }
+
+  // Simple medida accumulated
+  return (
+    <Card>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-gray-50">
+              <th className="text-left px-4 py-2 font-medium text-gray-500 text-xs" rowSpan={2}>Período</th>
+              <th className="text-center px-2 py-1 font-medium text-gray-400 text-xs border-b border-gray-100" colSpan={2}>Mês</th>
+              <th className="text-center px-2 py-1 font-medium text-indigo-500 text-xs border-b border-indigo-100 border-l bg-indigo-50/40" colSpan={3}>Acumulado YTD</th>
+            </tr>
+            <tr className="border-b bg-gray-50">
+              <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs">Razão</th>
+              <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs">Budget</th>
+              <th className="text-right px-3 py-2 font-medium text-indigo-600 text-xs border-l border-indigo-100">Razão Acum.</th>
+              <th className="text-right px-3 py-2 font-medium text-indigo-400 text-xs">Budget Acum.</th>
+              <th className="text-right px-3 py-2 font-medium text-indigo-400 text-xs">Δ Acum.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => {
+              const delta = r.cumRaz - r.cumBgt
+              return (
+                <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
+                  <td className="px-4 py-3 font-medium text-gray-900">{formatPeriodo(r.period)}</td>
+                  <td className="px-3 py-3 text-right text-gray-600">{formatCurrency(r.mRazao)}</td>
+                  <td className="px-3 py-3 text-right text-gray-500">{formatCurrency(r.mBudget)}</td>
+                  <td className="px-3 py-3 text-right font-semibold text-indigo-700 border-l border-indigo-50">{formatCurrency(r.cumRaz)}</td>
+                  <td className="px-3 py-3 text-right text-indigo-500">{formatCurrency(r.cumBgt)}</td>
+                  <td className={cn('px-3 py-3 text-right font-semibold', colorForVariance(delta))}>{formatCurrency(delta)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
+              <td className="px-4 py-3 text-xs" colSpan={3}>Total Acumulado</td>
+              <td className="px-3 py-3 text-right text-indigo-700">{formatCurrency(medidaTotals.razao)}</td>
+              <td className="px-3 py-3 text-right">{formatCurrency(medidaTotals.budget)}</td>
+              <td className={cn('px-3 py-3 text-right', colorForVariance(medidaTotals.razao - medidaTotals.budget))}>{formatCurrency(medidaTotals.razao - medidaTotals.budget)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </Card>
   )
 }

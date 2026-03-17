@@ -69,15 +69,14 @@ function parseNumber(v: unknown): number {
 function parseDate(v: unknown): string {
   if (!v) return ''
 
-  // JavaScript Date object (XLSX cellDates: true)
+  // JavaScript Date object (cellDates: true)
   if (v instanceof Date) {
     if (isNaN(v.getTime())) return ''
-    return v.toISOString().substring(0, 10)
-  }
-
-  // Legacy: object with toISOString
-  if (typeof v === 'object' && v !== null && 'toISOString' in v) {
-    return (v as Date).toISOString().substring(0, 10)
+    // Use local-time components to avoid UTC timezone shifting the date
+    const y = v.getFullYear()
+    const m = String(v.getMonth() + 1).padStart(2, '0')
+    const d = String(v.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
   }
 
   const s = String(v).trim()
@@ -123,13 +122,14 @@ export async function POST(req: NextRequest) {
     const workbook = XLSX.read(bytes, { type: 'array', cellDates: true })
     const sheet    = workbook.Sheets[workbook.SheetNames[0]]
 
-    // rawNumbers: false  → força células numéricas a virem como string formatada
-    // (ex: "-4.425,04") em vez de float já parseado de forma errada pelo xlsx
-    // quando a célula tem formato pt-BR customizado.
-    // Para datas, xlsx ainda respeita cellDates:true independente de rawNumbers.
+    // Sem rawNumbers:false para que cellDates:true entregue Date objects reais
+    // para células de data — evita o problema de o formato da célula Excel
+    // (ex: MM/DD/YYYY) fazer "02/01/2025" (fevereiro) ser parseado como
+    // "01 de janeiro" pelo regex brasileiro.
+    // Células numéricas vêm como float nativo; parseNumber lida com ambos
+    // (float nativo e string pt-BR).
     const raw = XLSX.utils.sheet_to_json(sheet, {
       defval: '',
-      rawNumbers: false,
     }) as Record<string, unknown>[]
 
     if (!raw.length) return NextResponse.json({ error: 'Arquivo vazio' }, { status: 400 })
@@ -137,7 +137,22 @@ export async function POST(req: NextRequest) {
     const columns = Object.keys(raw[0])
 
     if (!mapping) {
-      return NextResponse.json({ columns, sample: raw.slice(0, 5), total: raw.length })
+      // Convert Date objects to legible strings for the preview table
+      const preview = raw.slice(0, 5).map(row => {
+        const clean: Record<string, unknown> = {}
+        for (const [k, v] of Object.entries(row)) {
+          if (v instanceof Date) {
+            const y = v.getFullYear()
+            const mo = String(v.getMonth() + 1).padStart(2, '0')
+            const d = String(v.getDate()).padStart(2, '0')
+            clean[k] = `${d}/${mo}/${y}`
+          } else {
+            clean[k] = v
+          }
+        }
+        return clean
+      })
+      return NextResponse.json({ columns, sample: preview, total: raw.length })
     }
 
     const map: Record<string, string> = JSON.parse(mapping)
