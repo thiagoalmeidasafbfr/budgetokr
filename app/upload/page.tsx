@@ -121,7 +121,7 @@ export default function UploadPage() {
     fd.append('file', file)
     fd.append('tipo', tipo)
     fd.append('mapping', JSON.stringify(mapping))
-    fd.append('mode', mode)
+    fd.append('mode', tipo === 'dre_linhas' ? 'replace' : mode)
 
     const interval = setInterval(() => setProgress(p => Math.min(p + 6, 88)), 400)
     const res  = await fetch('/api/upload', { method: 'POST', body: fd })
