@@ -11,7 +11,7 @@ if (!fs.existsSync(DATA_DIR)) {
 
 let db: Database.Database | null = null;
 
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 export function getDb(): Database.Database {
   if (!db) {
@@ -51,6 +51,32 @@ function initSchema(db: Database.Database) {
     }
     // v4 → v5: dre_linhas — estrutura da DRE com subtotais e sinais
     // (idempotente: CREATE TABLE IF NOT EXISTS já garante isso)
+    // v5 → v6: kpis_manuais e kpi_valores
+    if (version < 6) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS kpis_manuais (
+          id           INTEGER PRIMARY KEY AUTOINCREMENT,
+          nome         TEXT    NOT NULL,
+          unidade      TEXT    NOT NULL DEFAULT '',
+          descricao    TEXT    DEFAULT '',
+          departamento TEXT    DEFAULT '',
+          cor          TEXT    DEFAULT '#6366f1',
+          ordem        INTEGER NOT NULL DEFAULT 999,
+          tem_budget   INTEGER NOT NULL DEFAULT 0,
+          created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS kpi_valores (
+          id       INTEGER PRIMARY KEY AUTOINCREMENT,
+          kpi_id   INTEGER NOT NULL,
+          periodo  TEXT    NOT NULL,
+          valor    REAL    NOT NULL DEFAULT 0,
+          meta     REAL    DEFAULT NULL,
+          UNIQUE(kpi_id, periodo),
+          FOREIGN KEY (kpi_id) REFERENCES kpis_manuais(id) ON DELETE CASCADE
+        );
+      `)
+    }
     if (!row) {
       db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(SCHEMA_VERSION);
     } else {
@@ -124,6 +150,29 @@ function initSchema(db: Database.Database) {
       formula_sinais TEXT   DEFAULT '[]',               -- JSON array de ints
       negrito       INTEGER NOT NULL DEFAULT 0,         -- 1 = linha em negrito
       separador     INTEGER NOT NULL DEFAULT 0          -- 1 = linha separadora acima
+    );
+
+    -- ─── KPIs Manuais ─────────────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS kpis_manuais (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome         TEXT    NOT NULL,
+      unidade      TEXT    NOT NULL DEFAULT '',
+      descricao    TEXT    DEFAULT '',
+      departamento TEXT    DEFAULT '',
+      cor          TEXT    DEFAULT '#6366f1',
+      ordem        INTEGER NOT NULL DEFAULT 999,
+      tem_budget   INTEGER NOT NULL DEFAULT 0,
+      created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS kpi_valores (
+      id       INTEGER PRIMARY KEY AUTOINCREMENT,
+      kpi_id   INTEGER NOT NULL,
+      periodo  TEXT    NOT NULL,
+      valor    REAL    NOT NULL DEFAULT 0,
+      meta     REAL    DEFAULT NULL,
+      UNIQUE(kpi_id, periodo),
+      FOREIGN KEY (kpi_id) REFERENCES kpis_manuais(id) ON DELETE CASCADE
     );
 
     -- ─── Medidas (como "measures" do Power BI) ───────────────────────────────

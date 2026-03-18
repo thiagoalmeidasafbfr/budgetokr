@@ -464,3 +464,122 @@ export function getDRELinhas(): DRELinha[] {
     ORDER BY ordem
   `).all() as DRELinha[]
 }
+
+// ─── KPIs Manuais ─────────────────────────────────────────────────────────────
+
+export interface KpiManual {
+  id: number
+  nome: string
+  unidade: string
+  descricao: string
+  departamento: string
+  cor: string
+  ordem: number
+  tem_budget: number
+}
+
+export interface KpiValor {
+  id: number
+  kpi_id: number
+  periodo: string
+  valor: number
+  meta: number | null
+}
+
+export function getKpisManuais(departamento?: string): KpiManual[] {
+  const db = getDb()
+  if (departamento !== undefined && departamento !== '') {
+    return db.prepare(`
+      SELECT id, nome, unidade, descricao, departamento, cor, ordem, tem_budget
+      FROM kpis_manuais
+      WHERE departamento = '' OR departamento = ?
+      ORDER BY ordem, nome
+    `).all(departamento) as KpiManual[]
+  }
+  return db.prepare(`
+    SELECT id, nome, unidade, descricao, departamento, cor, ordem, tem_budget
+    FROM kpis_manuais
+    ORDER BY ordem, nome
+  `).all() as KpiManual[]
+}
+
+export function upsertKpiManual(data: Omit<KpiManual, 'id'>): KpiManual {
+  const db = getDb()
+  const stmt = db.prepare(`
+    INSERT INTO kpis_manuais (nome, unidade, descricao, departamento, cor, ordem, tem_budget)
+    VALUES (@nome, @unidade, @descricao, @departamento, @cor, @ordem, @tem_budget)
+  `)
+  const result = stmt.run(data)
+  return db.prepare('SELECT id, nome, unidade, descricao, departamento, cor, ordem, tem_budget FROM kpis_manuais WHERE id = ?').get(result.lastInsertRowid) as KpiManual
+}
+
+export function updateKpiManual(id: number, data: Omit<KpiManual, 'id'>): KpiManual {
+  const db = getDb()
+  db.prepare(`
+    UPDATE kpis_manuais
+    SET nome = @nome, unidade = @unidade, descricao = @descricao,
+        departamento = @departamento, cor = @cor, ordem = @ordem, tem_budget = @tem_budget
+    WHERE id = @id
+  `).run({ ...data, id })
+  return db.prepare('SELECT id, nome, unidade, descricao, departamento, cor, ordem, tem_budget FROM kpis_manuais WHERE id = ?').get(id) as KpiManual
+}
+
+export function deleteKpiManual(id: number): void {
+  const db = getDb()
+  db.prepare('DELETE FROM kpis_manuais WHERE id = ?').run(id)
+}
+
+export function getKpiValores(kpiId: number, periodos?: string[]): KpiValor[] {
+  const db = getDb()
+  if (periodos?.length) {
+    const placeholders = periodos.map(() => '?').join(',')
+    return db.prepare(`
+      SELECT id, kpi_id, periodo, valor, meta
+      FROM kpi_valores
+      WHERE kpi_id = ? AND periodo IN (${placeholders})
+      ORDER BY periodo
+    `).all(kpiId, ...periodos) as KpiValor[]
+  }
+  return db.prepare(`
+    SELECT id, kpi_id, periodo, valor, meta
+    FROM kpi_valores
+    WHERE kpi_id = ?
+    ORDER BY periodo
+  `).all(kpiId) as KpiValor[]
+}
+
+export function upsertKpiValores(
+  kpiId: number,
+  valores: Array<{ periodo: string; valor: number; meta?: number | null }>
+): void {
+  const db = getDb()
+  const stmt = db.prepare(`
+    INSERT INTO kpi_valores (kpi_id, periodo, valor, meta)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(kpi_id, periodo) DO UPDATE SET valor = excluded.valor, meta = excluded.meta
+  `)
+  const runAll = db.transaction(() => {
+    for (const v of valores) {
+      stmt.run(kpiId, v.periodo, v.valor, v.meta ?? null)
+    }
+  })
+  runAll()
+}
+
+export function getMedidas(): import('./types').Medida[] {
+  const db = getDb()
+  const rows = db.prepare('SELECT * FROM medidas ORDER BY nome').all() as Array<{
+    id: number; nome: string; descricao: string; cor: string
+    tipo_fonte: string; tipo_medida: string; filtros: string
+    denominador_filtros: string; denominador_tipo_fonte: string
+    created_at: string; updated_at: string
+  }>
+  return rows.map(raw => ({
+    ...raw,
+    tipo_fonte:             raw.tipo_fonte as 'budget' | 'razao' | 'ambos',
+    tipo_medida:            (raw.tipo_medida || 'simples') as 'simples' | 'ratio',
+    filtros:                JSON.parse(raw.filtros || '[]'),
+    denominador_filtros:    JSON.parse(raw.denominador_filtros || '[]'),
+    denominador_tipo_fonte: (raw.denominador_tipo_fonte || 'ambos') as 'budget' | 'razao' | 'ambos',
+  }))
+}

@@ -1,0 +1,875 @@
+'use client'
+import React, { useState, useEffect, useCallback } from 'react'
+import { Plus, Settings, Edit2, Trash2, Save, X, BarChart3, TrendingUp, TrendingDown, Target } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  Legend, LineChart, Line,
+} from 'recharts'
+import type { KpiManual, KpiValor } from '@/lib/query'
+
+const DEFAULT_COLORS = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6']
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface AnaliseRow {
+  departamento: string
+  nome_departamento: string
+  periodo: string
+  budget: number
+  razao: number
+  variacao: number
+  variacao_pct: number
+}
+
+interface DreGrupo {
+  dre: string
+  budget: number
+  razao: number
+}
+
+interface DashboardData {
+  byPeriodo: AnaliseRow[]
+  dreGrupos: DreGrupo[]
+}
+
+// ─── KPI Edit Modal (create/edit definition) ──────────────────────────────────
+
+interface KpiEditModalProps {
+  kpi: KpiManual | null          // null = new
+  departamento: string
+  onSave: (kpi: Omit<KpiManual, 'id'> & { id?: number }) => Promise<void>
+  onDelete: (id: number) => Promise<void>
+  onClose: () => void
+}
+
+function KpiEditModal({ kpi, departamento, onSave, onDelete, onClose }: KpiEditModalProps) {
+  const [nome,       setNome]      = useState(kpi?.nome       ?? '')
+  const [unidade,    setUnidade]   = useState(kpi?.unidade    ?? '')
+  const [descricao,  setDescricao] = useState(kpi?.descricao  ?? '')
+  const [cor,        setCor]       = useState(kpi?.cor        ?? '#6366f1')
+  const [temBudget,  setTemBudget] = useState(kpi?.tem_budget ?? 0)
+  const [saving,     setSaving]    = useState(false)
+  const [deleting,   setDeleting]  = useState(false)
+
+  const handleSave = async () => {
+    if (!nome.trim()) return
+    setSaving(true)
+    await onSave({
+      id: kpi?.id,
+      nome: nome.trim(),
+      unidade: unidade.trim(),
+      descricao: descricao.trim(),
+      departamento: kpi?.departamento ?? departamento,
+      cor,
+      ordem: kpi?.ordem ?? 999,
+      tem_budget: temBudget,
+    })
+    setSaving(false)
+  }
+
+  const handleDelete = async () => {
+    if (!kpi) return
+    if (!confirm(`Excluir KPI "${kpi.nome}"? Esta ação não pode ser desfeita.`)) return
+    setDeleting(true)
+    await onDelete(kpi.id)
+    setDeleting(false)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b">
+          <h2 className="font-bold text-gray-900">{kpi ? 'Editar KPI' : 'Novo KPI'}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        </div>
+        <div className="px-6 py-4 space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Nome *</label>
+            <input
+              value={nome}
+              onChange={e => setNome(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              placeholder="Ex: NPS, Churn Rate, MRR..."
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Unidade</label>
+              <input
+                value={unidade}
+                onChange={e => setUnidade(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                placeholder="R$, %, un, x..."
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Cor</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={cor}
+                  onChange={e => setCor(e.target.value)}
+                  className="w-10 h-9 border border-gray-200 rounded-lg cursor-pointer"
+                />
+                <div className="flex flex-wrap gap-1">
+                  {DEFAULT_COLORS.slice(0, 4).map(c => (
+                    <button
+                      key={c}
+                      onClick={() => setCor(c)}
+                      className={cn('w-5 h-5 rounded-full border-2', cor === c ? 'border-gray-600' : 'border-transparent')}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Descrição</label>
+            <textarea
+              value={descricao}
+              onChange={e => setDescricao(e.target.value)}
+              rows={2}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
+              placeholder="Descrição opcional..."
+            />
+          </div>
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={temBudget === 1}
+                onChange={e => setTemBudget(e.target.checked ? 1 : 0)}
+                className="w-4 h-4 accent-indigo-600"
+              />
+              <span className="text-sm text-gray-700">Possui meta (budget)</span>
+            </label>
+          </div>
+        </div>
+        <div className="flex items-center justify-between px-6 py-4 border-t bg-gray-50 rounded-b-2xl">
+          <div>
+            {kpi && (
+              <Button variant="outline" size="sm" onClick={handleDelete} disabled={deleting}
+                className="text-red-500 hover:text-red-700 hover:bg-red-50 border-red-200">
+                <Trash2 size={13} />{deleting ? 'Excluindo...' : 'Excluir'}
+              </Button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
+            <Button size="sm" onClick={handleSave} disabled={saving || !nome.trim()}>
+              <Save size={13} />{saving ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── KPI Valores Modal ────────────────────────────────────────────────────────
+
+interface KpiValoresModalProps {
+  kpi: KpiManual
+  periodos: string[]
+  onClose: () => void
+  onSaved: () => void
+}
+
+function KpiValoresModal({ kpi, periodos, onClose, onSaved }: KpiValoresModalProps) {
+  // Use up to 12 most recent periods; if user has selected periods use those
+  const targetPeriods = periodos.length > 0 ? periodos : []
+  const displayPeriods = targetPeriods.length > 0
+    ? [...targetPeriods].sort()
+    : []
+
+  const [rows, setRows] = useState<Array<{ periodo: string; valor: string; meta: string }>>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    const fetchValores = async () => {
+      setLoading(true)
+      const params = new URLSearchParams({ kpiId: String(kpi.id) })
+      if (displayPeriods.length > 0) params.set('periodos', displayPeriods.join(','))
+      const res = await fetch(`/api/kpis/valores?${params}`, { cache: 'no-store' })
+      const existing: KpiValor[] = res.ok ? await res.json() : []
+      const byPeriodo: Record<string, KpiValor> = {}
+      for (const v of existing) byPeriodo[v.periodo] = v
+
+      const periodsToShow = displayPeriods.length > 0 ? displayPeriods : existing.map(v => v.periodo).sort()
+      setRows(periodsToShow.map(p => ({
+        periodo: p,
+        valor:   byPeriodo[p] != null ? String(byPeriodo[p].valor) : '',
+        meta:    byPeriodo[p]?.meta != null ? String(byPeriodo[p].meta) : '',
+      })))
+      setLoading(false)
+    }
+    fetchValores()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kpi.id])
+
+  const handleSave = async () => {
+    setSaving(true)
+    const valores = rows
+      .filter(r => r.valor !== '')
+      .map(r => ({
+        periodo: r.periodo,
+        valor:   parseFloat(r.valor) || 0,
+        meta:    r.meta !== '' ? (parseFloat(r.meta) || 0) : null,
+      }))
+    await fetch('/api/kpis/valores', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kpiId: kpi.id, valores }),
+    })
+    setSaving(false)
+    onSaved()
+    onClose()
+  }
+
+  const updateRow = (idx: number, field: 'valor' | 'meta', val: string) => {
+    setRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: val } : r))
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: kpi.cor }} />
+            <h2 className="font-bold text-gray-900">{kpi.nome}</h2>
+            {kpi.unidade && <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{kpi.unidade}</span>}
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {loading ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : rows.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">
+              Nenhum período selecionado. Selecione períodos na sidebar para editar valores.
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-2 font-medium text-gray-500">Período</th>
+                  <th className="text-right py-2 font-medium text-gray-500">Valor</th>
+                  {kpi.tem_budget === 1 && (
+                    <th className="text-right py-2 font-medium text-gray-500">Meta</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, idx) => (
+                  <tr key={row.periodo} className="border-b border-gray-50">
+                    <td className="py-2 text-gray-700 font-medium">{formatPeriodo(row.periodo)}</td>
+                    <td className="py-2 text-right">
+                      <input
+                        type="number"
+                        step="any"
+                        value={row.valor}
+                        onChange={e => updateRow(idx, 'valor', e.target.value)}
+                        className="w-28 border border-gray-200 rounded px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                        placeholder="0"
+                      />
+                    </td>
+                    {kpi.tem_budget === 1 && (
+                      <td className="py-2 text-right">
+                        <input
+                          type="number"
+                          step="any"
+                          value={row.meta}
+                          onChange={e => updateRow(idx, 'meta', e.target.value)}
+                          className="w-28 border border-gray-200 rounded px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                          placeholder="—"
+                        />
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 px-6 py-4 border-t bg-gray-50 rounded-b-2xl flex-shrink-0">
+          <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
+          <Button size="sm" onClick={handleSave} disabled={saving || rows.length === 0}>
+            <Save size={13} />{saving ? 'Salvando...' : 'Salvar valores'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── KPI Management Modal ─────────────────────────────────────────────────────
+
+interface KpiManagementModalProps {
+  departamento: string
+  kpis: KpiManual[]
+  onClose: () => void
+  onRefresh: () => void
+}
+
+function KpiManagementModal({ departamento, kpis, onClose, onRefresh }: KpiManagementModalProps) {
+  const [editingKpi, setEditingKpi] = useState<KpiManual | null | 'new'>(null)
+
+  const handleSaveKpi = async (data: Omit<KpiManual, 'id'> & { id?: number }) => {
+    const method = data.id ? 'PUT' : 'POST'
+    await fetch('/api/kpis', {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...data, departamento: data.departamento || departamento }),
+    })
+    setEditingKpi(null)
+    onRefresh()
+  }
+
+  const handleDeleteKpi = async (id: number) => {
+    await fetch(`/api/kpis?id=${id}`, { method: 'DELETE' })
+    setEditingKpi(null)
+    onRefresh()
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
+          <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0">
+            <h2 className="font-bold text-gray-900">Configurar KPIs</h2>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            {kpis.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-8">Nenhum KPI configurado para este departamento.</p>
+            ) : (
+              <div className="space-y-2">
+                {kpis.map(kpi => (
+                  <div key={kpi.id}
+                    className="flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: kpi.cor }} />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{kpi.nome}</p>
+                        <p className="text-xs text-gray-400">
+                          {kpi.unidade && <span className="mr-2">{kpi.unidade}</span>}
+                          {kpi.departamento === '' ? 'Global' : kpi.departamento}
+                          {kpi.tem_budget === 1 && <span className="ml-2 text-indigo-500">com meta</span>}
+                        </p>
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => setEditingKpi(kpi)}
+                      className="flex-shrink-0 ml-2">
+                      <Edit2 size={12} />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-between px-6 py-4 border-t bg-gray-50 rounded-b-2xl flex-shrink-0">
+            <Button size="sm" onClick={() => setEditingKpi('new')}>
+              <Plus size={13} />Novo KPI
+            </Button>
+            <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
+          </div>
+        </div>
+      </div>
+
+      {editingKpi !== null && (
+        <KpiEditModal
+          kpi={editingKpi === 'new' ? null : editingKpi}
+          departamento={departamento}
+          onSave={handleSaveKpi}
+          onDelete={handleDeleteKpi}
+          onClose={() => setEditingKpi(null)}
+        />
+      )}
+    </>
+  )
+}
+
+// ─── KPI Card with sparkline ──────────────────────────────────────────────────
+
+interface KpiCardProps {
+  kpi: KpiManual
+  valores: KpiValor[]
+  onEditValores: () => void
+}
+
+function KpiCard({ kpi, valores, onEditValores }: KpiCardProps) {
+  const sorted = [...valores].sort((a, b) => a.periodo.localeCompare(b.periodo))
+  const latest = sorted[sorted.length - 1]
+  const sparkData = sorted.slice(-6)
+
+  const formatValue = (v: number) => {
+    if (kpi.unidade === 'R$') return formatCurrency(v)
+    if (kpi.unidade === '%') return `${v.toFixed(1)}%`
+    return `${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}${kpi.unidade ? ` ${kpi.unidade}` : ''}`
+  }
+
+  const hasMeta = kpi.tem_budget === 1 && latest?.meta != null
+  const metaDiff = hasMeta ? (latest!.valor - latest!.meta!) : null
+
+  return (
+    <Card className="flex flex-col">
+      <CardContent className="p-4 flex flex-col gap-2 flex-1">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: kpi.cor }} />
+            <p className="text-sm font-semibold text-gray-800 truncate">{kpi.nome}</p>
+          </div>
+          <button
+            onClick={onEditValores}
+            className="text-xs text-gray-400 hover:text-indigo-600 flex items-center gap-0.5 flex-shrink-0 ml-1"
+          >
+            <Edit2 size={11} />
+          </button>
+        </div>
+
+        {latest != null ? (
+          <div>
+            <p className="text-2xl font-bold text-gray-900">{formatValue(latest.valor)}</p>
+            {hasMeta && metaDiff !== null && (
+              <p className={cn('text-xs font-medium', metaDiff >= 0 ? 'text-emerald-600' : 'text-red-500')}>
+                Meta: {formatValue(latest.meta!)}
+                {' '}
+                <span>({metaDiff >= 0 ? '+' : ''}{formatValue(metaDiff)})</span>
+              </p>
+            )}
+            <p className="text-xs text-gray-400">{formatPeriodo(latest.periodo)}</p>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400 italic">Sem dados</p>
+        )}
+
+        {sparkData.length > 1 && (
+          <div className="mt-auto">
+            <ResponsiveContainer width="100%" height={50}>
+              <LineChart data={sparkData} margin={{ top: 4, right: 4, left: 4, bottom: 4 }}>
+                <Line
+                  type="monotone"
+                  dataKey="valor"
+                  stroke={kpi.cor}
+                  strokeWidth={2}
+                  dot={false}
+                  isAnimationActive={false}
+                />
+                {kpi.tem_budget === 1 && (
+                  <Line
+                    type="monotone"
+                    dataKey="meta"
+                    stroke="#d1d5db"
+                    strokeWidth={1}
+                    strokeDasharray="3 3"
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Summary Card ─────────────────────────────────────────────────────────────
+
+function SummaryCard({ label, value, sub, icon: Icon, color }: {
+  label: string; value: string; sub?: string
+  icon: React.ElementType; color: string
+}) {
+  return (
+    <Card>
+      <CardContent className="p-4 flex items-start gap-3">
+        <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0', color)}>
+          <Icon size={16} className="text-white" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs text-gray-500">{label}</p>
+          <p className="text-lg font-bold text-gray-900 truncate">{value}</p>
+          {sub && <p className="text-xs text-gray-400">{sub}</p>}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+export default function DeptDashboardPage() {
+  const [departamentos,    setDepartamentos]    = useState<string[]>([])
+  const [allPeriodos,      setAllPeriodos]      = useState<string[]>([])
+  const [selDept,          setSelDept]          = useState<string>('')
+  const [selPeriods,       setSelPeriods]       = useState<string[]>([])
+  const [dashData,         setDashData]         = useState<DashboardData | null>(null)
+  const [loading,          setLoading]          = useState(false)
+  const [kpis,             setKpis]             = useState<KpiManual[]>([])
+  const [kpiValores,       setKpiValores]       = useState<Record<number, KpiValor[]>>({})
+  const [showMgmtModal,    setShowMgmtModal]    = useState(false)
+  const [editValoresKpi,   setEditValoresKpi]   = useState<KpiManual | null>(null)
+
+  // Load department and period lists
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/analise?type=distinct&col=nome_departamento', { cache: 'no-store' }).then(r => r.json()),
+      fetch('/api/analise?type=distinct&col=data_lancamento',   { cache: 'no-store' }).then(r => r.json()),
+    ]).then(([depts, dates]) => {
+      setDepartamentos(Array.isArray(depts) ? depts : [])
+      const unique = [...new Set(
+        (Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean)
+      )].sort() as string[]
+      setAllPeriodos(unique)
+    })
+  }, [])
+
+  // Load dashboard data when dept/periods change
+  const loadDashboard = useCallback(async (dept: string, periods: string[]) => {
+    if (!dept) { setDashData(null); return }
+    setLoading(true)
+    const params = new URLSearchParams({ departamento: dept })
+    if (periods.length) params.set('periodos', periods.join(','))
+    const res = await fetch(`/api/dept-dashboard?${params}`, { cache: 'no-store' })
+    if (res.ok) {
+      const data = await res.json()
+      setDashData(data)
+    }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => {
+    loadDashboard(selDept, selPeriods)
+  }, [selDept, selPeriods, loadDashboard])
+
+  // Load KPIs for selected department
+  const loadKpis = useCallback(async (dept: string) => {
+    if (!dept) { setKpis([]); return }
+    const params = new URLSearchParams({ departamento: dept })
+    const res = await fetch(`/api/kpis?${params}`, { cache: 'no-store' })
+    if (res.ok) setKpis(await res.json())
+  }, [])
+
+  useEffect(() => {
+    loadKpis(selDept)
+  }, [selDept, loadKpis])
+
+  // Load KPI valores whenever kpis change
+  useEffect(() => {
+    if (!kpis.length) { setKpiValores({}); return }
+    const fetches = kpis.map(k =>
+      fetch(`/api/kpis/valores?kpiId=${k.id}`, { cache: 'no-store' })
+        .then(r => r.ok ? r.json() : [])
+        .then((vals: KpiValor[]) => [k.id, vals] as [number, KpiValor[]])
+    )
+    Promise.all(fetches).then(pairs => {
+      const map: Record<number, KpiValor[]> = {}
+      for (const [id, vals] of pairs) map[id] = vals
+      setKpiValores(map)
+    })
+  }, [kpis])
+
+  // ── Aggregates ────────────────────────────────────────────────────────────
+
+  const byPeriodo = dashData?.byPeriodo ?? []
+  const dreGrupos = dashData?.dreGrupos ?? []
+
+  // Aggregate across selected periods for summary cards
+  const totals = byPeriodo.reduce(
+    (a, r) => ({ budget: a.budget + r.budget, razao: a.razao + r.razao }),
+    { budget: 0, razao: 0 }
+  )
+  const totalVariacao = totals.razao - totals.budget
+  const totalVariacaoPct = totals.budget ? (totalVariacao / Math.abs(totals.budget)) * 100 : 0
+
+  // Chart data: budget vs razão per period
+  const chartData = byPeriodo
+    .reduce<Record<string, { periodo: string; budget: number; razao: number }>>((acc, r) => {
+      if (!acc[r.periodo]) acc[r.periodo] = { periodo: r.periodo, budget: 0, razao: 0 }
+      acc[r.periodo].budget += r.budget
+      acc[r.periodo].razao  += r.razao
+      return acc
+    }, {})
+  const chartRows = Object.values(chartData)
+    .sort((a, b) => a.periodo.localeCompare(b.periodo))
+    .map(r => ({ ...r, label: formatPeriodo(r.periodo) }))
+
+  // DRE with variacao
+  const dreRows = dreGrupos.map(g => ({
+    ...g,
+    variacao:     g.razao - g.budget,
+    variacao_pct: g.budget ? ((g.razao - g.budget) / Math.abs(g.budget)) * 100 : 0,
+  }))
+
+  return (
+    <div className="flex gap-0 min-h-screen">
+      {/* ── Sidebar ─────────────────────────────────────────────────────── */}
+      <div className="w-52 flex-shrink-0 border-r border-gray-100 flex flex-col bg-white">
+        <div className="p-3 border-b border-gray-100">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Departamento</p>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+          {departamentos.map(d => (
+            <button
+              key={d}
+              onClick={() => { setSelDept(d); setSelPeriods([]) }}
+              className={cn(
+                'w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                selDept === d
+                  ? 'bg-indigo-50 text-indigo-700'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+              )}
+            >
+              {d || '—'}
+            </button>
+          ))}
+        </div>
+
+        {selDept && (
+          <>
+            <div className="px-3 py-2 border-t border-gray-100">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Períodos</p>
+              <div className="space-y-0.5 max-h-48 overflow-y-auto">
+                {allPeriodos.map(p => (
+                  <label key={p} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                    <input
+                      type="checkbox"
+                      checked={selPeriods.includes(p)}
+                      onChange={e => setSelPeriods(prev =>
+                        e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}
+                      className="w-3 h-3 accent-indigo-600"
+                    />
+                    <span className="text-xs text-gray-600">{formatPeriodo(p)}</span>
+                  </label>
+                ))}
+              </div>
+              {selPeriods.length > 0 && (
+                <button
+                  onClick={() => setSelPeriods([])}
+                  className="mt-1 text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"
+                >
+                  <X size={9} />Limpar
+                </button>
+              )}
+            </div>
+
+            <div className="p-3 border-t border-gray-100">
+              <Button variant="outline" size="sm" className="w-full text-xs"
+                onClick={() => setShowMgmtModal(true)}>
+                <Settings size={12} />Configurar KPIs
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── Main content ─────────────────────────────────────────────────── */}
+      <div className="flex-1 p-6 space-y-6 min-w-0 bg-gray-50/50">
+        {!selDept ? (
+          <div className="flex flex-col items-center justify-center h-64 text-center">
+            <BarChart3 size={40} className="text-gray-300 mb-3" />
+            <p className="text-lg font-semibold text-gray-400">Selecione um departamento</p>
+            <p className="text-sm text-gray-300">Escolha um departamento na sidebar para visualizar o dashboard</p>
+          </div>
+        ) : (
+          <>
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">{selDept}</h1>
+                <p className="text-gray-500 text-sm mt-0.5">
+                  {selPeriods.length > 0
+                    ? `${selPeriods.length} período(s) selecionado(s)`
+                    : 'Todos os períodos'}
+                </p>
+              </div>
+              {loading && (
+                <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              )}
+            </div>
+
+            {/* Section 1 — Summary Cards */}
+            <div className="grid grid-cols-4 gap-4">
+              <SummaryCard
+                label="Total Budget"
+                value={formatCurrency(totals.budget)}
+                icon={Target}
+                color="bg-indigo-500"
+              />
+              <SummaryCard
+                label="Total Realizado"
+                value={formatCurrency(totals.razao)}
+                icon={BarChart3}
+                color="bg-emerald-500"
+              />
+              <SummaryCard
+                label="Variação"
+                value={formatCurrency(totalVariacao)}
+                sub={totalVariacao >= 0 ? 'Acima do budget' : 'Abaixo do budget'}
+                icon={totalVariacao >= 0 ? TrendingUp : TrendingDown}
+                color={totalVariacao >= 0 ? 'bg-emerald-500' : 'bg-red-500'}
+              />
+              <SummaryCard
+                label="% Variação"
+                value={formatPct(totalVariacaoPct)}
+                sub={`Budget: ${formatCurrency(totals.budget)}`}
+                icon={TrendingUp}
+                color={totalVariacaoPct >= 0 ? 'bg-emerald-500' : 'bg-red-500'}
+              />
+            </div>
+
+            {/* Section 2 — Monthly Chart */}
+            {chartRows.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold text-gray-700">Budget vs Realizado por Período</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={chartRows} margin={{ top: 0, right: 0, left: -10, bottom: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis
+                        dataKey="label"
+                        angle={-30}
+                        textAnchor="end"
+                        tick={{ fontSize: 10 }}
+                        interval={0}
+                      />
+                      <YAxis
+                        tickFormatter={v => formatCurrency(Number(v)).replace('R$\u00a0', '')}
+                        tick={{ fontSize: 10 }}
+                      />
+                      <Tooltip formatter={(v) => formatCurrency(Number(v))} />
+                      <Legend />
+                      <Bar dataKey="budget" name="Budget"    fill="#818cf8" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="razao"  name="Realizado" fill="#34d399" radius={[3, 3, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Section 3 — DRE Resumida */}
+            {dreRows.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold text-gray-700">DRE Resumida</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-gray-50">
+                          <th className="text-left px-5 py-3 font-medium text-gray-500">DRE Gerencial</th>
+                          <th className="text-right px-5 py-3 font-medium text-gray-500">Budget</th>
+                          <th className="text-right px-5 py-3 font-medium text-gray-500">Realizado</th>
+                          <th className="text-right px-5 py-3 font-medium text-gray-500">Variação</th>
+                          <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dreRows.map((row, i) => (
+                          <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                            <td className="px-5 py-3 font-medium text-gray-900">{row.dre}</td>
+                            <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.budget)}</td>
+                            <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.razao)}</td>
+                            <td className={cn('px-5 py-3 text-right font-semibold', colorForVariance(row.variacao))}>
+                              {formatCurrency(row.variacao)}
+                            </td>
+                            <td className="px-5 py-3 text-right">
+                              <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(row.variacao))}>
+                                {formatPct(row.variacao_pct)}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
+                          <td className="px-5 py-3">Total</td>
+                          <td className="px-5 py-3 text-right">{formatCurrency(dreRows.reduce((s, r) => s + r.budget, 0))}</td>
+                          <td className="px-5 py-3 text-right">{formatCurrency(dreRows.reduce((s, r) => s + r.razao, 0))}</td>
+                          <td className={cn('px-5 py-3 text-right', colorForVariance(totalVariacao))}>
+                            {formatCurrency(totalVariacao)}
+                          </td>
+                          <td className="px-5 py-3 text-right">
+                            <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(totalVariacao))}>
+                              {formatPct(totalVariacaoPct)}
+                            </span>
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Section 4 — KPIs Manuais */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">KPIs</h2>
+                <Button size="sm" variant="outline" onClick={() => setShowMgmtModal(true)}>
+                  <Plus size={13} />Novo KPI
+                </Button>
+              </div>
+              {kpis.length === 0 ? (
+                <Card>
+                  <CardContent className="py-10 flex flex-col items-center gap-2">
+                    <Target size={28} className="text-gray-300" />
+                    <p className="text-sm text-gray-400">Nenhum KPI configurado.</p>
+                    <Button size="sm" variant="outline" onClick={() => setShowMgmtModal(true)}>
+                      <Plus size={12} />Adicionar KPI
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-3 gap-4">
+                  {kpis.map(kpi => (
+                    <KpiCard
+                      key={kpi.id}
+                      kpi={kpi}
+                      valores={kpiValores[kpi.id] ?? []}
+                      onEditValores={() => setEditValoresKpi(kpi)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── Modals ──────────────────────────────────────────────────────── */}
+      {showMgmtModal && (
+        <KpiManagementModal
+          departamento={selDept}
+          kpis={kpis}
+          onClose={() => setShowMgmtModal(false)}
+          onRefresh={() => loadKpis(selDept)}
+        />
+      )}
+
+      {editValoresKpi && (
+        <KpiValoresModal
+          kpi={editValoresKpi}
+          periodos={selPeriods}
+          onClose={() => setEditValoresKpi(null)}
+          onSaved={() => loadKpis(selDept)}
+        />
+      )}
+    </div>
+  )
+}

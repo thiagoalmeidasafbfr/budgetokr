@@ -12,6 +12,7 @@ const nav: NavItem[] = [
   { href: '/',            icon: BarChart3,   label: 'Dashboard'  },
   { href: '/analise',     icon: GitCompare,  label: 'Análise'    },
   { href: '/dre',         icon: LineChart,   label: 'DRE'        },
+  { href: '/dept',        icon: Layers,      label: 'Dept. Dashboard' },
   { href: '/medidas',     icon: Target,      label: 'Medidas'    },
   {
     label: 'Lançamentos', icon: FileText, children: [

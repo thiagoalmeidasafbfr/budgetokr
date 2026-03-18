@@ -751,7 +751,7 @@ export default function DREPage() {
                           Demonstrativo Gerencial
                         </th>
                         {dataPeriods.map(p => (
-                          <th key={p} colSpan={3} className="text-center px-1 py-2 font-medium text-gray-500 border-l border-gray-200">
+                          <th key={p} colSpan={3} className="text-center px-1 py-2 font-medium text-gray-600 border-l-2 border-gray-300 bg-gray-50">
                             {formatPeriodo(p)}
                           </th>
                         ))}
@@ -760,9 +760,9 @@ export default function DREPage() {
                         <th className="sticky left-0 bg-gray-50/50 z-10" />
                         {dataPeriods.map(p => (
                           <React.Fragment key={p}>
-                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Orçado</th>
-                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs">Realizado</th>
-                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs">Var.</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-gray-300">Orçado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Realizado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Var.</th>
                           </React.Fragment>
                         ))}
                       </tr>
@@ -797,14 +797,14 @@ export default function DREPage() {
                             return (
                               <React.Fragment key={p}>
                                 <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'budget') }}
-                                  className={cn('px-2 py-2 text-right text-xs border-l border-gray-100', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                  className={cn('px-2 py-2 text-right text-xs border-l-2 border-gray-300', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
                                   {formatCurrency(cell.budget)}
                                 </td>
                                 <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'razao') }}
-                                  className={cn('px-2 py-2 text-right text-xs', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                  className={cn('px-2 py-2 text-right text-xs border-l border-gray-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
                                   {formatCurrency(cell.razao)}
                                 </td>
-                                <td className={cn('px-2 py-2 text-right text-xs font-semibold', colorForVariance(v))}>
+                                <td className={cn('px-2 py-2 text-right text-xs font-semibold border-l border-gray-200', colorForVariance(v))}>
                                   {formatCurrency(v)}
                                 </td>
                               </React.Fragment>
