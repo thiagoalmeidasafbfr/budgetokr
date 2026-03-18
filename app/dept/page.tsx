@@ -625,21 +625,18 @@ function MedidaPinModal({ departamento, onClose, onRefresh }: MedidaPinModalProp
     e?.stopPropagation()
     setSavingUn(true)
     try {
-      // Fetch full medida to preserve filtros, then PATCH only unidade
-      const allMedidas = await fetch('/api/medidas', { cache: 'no-store' }).then(r => r.json())
-      const full = (allMedidas as Array<Record<string, unknown>>).find((x) => x.id === medidaId)
-      if (full) {
-        await fetch('/api/medidas', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...full, unidade: editUnidade }),
-        })
+      const res = await fetch('/api/medidas', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: medidaId, unidade: editUnidade }),
+      })
+      if (res.ok) {
         setMedidas(prev => prev.map(x => x.id === medidaId ? { ...x, unidade: editUnidade } : x))
+        setEditingId(null)
+        onRefresh()
       }
     } finally {
       setSavingUn(false)
-      setEditingId(null)
-      onRefresh()
     }
   }
 
@@ -769,9 +766,12 @@ function MedidaDisplayCard({ card }: { card: MedidaCard }) {
 
   const unidade = card.medida.unidade ?? ''
   const isPercent = unidade === '%'
+  const formatPctVal = (v: number) =>
+    `${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`
+
   const formatVal = (v: number) => {
     if (unidade === 'R$') return formatCurrency(v)
-    if (isPercent)        return `${v.toFixed(1)}%`
+    if (isPercent)        return formatPctVal(v)
     if (unidade)          return `${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ${unidade}`
     return formatCurrency(v)
   }
@@ -782,7 +782,7 @@ function MedidaDisplayCard({ card }: { card: MedidaCard }) {
   const deltaGood = deltaPositiveIsGood ? delta >= 0 : delta <= 0
   const formatDelta = (v: number) => {
     const sign = v >= 0 ? '+' : ''
-    if (isPercent) return `${sign}${v.toFixed(1)} pp`
+    if (isPercent) return `${sign}${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pp`
     if (unidade === 'R$') return `${sign}${formatCurrency(v)}`
     if (unidade) return `${sign}${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ${unidade}`
     return `${sign}${formatCurrency(v)}`

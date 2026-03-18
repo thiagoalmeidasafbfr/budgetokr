@@ -76,6 +76,19 @@ export async function PUT(req: NextRequest) {
   }
 }
 
+export async function PATCH(req: NextRequest) {
+  try {
+    const { id, unidade } = await req.json()
+    if (!id) return NextResponse.json({ error: 'id obrigatório' }, { status: 400 })
+    const db = getDb()
+    db.prepare(`UPDATE medidas SET unidade=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(unidade ?? '', id)
+    const m = db.prepare('SELECT * FROM medidas WHERE id = ?').get(id) as RawRow
+    return NextResponse.json(parseRow(m))
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500 })
+  }
+}
+
 export async function DELETE(req: NextRequest) {
   try {
     const id = new URL(req.url).searchParams.get('id')
