@@ -19,15 +19,18 @@ export async function GET(req: NextRequest) {
 
     // Get DRE data for the department and aggregate by dre name
     const dreRows = getDRE(periodos, [departamento])
-    const dreMap: Record<string, { dre: string; budget: number; razao: number }> = {}
+    const dreMap: Record<string, { dre: string; budget: number; razao: number; ordem_dre: number }> = {}
     for (const row of dreRows) {
       if (!dreMap[row.dre]) {
-        dreMap[row.dre] = { dre: row.dre, budget: 0, razao: 0 }
+        dreMap[row.dre] = { dre: row.dre, budget: 0, razao: 0, ordem_dre: row.ordem_dre ?? 999 }
       }
       dreMap[row.dre].budget += row.budget
       dreMap[row.dre].razao  += row.razao
+      if ((row.ordem_dre ?? 999) < dreMap[row.dre].ordem_dre) {
+        dreMap[row.dre].ordem_dre = row.ordem_dre ?? 999
+      }
     }
-    const dreGrupos = Object.values(dreMap)
+    const dreGrupos = Object.values(dreMap).sort((a, b) => a.ordem_dre - b.ordem_dre)
 
     // All medidas
     const medidas = getMedidas()

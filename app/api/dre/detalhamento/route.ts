@@ -7,10 +7,12 @@ export const dynamic = 'force-dynamic'
 // equivalente ao "Abrir detalhamento" do sistema atual.
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
-  const dre         = searchParams.get('dre')         ?? ''
-  const agrupamento = searchParams.get('agrupamento') ?? ''
-  const periodo     = searchParams.get('periodo')     ?? ''
-  const tipo        = searchParams.get('tipo')        ?? 'ambos'  // budget | razao | ambos
+  const dre          = searchParams.get('dre')          ?? ''
+  const agrupamento  = searchParams.get('agrupamento')  ?? ''
+  const periodo      = searchParams.get('periodo')      ?? ''
+  const tipo         = searchParams.get('tipo')         ?? 'ambos'  // budget | razao | ambos
+  const departamento = searchParams.get('departamento') ?? ''
+  const periodosRaw  = searchParams.get('periodos')     ?? ''
 
   const db = getDb()
   const conditions: string[] = []
@@ -34,10 +36,25 @@ export async function GET(req: NextRequest) {
     params.push(agrupamento)
   }
 
-  // Filtro de período
+  // Filtro de período (single)
   if (periodo) {
     conditions.push(`strftime('%Y-%m', l.data_lancamento) = ?`)
     params.push(periodo)
+  }
+
+  // Filtro de períodos (múltiplos, comma-separated)
+  if (periodosRaw && !periodo) {
+    const periodos = periodosRaw.split(',').filter(Boolean)
+    if (periodos.length) {
+      conditions.push(`strftime('%Y-%m', l.data_lancamento) IN (${periodos.map(() => '?').join(',')})`)
+      params.push(...periodos)
+    }
+  }
+
+  // Filtro de departamento
+  if (departamento) {
+    conditions.push(`cc.nome_departamento = ?`)
+    params.push(departamento)
   }
 
   const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''

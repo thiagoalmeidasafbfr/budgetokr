@@ -1,12 +1,12 @@
 'use client'
 import React, { useState, useEffect, useCallback } from 'react'
-import { Plus, Settings, Edit2, Trash2, Save, X, BarChart3, TrendingUp, TrendingDown, Target } from 'lucide-react'
+import { Plus, Settings, Edit2, Trash2, Save, X, BarChart3, TrendingUp, TrendingDown, Target, ExternalLink, Download } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  Legend, LineChart, Line,
+  Legend, LineChart, Line, LabelList,
 } from 'recharts'
 import type { KpiManual, KpiValor } from '@/lib/query'
 
@@ -28,11 +28,144 @@ interface DreGrupo {
   dre: string
   budget: number
   razao: number
+  ordem_dre?: number
 }
 
 interface DashboardData {
   byPeriodo: AnaliseRow[]
   dreGrupos: DreGrupo[]
+}
+
+// ─── DRE Detalhamento Modal ────────────────────────────────────────────────────
+
+interface DetalhamentoLinha {
+  id: number
+  tipo: string
+  data_lancamento: string
+  numero_conta_contabil: string
+  nome_conta_contabil: string
+  centro_custo: string
+  nome_centro_custo: string
+  agrupamento_arvore: string
+  dre: string
+  nome_conta_contrapartida: string
+  debito_credito: number
+  observacao: string
+  fonte: string
+}
+
+interface DetModalState {
+  dre: string
+  departamento: string
+  periodos: string[]
+}
+
+function DetalhamentoModal({ ctx, onClose }: { ctx: DetModalState; onClose: () => void }) {
+  const [rows,    setRows]    = useState<DetalhamentoLinha[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const p = new URLSearchParams()
+    if (ctx.dre)           p.set('dre',          ctx.dre)
+    if (ctx.departamento)  p.set('departamento', ctx.departamento)
+    if (ctx.periodos.length) p.set('periodos',   ctx.periodos.join(','))
+    fetch(`/api/dre/detalhamento?${p}`)
+      .then(r => r.json())
+      .then(data => { setRows(data); setLoading(false) })
+  }, [ctx])
+
+  const total = rows.reduce((s, r) => s + r.debito_credito, 0)
+
+  const exportCSV = () => {
+    const header = ['Data', 'Tipo', 'Centro de Custo', 'DRE', 'Agrupamento', 'Conta Contábil', 'Valor', 'Conta Contrapartida', 'Observação']
+    const csvRows = rows.map(r => [
+      r.data_lancamento, r.tipo,
+      `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}`,
+      r.dre, r.agrupamento_arvore,
+      `${r.numero_conta_contabil} — ${r.nome_conta_contabil}`,
+      r.debito_credito, r.nome_conta_contrapartida, r.observacao,
+    ])
+    const csv = [header, ...csvRows].map(row => row.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')).join('\n')
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href = url; a.download = `dre-lancamentos-${Date.now()}.csv`; a.click()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-10 px-4 overflow-auto"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] max-h-[92vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b">
+          <div>
+            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">DRE — Lançamentos</p>
+            <h2 className="text-base font-bold text-gray-900 mt-0.5">{ctx.dre}</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            {!loading && rows.length > 0 && (
+              <button onClick={exportCSV}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-indigo-50 hover:text-indigo-700 text-gray-600 transition-colors font-medium">
+                <Download size={13} /> Exportar CSV
+              </button>
+            )}
+            <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+        {loading ? (
+          <div className="flex-1 flex items-center justify-center p-10">
+            <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <div className="flex-1 overflow-auto">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-gray-700 text-white">
+                <tr>
+                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Data Lançamento</th>
+                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Tipo</th>
+                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Centro de Custo</th>
+                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">DRE Gerencial</th>
+                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Agrupamento</th>
+                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Conta Contábil</th>
+                  <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Valor</th>
+                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Observação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={r.id} className={cn('border-b border-gray-100', i % 2 === 0 ? 'bg-white' : 'bg-gray-50/60')}>
+                    <td className="px-3 py-1.5 whitespace-nowrap font-mono">{r.data_lancamento}</td>
+                    <td className="px-3 py-1.5">
+                      <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium',
+                        r.tipo === 'budget' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700')}>
+                        {r.tipo === 'budget' ? 'Budget' : 'Real'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-1.5 whitespace-nowrap">{r.centro_custo}{r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap">{r.dre}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap">{r.agrupamento_arvore}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap">{r.numero_conta_contabil} — {r.nome_conta_contabil}</td>
+                    <td className={cn('px-3 py-1.5 text-right whitespace-nowrap font-semibold', r.debito_credito < 0 ? 'text-red-600' : 'text-gray-800')}>
+                      {formatCurrency(r.debito_credito)}
+                    </td>
+                    <td className="px-3 py-1.5 max-w-xs truncate text-gray-500">{r.observacao}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="sticky bottom-0 bg-gray-800 text-white font-bold">
+                <tr>
+                  <td colSpan={6} className="px-3 py-2 text-right">Total ({rows.length} lançamentos)</td>
+                  <td className={cn('px-3 py-2 text-right', total < 0 ? 'text-red-300' : 'text-emerald-300')}>{formatCurrency(total)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 // ─── KPI Edit Modal (create/edit definition) ──────────────────────────────────
@@ -408,10 +541,16 @@ interface KpiCardProps {
   onEditValores: () => void
 }
 
+const MONTHS_SHORT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+function shortPeriodo(p: string) {
+  const [year, month] = p.split('-')
+  return `${MONTHS_SHORT[parseInt(month) - 1]}/${year.slice(2)}`
+}
+
 function KpiCard({ kpi, valores, onEditValores }: KpiCardProps) {
   const sorted = [...valores].sort((a, b) => a.periodo.localeCompare(b.periodo))
   const latest = sorted[sorted.length - 1]
-  const sparkData = sorted.slice(-6)
+  const sparkData = sorted.slice(-6).map(d => ({ ...d, label: shortPeriodo(d.periodo) }))
 
   const formatValue = (v: number) => {
     if (kpi.unidade === 'R$') return formatCurrency(v)
@@ -456,16 +595,34 @@ function KpiCard({ kpi, valores, onEditValores }: KpiCardProps) {
 
         {sparkData.length > 1 && (
           <div className="mt-auto">
-            <ResponsiveContainer width="100%" height={50}>
-              <LineChart data={sparkData} margin={{ top: 4, right: 4, left: 4, bottom: 4 }}>
+            <ResponsiveContainer width="100%" height={130}>
+              <LineChart data={sparkData} margin={{ top: 20, right: 8, left: 8, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 9, fill: '#9ca3af' }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  formatter={(v: unknown) => [formatValue(Number(v)), kpi.nome]}
+                  contentStyle={{ fontSize: 11, padding: '4px 8px' }}
+                />
                 <Line
                   type="monotone"
                   dataKey="valor"
                   stroke={kpi.cor}
                   strokeWidth={2}
-                  dot={false}
+                  dot={{ r: 3, fill: kpi.cor, strokeWidth: 0 }}
                   isAnimationActive={false}
-                />
+                >
+                  <LabelList
+                    dataKey="valor"
+                    position="top"
+                    style={{ fontSize: 9, fill: '#6b7280' }}
+                    formatter={(v: unknown) => formatValue(Number(v))}
+                  />
+                </Line>
                 {kpi.tem_budget === 1 && (
                   <Line
                     type="monotone"
@@ -521,6 +678,7 @@ export default function DeptDashboardPage() {
   const [kpiValores,       setKpiValores]       = useState<Record<number, KpiValor[]>>({})
   const [showMgmtModal,    setShowMgmtModal]    = useState(false)
   const [editValoresKpi,   setEditValoresKpi]   = useState<KpiManual | null>(null)
+  const [detModal,         setDetModal]         = useState<DetModalState | null>(null)
 
   // Load department and period lists
   useEffect(() => {
@@ -730,94 +888,7 @@ export default function DeptDashboardPage() {
               />
             </div>
 
-            {/* Section 2 — Monthly Chart */}
-            {chartRows.length > 0 && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold text-gray-700">Budget vs Realizado por Período</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={chartRows} margin={{ top: 0, right: 0, left: -10, bottom: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis
-                        dataKey="label"
-                        angle={-30}
-                        textAnchor="end"
-                        tick={{ fontSize: 10 }}
-                        interval={0}
-                      />
-                      <YAxis
-                        tickFormatter={v => formatCurrency(Number(v)).replace('R$\u00a0', '')}
-                        tick={{ fontSize: 10 }}
-                      />
-                      <Tooltip formatter={(v) => formatCurrency(Number(v))} />
-                      <Legend />
-                      <Bar dataKey="budget" name="Budget"    fill="#818cf8" radius={[3, 3, 0, 0]} />
-                      <Bar dataKey="razao"  name="Realizado" fill="#34d399" radius={[3, 3, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Section 3 — DRE Resumida */}
-            {dreRows.length > 0 && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold text-gray-700">DRE Resumida</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b bg-gray-50">
-                          <th className="text-left px-5 py-3 font-medium text-gray-500">DRE Gerencial</th>
-                          <th className="text-right px-5 py-3 font-medium text-gray-500">Budget</th>
-                          <th className="text-right px-5 py-3 font-medium text-gray-500">Realizado</th>
-                          <th className="text-right px-5 py-3 font-medium text-gray-500">Variação</th>
-                          <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dreRows.map((row, i) => (
-                          <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                            <td className="px-5 py-3 font-medium text-gray-900">{row.dre}</td>
-                            <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.budget)}</td>
-                            <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.razao)}</td>
-                            <td className={cn('px-5 py-3 text-right font-semibold', colorForVariance(row.variacao))}>
-                              {formatCurrency(row.variacao)}
-                            </td>
-                            <td className="px-5 py-3 text-right">
-                              <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(row.variacao))}>
-                                {formatPct(row.variacao_pct)}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
-                          <td className="px-5 py-3">Total</td>
-                          <td className="px-5 py-3 text-right">{formatCurrency(dreRows.reduce((s, r) => s + r.budget, 0))}</td>
-                          <td className="px-5 py-3 text-right">{formatCurrency(dreRows.reduce((s, r) => s + r.razao, 0))}</td>
-                          <td className={cn('px-5 py-3 text-right', colorForVariance(totalVariacao))}>
-                            {formatCurrency(totalVariacao)}
-                          </td>
-                          <td className="px-5 py-3 text-right">
-                            <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(totalVariacao))}>
-                              {formatPct(totalVariacaoPct)}
-                            </span>
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Section 4 — KPIs Manuais */}
+            {/* Section 2 — KPIs Manuais */}
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">KPIs</h2>
@@ -848,11 +919,106 @@ export default function DeptDashboardPage() {
                 </div>
               )}
             </div>
+
+            {/* Section 3 — Monthly Chart */}
+            {chartRows.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold text-gray-700">Budget vs Realizado por Período</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={chartRows} margin={{ top: 0, right: 0, left: -10, bottom: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis
+                        dataKey="label"
+                        angle={-30}
+                        textAnchor="end"
+                        tick={{ fontSize: 10 }}
+                        interval={0}
+                      />
+                      <YAxis
+                        tickFormatter={v => formatCurrency(Number(v)).replace('R$\u00a0', '')}
+                        tick={{ fontSize: 10 }}
+                      />
+                      <Tooltip formatter={(v) => formatCurrency(Number(v))} />
+                      <Legend />
+                      <Bar dataKey="budget" name="Budget"    fill="#818cf8" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="razao"  name="Realizado" fill="#34d399" radius={[3, 3, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Section 4 — DRE Resumida */}
+            {dreRows.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold text-gray-700">DRE Resumida</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-gray-50">
+                          <th className="text-left px-5 py-3 font-medium text-gray-500">DRE Gerencial</th>
+                          <th className="text-right px-5 py-3 font-medium text-gray-500">Budget</th>
+                          <th className="text-right px-5 py-3 font-medium text-gray-500">Realizado</th>
+                          <th className="text-right px-5 py-3 font-medium text-gray-500">Variação</th>
+                          <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>
+                          <th className="px-5 py-3" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dreRows.map((row, i) => (
+                          <tr key={i} className="border-b border-gray-50 hover:bg-indigo-50/40 transition-colors cursor-pointer group"
+                            onClick={() => setDetModal({ dre: row.dre, departamento: selDept, periodos: selPeriods })}>
+                            <td className="px-5 py-3 font-medium text-gray-900">{row.dre}</td>
+                            <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.budget)}</td>
+                            <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.razao)}</td>
+                            <td className={cn('px-5 py-3 text-right font-semibold', colorForVariance(row.variacao))}>
+                              {formatCurrency(row.variacao)}
+                            </td>
+                            <td className="px-5 py-3 text-right">
+                              <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(row.variacao))}>
+                                {formatPct(row.variacao_pct)}
+                              </span>
+                            </td>
+                            <td className="px-3 py-3 text-gray-300 group-hover:text-indigo-400">
+                              <ExternalLink size={13} />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
+                          <td className="px-5 py-3">Total</td>
+                          <td className="px-5 py-3 text-right">{formatCurrency(dreRows.reduce((s, r) => s + r.budget, 0))}</td>
+                          <td className="px-5 py-3 text-right">{formatCurrency(dreRows.reduce((s, r) => s + r.razao, 0))}</td>
+                          <td className={cn('px-5 py-3 text-right', colorForVariance(totalVariacao))}>
+                            {formatCurrency(totalVariacao)}
+                          </td>
+                          <td className="px-5 py-3 text-right">
+                            <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(totalVariacao))}>
+                              {formatPct(totalVariacaoPct)}
+                            </span>
+                          </td>
+                          <td />
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </>
         )}
       </div>
 
       {/* ── Modals ──────────────────────────────────────────────────────── */}
+      {detModal && <DetalhamentoModal ctx={detModal} onClose={() => setDetModal(null)} />}
+
       {showMgmtModal && (
         <KpiManagementModal
           departamento={selDept}
