@@ -59,6 +59,7 @@ export async function GET(req: NextRequest) {
         groupByDept: false,
         groupByPeriod: true,
         periodos: periodos ?? [],
+        extraFiltros: [{ column: 'nome_departamento', operator: '=', value: departamento }],
       })
       const byPeriodoMedida = resultados.reduce<Record<string, { budget: number; razao: number }>>((acc, r) => {
         if (!acc[r.periodo]) acc[r.periodo] = { budget: 0, razao: 0 }

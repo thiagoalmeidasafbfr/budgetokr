@@ -34,6 +34,7 @@ const FILTER_COLUMNS: Array<{ value: FilterColumn; label: string; group: string 
 interface MedidaForm {
   nome: string
   descricao: string
+  unidade: string
   cor: string
   tipo_medida: 'simples' | 'ratio'
   tipo_fonte: 'budget' | 'razao' | 'ambos'
@@ -43,7 +44,7 @@ interface MedidaForm {
 }
 
 const emptyForm = (): MedidaForm => ({
-  nome: '', descricao: '', cor: '#6366f1',
+  nome: '', descricao: '', unidade: '', cor: '#6366f1',
   tipo_medida: 'simples', tipo_fonte: 'ambos',
   filtros: [],
   denominador_filtros: [],
@@ -118,7 +119,8 @@ export default function MedidasPage() {
 
   const openEdit = (m: Medida) => {
     setForm({
-      nome: m.nome, descricao: m.descricao ?? '', cor: m.cor,
+      nome: m.nome, descricao: m.descricao ?? '', unidade: m.unidade ?? '',
+      cor: m.cor,
       tipo_medida: m.tipo_medida ?? 'simples',
       tipo_fonte: m.tipo_fonte,
       filtros: m.filtros,
@@ -177,11 +179,19 @@ export default function MedidasPage() {
               </div>
             </div>
 
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">Descrição</label>
-              <input value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                placeholder="Descrição opcional" />
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2">
+                <label className="text-sm font-medium text-gray-700 mb-1 block">Descrição</label>
+                <input value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  placeholder="Descrição opcional" />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">Unidade</label>
+                <input value={form.unidade} onChange={e => setForm(f => ({ ...f, unidade: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  placeholder="R$, %, x…" />
+              </div>
             </div>
 
             {/* Tipo de medida */}

@@ -97,7 +97,8 @@ export interface MedidaQueryOptions {
   groupByDept?: boolean
   groupByPeriod?: boolean
   groupByCentroCusto?: boolean
-  periodos?: string[]   // filtro extra: ['2024-01', '2024-02', ...]
+  periodos?: string[]        // filtro de período: ['2024-01', '2024-02', ...]
+  extraFiltros?: import('./types').FilterCondition[]  // filtros adicionais (AND com filtros da medida)
 }
 
 export function getMedidaResultados(
@@ -109,25 +110,36 @@ export function getMedidaResultados(
     groupByPeriod = true,
     groupByCentroCusto = false,
     periodos = [],
+    extraFiltros = [],
   } = options
 
   const db = getDb()
   const raw = db.prepare('SELECT * FROM medidas WHERE id = ?').get(medidaId) as {
-    id: number; nome: string; descricao: string; cor: string
+    id: number; nome: string; descricao: string; unidade: string; cor: string
     tipo_fonte: string; tipo_medida: string; filtros: string
     denominador_filtros: string; denominador_tipo_fonte: string
     created_at: string; updated_at: string
   } | undefined
   if (!raw) return []
 
-  const medida: Medida = {
+  const baseMedida: Medida = {
     ...raw,
+    unidade:                raw.unidade ?? '',
     tipo_fonte:             raw.tipo_fonte as 'budget' | 'razao' | 'ambos',
     tipo_medida:            (raw.tipo_medida || 'simples') as 'simples' | 'ratio',
     filtros:                JSON.parse(raw.filtros || '[]'),
     denominador_filtros:    JSON.parse(raw.denominador_filtros || '[]'),
     denominador_tipo_fonte: (raw.denominador_tipo_fonte || 'ambos') as 'budget' | 'razao' | 'ambos',
   }
+
+  // Merge extra filters (e.g. department filter from dept dashboard)
+  const medida: Medida = extraFiltros.length > 0 ? {
+    ...baseMedida,
+    filtros:             [...baseMedida.filtros, ...extraFiltros],
+    denominador_filtros: baseMedida.denominador_filtros.length > 0
+      ? [...baseMedida.denominador_filtros, ...extraFiltros]
+      : baseMedida.denominador_filtros,
+  } : baseMedida
 
   const groupBy: string[] = []
   if (groupByDept)        groupBy.push('cc.departamento', 'cc.nome_departamento')
@@ -602,13 +614,14 @@ export function deleteDeptMedida(departamento: string, medidaId: number): void {
 export function getMedidas(): import('./types').Medida[] {
   const db = getDb()
   const rows = db.prepare('SELECT * FROM medidas ORDER BY nome').all() as Array<{
-    id: number; nome: string; descricao: string; cor: string
+    id: number; nome: string; descricao: string; unidade: string; cor: string
     tipo_fonte: string; tipo_medida: string; filtros: string
     denominador_filtros: string; denominador_tipo_fonte: string
     created_at: string; updated_at: string
   }>
   return rows.map(raw => ({
     ...raw,
+    unidade:                raw.unidade ?? '',
     tipo_fonte:             raw.tipo_fonte as 'budget' | 'razao' | 'ambos',
     tipo_medida:            (raw.tipo_medida || 'simples') as 'simples' | 'ratio',
     filtros:                JSON.parse(raw.filtros || '[]'),

@@ -77,7 +77,7 @@ function initSchema(db: Database.Database) {
         );
       `)
     }
-    // v6 → v7: dept_medidas — medidas calculadas fixadas ao dashboard de cada dept
+    // v6 → v7: dept_medidas + unidade em medidas
     if (version < 7) {
       db.exec(`
         CREATE TABLE IF NOT EXISTS dept_medidas (
@@ -89,6 +89,7 @@ function initSchema(db: Database.Database) {
           FOREIGN KEY (medida_id) REFERENCES medidas(id) ON DELETE CASCADE
         );
       `)
+      try { db.exec(`ALTER TABLE medidas ADD COLUMN unidade TEXT DEFAULT ''`) } catch { /* ok */ }
     }
     if (!row) {
       db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(SCHEMA_VERSION);
@@ -193,6 +194,7 @@ function initSchema(db: Database.Database) {
       id                      INTEGER PRIMARY KEY AUTOINCREMENT,
       nome                    TEXT    NOT NULL,
       descricao               TEXT,
+      unidade                 TEXT    DEFAULT '',        -- 'R$', '%', 'x', etc.
       cor                     TEXT    DEFAULT '#6366f1',
       tipo_fonte              TEXT    DEFAULT 'ambos',   -- 'budget' | 'razao' | 'ambos'
       tipo_medida             TEXT    DEFAULT 'simples', -- 'simples' | 'ratio'

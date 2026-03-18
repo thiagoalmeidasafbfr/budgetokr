@@ -59,6 +59,7 @@ export interface Medida {
   id: number
   nome: string
   descricao?: string
+  unidade?: string
   cor: string
   tipo_fonte: 'budget' | 'razao' | 'ambos'
   tipo_medida: 'simples' | 'ratio'

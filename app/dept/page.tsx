@@ -35,6 +35,7 @@ interface MedidaInfo {
   id: number
   nome: string
   descricao?: string
+  unidade?: string
   cor: string
   tipo_medida: string
   tipo_fonte: string
@@ -653,9 +654,19 @@ function MedidaDisplayCard({ card }: { card: MedidaCard }) {
     razao: vals.razao,
     budget: vals.budget,
   }))
-  const latest = sorted[sorted.length - 1]
+  const latestPeriodo = sorted[sorted.length - 1]?.[0]
 
-  const formatVal = (v: number) => formatCurrency(v)
+  // YTD: sum all periods
+  const ytdRazao  = sorted.reduce((s, [, v]) => s + v.razao,  0)
+  const ytdBudget = sorted.reduce((s, [, v]) => s + v.budget, 0)
+
+  const unidade = card.medida.unidade ?? ''
+  const formatVal = (v: number) => {
+    if (unidade === 'R$') return formatCurrency(v)
+    if (unidade === '%')  return `${v.toFixed(1)}%`
+    if (unidade)          return `${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ${unidade}`
+    return formatCurrency(v)
+  }
 
   return (
     <Card className="flex flex-col">
@@ -663,17 +674,20 @@ function MedidaDisplayCard({ card }: { card: MedidaCard }) {
         <div className="flex items-start gap-1.5 min-w-0">
           <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5" style={{ backgroundColor: card.medida.cor }} />
           <p className="text-sm font-semibold text-gray-800 truncate">{card.medida.nome}</p>
+          {unidade && <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full flex-shrink-0">{unidade}</span>}
         </div>
 
-        {latest ? (
+        {sorted.length > 0 ? (
           <div>
-            <p className="text-2xl font-bold text-gray-900">{formatVal(latest[1].razao)}</p>
-            {latest[1].budget !== 0 && (
-              <p className={cn('text-xs font-medium', latest[1].razao >= latest[1].budget ? 'text-emerald-600' : 'text-red-500')}>
-                Budget: {formatVal(latest[1].budget)}
+            <p className="text-2xl font-bold text-gray-900">{formatVal(ytdRazao)}</p>
+            {ytdBudget !== 0 && (
+              <p className={cn('text-xs font-medium', ytdRazao >= ytdBudget ? 'text-emerald-600' : 'text-red-500')}>
+                Budget YTD: {formatVal(ytdBudget)}
               </p>
             )}
-            <p className="text-xs text-gray-400">{shortPeriodo(latest[0])}</p>
+            <p className="text-xs text-gray-400">
+              YTD até {latestPeriodo ? shortPeriodo(latestPeriodo) : '—'}
+            </p>
           </div>
         ) : (
           <p className="text-sm text-gray-400 italic">Sem dados</p>
