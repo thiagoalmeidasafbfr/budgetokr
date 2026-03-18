@@ -569,9 +569,11 @@ interface MedidaPinModalProps {
 }
 
 function MedidaPinModal({ departamento, onClose, onRefresh }: MedidaPinModalProps) {
-  const [medidas, setMedidas]   = useState<MedidaInfo[]>([])
-  const [pinned,  setPinned]    = useState<Set<number>>(new Set())
-  const [saving,  setSaving]    = useState(false)
+  const [medidas,    setMedidas]    = useState<MedidaInfo[]>([])
+  const [pinned,     setPinned]     = useState<Set<number>>(new Set())
+  const [saving,     setSaving]     = useState(false)
+  const [editingId,  setEditingId]  = useState<number | null>(null)
+  const [editUnidade, setEditUnidade] = useState('')
 
   useEffect(() => {
     fetch(`/api/dept-medidas?departamento=${encodeURIComponent(departamento)}`, { cache: 'no-store' })
@@ -599,6 +601,27 @@ function MedidaPinModal({ departamento, onClose, onRefresh }: MedidaPinModalProp
     onRefresh()
   }
 
+  const startEditUnidade = (m: MedidaInfo, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setEditingId(m.id)
+    setEditUnidade(m.unidade ?? '')
+  }
+
+  const saveUnidade = async (medidaId: number) => {
+    // Fetch full medida first to preserve filtros
+    const full = await fetch('/api/medidas').then(r => r.json())
+      .then((arr: Array<{ id: number; nome: string; descricao: string; cor: string; tipo_fonte: string; tipo_medida: string; filtros: unknown; denominador_filtros: unknown; denominador_tipo_fonte: string }>) => arr.find(x => x.id === medidaId))
+    if (!full) return
+    await fetch('/api/medidas', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...full, unidade: editUnidade }),
+    })
+    setMedidas(prev => prev.map(x => x.id === medidaId ? { ...x, unidade: editUnidade } : x))
+    setEditingId(null)
+    onRefresh()
+  }
+
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col">
@@ -619,23 +642,49 @@ function MedidaPinModal({ departamento, onClose, onRefresh }: MedidaPinModalProp
               {medidas.map(m => {
                 const active = pinned.has(m.id)
                 return (
-                  <button key={m.id} disabled={saving}
-                    onClick={() => toggle(m.id)}
-                    className={cn(
-                      'w-full flex items-center gap-3 p-3 rounded-xl border transition-colors text-left',
-                      active
-                        ? 'border-indigo-200 bg-indigo-50'
-                        : 'border-gray-100 hover:bg-gray-50'
-                    )}>
-                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: m.cor }} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{m.nome}</p>
-                      {m.descricao && <p className="text-xs text-gray-400 truncate">{m.descricao}</p>}
+                  <div key={m.id} className={cn(
+                    'rounded-xl border transition-colors',
+                    active ? 'border-indigo-200 bg-indigo-50' : 'border-gray-100'
+                  )}>
+                    <div className="flex items-center gap-3 p-3">
+                      <button disabled={saving} onClick={() => toggle(m.id)}
+                        className="flex items-center gap-3 flex-1 min-w-0 text-left">
+                        <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: m.cor }} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{m.nome}</p>
+                          {m.descricao && <p className="text-xs text-gray-400 truncate">{m.descricao}</p>}
+                        </div>
+                      </button>
+                      {/* Unidade inline edit */}
+                      {editingId === m.id ? (
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <input
+                            autoFocus
+                            value={editUnidade}
+                            onChange={e => setEditUnidade(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') saveUnidade(m.id); if (e.key === 'Escape') setEditingId(null) }}
+                            className="w-14 border border-indigo-300 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300 text-center"
+                            placeholder="R$, %…"
+                          />
+                          <button onClick={() => saveUnidade(m.id)} className="text-emerald-600 hover:text-emerald-700"><Save size={13} /></button>
+                          <button onClick={() => setEditingId(null)} className="text-gray-400 hover:text-gray-600"><X size={13} /></button>
+                        </div>
+                      ) : (
+                        <button onClick={e => startEditUnidade(m, e)}
+                          className="flex-shrink-0 flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-600 px-1.5 py-0.5 rounded hover:bg-indigo-50 transition-colors">
+                          {m.unidade ? (
+                            <span className="font-medium text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">{m.unidade}</span>
+                          ) : (
+                            <span className="text-gray-300 italic">unidade</span>
+                          )}
+                          <Edit2 size={10} />
+                        </button>
+                      )}
+                      {active
+                        ? <CheckSquare size={16} className="text-indigo-600 flex-shrink-0" />
+                        : <Square size={16} className="text-gray-300 flex-shrink-0" />}
                     </div>
-                    {active
-                      ? <CheckSquare size={16} className="text-indigo-600 flex-shrink-0" />
-                      : <Square size={16} className="text-gray-300 flex-shrink-0" />}
-                  </button>
+                  </div>
                 )
               })}
             </div>
@@ -709,25 +758,25 @@ function MedidaDisplayCard({ card }: { card: MedidaCard }) {
 
         {sorted.length > 0 ? (
           <div className="space-y-1">
-            {/* Realizado YTD — headline */}
-            <p className="text-2xl font-bold text-gray-900">{formatVal(ytdRazao)}</p>
-
-            {/* Delta — prominent secondary info */}
-            {ytdBudget !== 0 && (
-              <div className={cn(
-                'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-sm font-bold',
-                deltaGood ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
-              )}>
-                {deltaGood ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+            {/* Delta — main number */}
+            {ytdBudget !== 0 ? (
+              <p className={cn('text-2xl font-bold', deltaGood ? 'text-emerald-600' : 'text-red-500')}>
                 {formatDelta(delta)}
+              </p>
+            ) : (
+              <p className="text-2xl font-bold text-gray-900">{formatVal(ytdRazao)}</p>
+            )}
+
+            {/* Realizado and Budget — smaller row */}
+            {ytdBudget !== 0 && (
+              <div className="flex items-center gap-3 text-xs text-gray-500">
+                <span>Real: <span className="font-semibold text-gray-700">{formatVal(ytdRazao)}</span></span>
+                <span>Orç: <span className="font-semibold text-gray-700">{formatVal(ytdBudget)}</span></span>
               </div>
             )}
 
-            {/* Budget and period — smaller */}
-            <div className="flex items-center gap-2 text-xs text-gray-400">
-              {ytdBudget !== 0 && <span>Budget: {formatVal(ytdBudget)}</span>}
-              <span>YTD até {latestPeriodo ? shortPeriodo(latestPeriodo) : '—'}</span>
-            </div>
+            {/* Period label */}
+            <p className="text-xs text-gray-400">YTD até {latestPeriodo ? shortPeriodo(latestPeriodo) : '—'}</p>
           </div>
         ) : (
           <p className="text-sm text-gray-400 italic">Sem dados</p>
