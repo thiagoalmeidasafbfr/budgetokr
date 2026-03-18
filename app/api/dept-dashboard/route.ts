@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAnalise, getDRE, getMedidas } from '@/lib/query'
+import { getAnalise, getDRE, getMedidas, getDRELinhas } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,7 +30,20 @@ export async function GET(req: NextRequest) {
         dreMap[row.dre].ordem_dre = row.ordem_dre ?? 999
       }
     }
-    const dreGrupos = Object.values(dreMap).sort((a, b) => a.ordem_dre - b.ordem_dre)
+
+    // Sort by the same order used in the main DRE page: dre_linhas.ordem
+    // Fall back to ordem_dre if a group isn't in dre_linhas
+    const dreLinhas = getDRELinhas()
+    const linhasOrder: Record<string, number> = {}
+    for (const l of dreLinhas) {
+      if (l.tipo === 'grupo') linhasOrder[l.nome] = l.ordem
+    }
+
+    const dreGrupos = Object.values(dreMap).sort((a, b) => {
+      const oa = linhasOrder[a.dre] ?? (1000 + a.ordem_dre)
+      const ob = linhasOrder[b.dre] ?? (1000 + b.ordem_dre)
+      return oa - ob
+    })
 
     // All medidas
     const medidas = getMedidas()
