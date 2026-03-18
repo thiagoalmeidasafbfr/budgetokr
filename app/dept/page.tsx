@@ -568,13 +568,85 @@ interface MedidaPinModalProps {
   onRefresh: () => void
 }
 
+// Separate sub-component so each medida row manages its own unidade state independently
+function MedidaRow({
+  m, active, onToggle,
+}: {
+  m: MedidaInfo
+  active: boolean
+  onToggle: () => void
+}) {
+  const [unidade, setUnidade] = useState(m.unidade ?? '')
+  const [saved,   setSaved]   = useState(false)
+
+  // sync if parent reloads
+  useEffect(() => { setUnidade(m.unidade ?? '') }, [m.unidade])
+
+  const persistUnidade = async (val: string) => {
+    await fetch('/api/medidas', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: m.id, unidade: val }),
+    })
+    setSaved(true)
+    setTimeout(() => setSaved(false), 1200)
+  }
+
+  return (
+    <div className={cn(
+      'rounded-xl border transition-colors flex items-center gap-0',
+      active ? 'border-indigo-200 bg-indigo-50' : 'border-gray-100',
+    )}>
+      {/* Left: toggle area */}
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex items-center gap-3 flex-1 min-w-0 p-3 text-left hover:bg-black/5 rounded-l-xl transition-colors"
+      >
+        <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: m.cor }} />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-gray-900 truncate">{m.nome}</p>
+          {m.descricao && <p className="text-xs text-gray-400 truncate">{m.descricao}</p>}
+        </div>
+      </button>
+
+      {/* Middle: unidade input — completely isolated from toggle */}
+      <div className="flex-shrink-0 px-2">
+        <input
+          type="text"
+          value={unidade}
+          onChange={e => setUnidade(e.target.value)}
+          onBlur={e => persistUnidade(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') { e.currentTarget.blur() }
+            if (e.key === 'Escape') { setUnidade(m.unidade ?? ''); e.currentTarget.blur() }
+          }}
+          placeholder="R$, %…"
+          className={cn(
+            'w-14 text-center text-xs border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-colors',
+            saved ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200 bg-white hover:border-gray-300'
+          )}
+        />
+      </div>
+
+      {/* Right: checkbox toggle */}
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex-shrink-0 p-3 rounded-r-xl hover:bg-black/5 transition-colors"
+      >
+        {active
+          ? <CheckSquare size={16} className="text-indigo-600" />
+          : <Square size={16} className="text-gray-300" />}
+      </button>
+    </div>
+  )
+}
+
 function MedidaPinModal({ departamento, onClose, onRefresh }: MedidaPinModalProps) {
-  const [medidas,     setMedidas]     = useState<MedidaInfo[]>([])
-  const [pinned,      setPinned]      = useState<Set<number>>(new Set())
-  const [togglingId,  setTogglingId]  = useState<number | null>(null)
-  const [editingId,   setEditingId]   = useState<number | null>(null)
-  const [editUnidade, setEditUnidade] = useState('')
-  const [savingUn,    setSavingUn]    = useState(false)
+  const [medidas,    setMedidas]    = useState<MedidaInfo[]>([])
+  const [pinned,     setPinned]     = useState<Set<number>>(new Set())
+  const [togglingId, setTogglingId] = useState<number | null>(null)
 
   const reload = () =>
     fetch(`/api/dept-medidas?departamento=${encodeURIComponent(departamento)}`, { cache: 'no-store' })
@@ -590,7 +662,6 @@ function MedidaPinModal({ departamento, onClose, onRefresh }: MedidaPinModalProp
     if (togglingId !== null) return
     setTogglingId(medidaId)
     const isPinned = pinned.has(medidaId)
-    // Optimistic update
     setPinned(prev => {
       const next = new Set(prev)
       isPinned ? next.delete(medidaId) : next.add(medidaId)
@@ -604,7 +675,6 @@ function MedidaPinModal({ departamento, onClose, onRefresh }: MedidaPinModalProp
       })
       onRefresh()
     } catch {
-      // Revert on error
       setPinned(prev => {
         const next = new Set(prev)
         isPinned ? next.add(medidaId) : next.delete(medidaId)
@@ -615,43 +685,13 @@ function MedidaPinModal({ departamento, onClose, onRefresh }: MedidaPinModalProp
     }
   }
 
-  const startEditUnidade = (m: MedidaInfo, e: React.MouseEvent) => {
-    e.stopPropagation()
-    setEditingId(m.id)
-    setEditUnidade(m.unidade ?? '')
-  }
-
-  const saveUnidade = async (medidaId: number, e?: React.MouseEvent) => {
-    e?.stopPropagation()
-    setSavingUn(true)
-    try {
-      const res = await fetch('/api/medidas', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: medidaId, unidade: editUnidade }),
-      })
-      if (res.ok) {
-        setMedidas(prev => prev.map(x => x.id === medidaId ? { ...x, unidade: editUnidade } : x))
-        setEditingId(null)
-        onRefresh()
-      }
-    } finally {
-      setSavingUn(false)
-    }
-  }
-
-  const cancelEdit = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    setEditingId(null)
-  }
-
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0">
           <div>
             <h2 className="font-bold text-gray-900">Medidas Calculadas</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Selecione quais aparecem neste dashboard</p>
+            <p className="text-xs text-gray-400 mt-0.5">Clique na linha para selecionar · edite a unidade no campo</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
         </div>
@@ -662,69 +702,14 @@ function MedidaPinModal({ departamento, onClose, onRefresh }: MedidaPinModalProp
             </p>
           ) : (
             <div className="space-y-2">
-              {medidas.map(m => {
-                const active = pinned.has(m.id)
-                const isToggling = togglingId === m.id
-                return (
-                  <div key={m.id}
-                    onClick={() => editingId !== m.id && toggle(m.id)}
-                    className={cn(
-                      'rounded-xl border transition-colors cursor-pointer select-none',
-                      active ? 'border-indigo-200 bg-indigo-50 hover:bg-indigo-100/70' : 'border-gray-100 hover:bg-gray-50',
-                      isToggling && 'opacity-60'
-                    )}>
-                    <div className="flex items-center gap-3 p-3">
-                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: m.cor }} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">{m.nome}</p>
-                        {m.descricao && <p className="text-xs text-gray-400 truncate">{m.descricao}</p>}
-                      </div>
-
-                      {/* Unidade inline edit */}
-                      {editingId === m.id ? (
-                        <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
-                          <input
-                            autoFocus
-                            value={editUnidade}
-                            onChange={e => setEditUnidade(e.target.value)}
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') saveUnidade(m.id)
-                              if (e.key === 'Escape') setEditingId(null)
-                            }}
-                            className="w-16 border border-indigo-300 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300 text-center"
-                            placeholder="R$, %…"
-                          />
-                          <button
-                            onClick={e => saveUnidade(m.id, e)}
-                            disabled={savingUn}
-                            className="text-emerald-600 hover:text-emerald-700 p-0.5">
-                            <Save size={13} />
-                          </button>
-                          <button onClick={cancelEdit} className="text-gray-400 hover:text-gray-600 p-0.5">
-                            <X size={13} />
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={e => startEditUnidade(m, e)}
-                          className="flex-shrink-0 flex items-center gap-1 text-xs px-1.5 py-0.5 rounded hover:bg-white/60 transition-colors">
-                          {m.unidade ? (
-                            <span className="font-medium text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded-full">{m.unidade}</span>
-                          ) : (
-                            <span className="text-gray-300 italic">unidade</span>
-                          )}
-                          <Edit2 size={9} className="text-gray-400" />
-                        </button>
-                      )}
-
-                      {/* Checkbox — part of the row click area */}
-                      {active
-                        ? <CheckSquare size={16} className="text-indigo-600 flex-shrink-0" />
-                        : <Square size={16} className="text-gray-300 flex-shrink-0" />}
-                    </div>
-                  </div>
-                )
-              })}
+              {medidas.map(m => (
+                <MedidaRow
+                  key={m.id}
+                  m={m}
+                  active={pinned.has(m.id)}
+                  onToggle={() => toggle(m.id)}
+                />
+              ))}
             </div>
           )}
         </div>
