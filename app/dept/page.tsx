@@ -1,6 +1,6 @@
 'use client'
 import React, { useState, useEffect, useCallback } from 'react'
-import { Plus, Settings, Edit2, Trash2, Save, X, BarChart3, TrendingUp, TrendingDown, Target, ExternalLink, Download } from 'lucide-react'
+import { Plus, Settings, Edit2, Trash2, Save, X, BarChart3, TrendingUp, TrendingDown, Target, ExternalLink, Download, CheckSquare, Square } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
@@ -31,9 +31,24 @@ interface DreGrupo {
   ordem_dre?: number
 }
 
+interface MedidaInfo {
+  id: number
+  nome: string
+  descricao?: string
+  cor: string
+  tipo_medida: string
+  tipo_fonte: string
+}
+
+interface MedidaCard {
+  medida: MedidaInfo
+  byPeriodo: Record<string, { budget: number; razao: number }>
+}
+
 interface DashboardData {
   byPeriodo: AnaliseRow[]
   dreGrupos: DreGrupo[]
+  medidaCards: MedidaCard[]
 }
 
 // ─── DRE Detalhamento Modal ────────────────────────────────────────────────────
@@ -533,18 +548,169 @@ function KpiManagementModal({ departamento, kpis, onClose, onRefresh }: KpiManag
   )
 }
 
+const MONTHS_SHORT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+function shortPeriodo(p: string) {
+  const [year, month] = p.split('-')
+  return `${MONTHS_SHORT[parseInt(month) - 1]}/${year.slice(2)}`
+}
+
+// ─── Medida Pin Modal ─────────────────────────────────────────────────────────
+
+interface MedidaPinModalProps {
+  departamento: string
+  onClose: () => void
+  onRefresh: () => void
+}
+
+function MedidaPinModal({ departamento, onClose, onRefresh }: MedidaPinModalProps) {
+  const [medidas, setMedidas]   = useState<MedidaInfo[]>([])
+  const [pinned,  setPinned]    = useState<Set<number>>(new Set())
+  const [saving,  setSaving]    = useState(false)
+
+  useEffect(() => {
+    fetch(`/api/dept-medidas?departamento=${encodeURIComponent(departamento)}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(({ pinned: pinnedArr, medidas: all }: { pinned: { medida_id: number }[]; medidas: MedidaInfo[] }) => {
+        setMedidas(all)
+        setPinned(new Set(pinnedArr.map((p: { medida_id: number }) => p.medida_id)))
+      })
+  }, [departamento])
+
+  const toggle = async (medidaId: number) => {
+    setSaving(true)
+    const isPinned = pinned.has(medidaId)
+    await fetch('/api/dept-medidas', {
+      method: isPinned ? 'DELETE' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ departamento, medidaId }),
+    })
+    setPinned(prev => {
+      const next = new Set(prev)
+      isPinned ? next.delete(medidaId) : next.add(medidaId)
+      return next
+    })
+    setSaving(false)
+    onRefresh()
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0">
+          <div>
+            <h2 className="font-bold text-gray-900">Medidas Calculadas</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Selecione quais aparecem neste dashboard</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {medidas.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">
+              Nenhuma medida cadastrada. Crie medidas em Análise → Medidas.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {medidas.map(m => {
+                const active = pinned.has(m.id)
+                return (
+                  <button key={m.id} disabled={saving}
+                    onClick={() => toggle(m.id)}
+                    className={cn(
+                      'w-full flex items-center gap-3 p-3 rounded-xl border transition-colors text-left',
+                      active
+                        ? 'border-indigo-200 bg-indigo-50'
+                        : 'border-gray-100 hover:bg-gray-50'
+                    )}>
+                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: m.cor }} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{m.nome}</p>
+                      {m.descricao && <p className="text-xs text-gray-400 truncate">{m.descricao}</p>}
+                    </div>
+                    {active
+                      ? <CheckSquare size={16} className="text-indigo-600 flex-shrink-0" />
+                      : <Square size={16} className="text-gray-300 flex-shrink-0" />}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end px-6 py-4 border-t bg-gray-50 rounded-b-2xl flex-shrink-0">
+          <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Medida Display Card ───────────────────────────────────────────────────────
+
+function MedidaDisplayCard({ card }: { card: MedidaCard }) {
+  const sorted = Object.entries(card.byPeriodo)
+    .sort(([a], [b]) => a.localeCompare(b))
+  const sparkData = sorted.slice(-6).map(([periodo, vals]) => ({
+    label: shortPeriodo(periodo),
+    razao: vals.razao,
+    budget: vals.budget,
+  }))
+  const latest = sorted[sorted.length - 1]
+
+  const formatVal = (v: number) => formatCurrency(v)
+
+  return (
+    <Card className="flex flex-col">
+      <CardContent className="p-4 flex flex-col gap-2 flex-1">
+        <div className="flex items-start gap-1.5 min-w-0">
+          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5" style={{ backgroundColor: card.medida.cor }} />
+          <p className="text-sm font-semibold text-gray-800 truncate">{card.medida.nome}</p>
+        </div>
+
+        {latest ? (
+          <div>
+            <p className="text-2xl font-bold text-gray-900">{formatVal(latest[1].razao)}</p>
+            {latest[1].budget !== 0 && (
+              <p className={cn('text-xs font-medium', latest[1].razao >= latest[1].budget ? 'text-emerald-600' : 'text-red-500')}>
+                Budget: {formatVal(latest[1].budget)}
+              </p>
+            )}
+            <p className="text-xs text-gray-400">{shortPeriodo(latest[0])}</p>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400 italic">Sem dados</p>
+        )}
+
+        {sparkData.length > 1 && (
+          <div className="mt-auto">
+            <ResponsiveContainer width="100%" height={130}>
+              <LineChart data={sparkData} margin={{ top: 20, right: 8, left: 8, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  formatter={(v: unknown, name: unknown) => [formatVal(Number(v)), name === 'razao' ? 'Realizado' : 'Budget']}
+                  contentStyle={{ fontSize: 11, padding: '4px 8px' }}
+                />
+                <Line type="monotone" dataKey="razao" stroke={card.medida.cor} strokeWidth={2}
+                  dot={{ r: 3, fill: card.medida.cor, strokeWidth: 0 }} isAnimationActive={false}>
+                  <LabelList dataKey="razao" position="top" style={{ fontSize: 9, fill: '#6b7280' }}
+                    formatter={(v: unknown) => formatVal(Number(v))} />
+                </Line>
+                <Line type="monotone" dataKey="budget" stroke="#d1d5db" strokeWidth={1}
+                  strokeDasharray="3 3" dot={false} isAnimationActive={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 // ─── KPI Card with sparkline ──────────────────────────────────────────────────
 
 interface KpiCardProps {
   kpi: KpiManual
   valores: KpiValor[]
   onEditValores: () => void
-}
-
-const MONTHS_SHORT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
-function shortPeriodo(p: string) {
-  const [year, month] = p.split('-')
-  return `${MONTHS_SHORT[parseInt(month) - 1]}/${year.slice(2)}`
 }
 
 function KpiCard({ kpi, valores, onEditValores }: KpiCardProps) {
@@ -677,6 +843,7 @@ export default function DeptDashboardPage() {
   const [kpis,             setKpis]             = useState<KpiManual[]>([])
   const [kpiValores,       setKpiValores]       = useState<Record<number, KpiValor[]>>({})
   const [showMgmtModal,    setShowMgmtModal]    = useState(false)
+  const [showMedidaModal,  setShowMedidaModal]  = useState(false)
   const [editValoresKpi,   setEditValoresKpi]   = useState<KpiManual | null>(null)
   const [detModal,         setDetModal]         = useState<DetModalState | null>(null)
 
@@ -741,8 +908,9 @@ export default function DeptDashboardPage() {
 
   // ── Aggregates ────────────────────────────────────────────────────────────
 
-  const byPeriodo = dashData?.byPeriodo ?? []
-  const dreGrupos = dashData?.dreGrupos ?? []
+  const byPeriodo   = dashData?.byPeriodo   ?? []
+  const dreGrupos   = dashData?.dreGrupos   ?? []
+  const medidaCards = dashData?.medidaCards ?? []
 
   // Aggregate across selected periods for summary cards
   const totals = byPeriodo.reduce(
@@ -888,26 +1056,39 @@ export default function DeptDashboardPage() {
               />
             </div>
 
-            {/* Section 2 — KPIs Manuais */}
+            {/* Section 2 — KPIs + Medidas Calculadas */}
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">KPIs</h2>
-                <Button size="sm" variant="outline" onClick={() => setShowMgmtModal(true)}>
-                  <Plus size={13} />Novo KPI
-                </Button>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setShowMedidaModal(true)}>
+                    <Settings size={12} />Medidas
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setShowMgmtModal(true)}>
+                    <Plus size={13} />Novo KPI
+                  </Button>
+                </div>
               </div>
-              {kpis.length === 0 ? (
+              {kpis.length === 0 && medidaCards.length === 0 ? (
                 <Card>
                   <CardContent className="py-10 flex flex-col items-center gap-2">
                     <Target size={28} className="text-gray-300" />
-                    <p className="text-sm text-gray-400">Nenhum KPI configurado.</p>
-                    <Button size="sm" variant="outline" onClick={() => setShowMgmtModal(true)}>
-                      <Plus size={12} />Adicionar KPI
-                    </Button>
+                    <p className="text-sm text-gray-400">Nenhum KPI ou medida configurado.</p>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => setShowMgmtModal(true)}>
+                        <Plus size={12} />Adicionar KPI
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setShowMedidaModal(true)}>
+                        <Settings size={12} />Adicionar Medida
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               ) : (
                 <div className="grid grid-cols-3 gap-4">
+                  {medidaCards.map((card, i) => (
+                    <MedidaDisplayCard key={`m-${i}`} card={card} />
+                  ))}
                   {kpis.map(kpi => (
                     <KpiCard
                       key={kpi.id}
@@ -920,38 +1101,7 @@ export default function DeptDashboardPage() {
               )}
             </div>
 
-            {/* Section 3 — Monthly Chart */}
-            {chartRows.length > 0 && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold text-gray-700">Budget vs Realizado por Período</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={chartRows} margin={{ top: 0, right: 0, left: -10, bottom: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis
-                        dataKey="label"
-                        angle={-30}
-                        textAnchor="end"
-                        tick={{ fontSize: 10 }}
-                        interval={0}
-                      />
-                      <YAxis
-                        tickFormatter={v => formatCurrency(Number(v)).replace('R$\u00a0', '')}
-                        tick={{ fontSize: 10 }}
-                      />
-                      <Tooltip formatter={(v) => formatCurrency(Number(v))} />
-                      <Legend />
-                      <Bar dataKey="budget" name="Budget"    fill="#818cf8" radius={[3, 3, 0, 0]} />
-                      <Bar dataKey="razao"  name="Realizado" fill="#34d399" radius={[3, 3, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Section 4 — DRE Resumida */}
+            {/* Section 3 — DRE Resumida */}
             {dreRows.length > 0 && (
               <Card>
                 <CardHeader className="pb-2">
@@ -1012,6 +1162,37 @@ export default function DeptDashboardPage() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Section 4 — Budget vs Realizado por Período */}
+            {chartRows.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold text-gray-700">Budget vs Realizado por Período</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={chartRows} margin={{ top: 0, right: 0, left: -10, bottom: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis
+                        dataKey="label"
+                        angle={-30}
+                        textAnchor="end"
+                        tick={{ fontSize: 10 }}
+                        interval={0}
+                      />
+                      <YAxis
+                        tickFormatter={v => formatCurrency(Number(v)).replace('R$\u00a0', '')}
+                        tick={{ fontSize: 10 }}
+                      />
+                      <Tooltip formatter={(v) => formatCurrency(Number(v))} />
+                      <Legend />
+                      <Bar dataKey="budget" name="Budget"    fill="#818cf8" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="razao"  name="Realizado" fill="#34d399" radius={[3, 3, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            )}
           </>
         )}
       </div>
@@ -1028,10 +1209,18 @@ export default function DeptDashboardPage() {
         />
       )}
 
+      {showMedidaModal && (
+        <MedidaPinModal
+          departamento={selDept}
+          onClose={() => setShowMedidaModal(false)}
+          onRefresh={() => loadDashboard(selDept, selPeriods)}
+        />
+      )}
+
       {editValoresKpi && (
         <KpiValoresModal
           kpi={editValoresKpi}
-          periodos={selPeriods}
+          periodos={selPeriods.length > 0 ? selPeriods : allPeriodos.slice(-12)}
           onClose={() => setEditValoresKpi(null)}
           onSaved={() => loadKpis(selDept)}
         />

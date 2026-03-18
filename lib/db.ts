@@ -11,7 +11,7 @@ if (!fs.existsSync(DATA_DIR)) {
 
 let db: Database.Database | null = null;
 
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 export function getDb(): Database.Database {
   if (!db) {
@@ -74,6 +74,19 @@ function initSchema(db: Database.Database) {
           meta     REAL    DEFAULT NULL,
           UNIQUE(kpi_id, periodo),
           FOREIGN KEY (kpi_id) REFERENCES kpis_manuais(id) ON DELETE CASCADE
+        );
+      `)
+    }
+    // v6 → v7: dept_medidas — medidas calculadas fixadas ao dashboard de cada dept
+    if (version < 7) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS dept_medidas (
+          id           INTEGER PRIMARY KEY AUTOINCREMENT,
+          departamento TEXT    NOT NULL,
+          medida_id    INTEGER NOT NULL,
+          ordem        INTEGER NOT NULL DEFAULT 999,
+          UNIQUE(departamento, medida_id),
+          FOREIGN KEY (medida_id) REFERENCES medidas(id) ON DELETE CASCADE
         );
       `)
     }

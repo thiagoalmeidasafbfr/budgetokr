@@ -566,6 +566,39 @@ export function upsertKpiValores(
   runAll()
 }
 
+// ─── Dept Medidas (medidas fixadas ao dashboard de um departamento) ────────────
+
+export interface DeptMedida {
+  id: number
+  departamento: string
+  medida_id: number
+  ordem: number
+}
+
+export function getDeptMedidas(departamento: string): DeptMedida[] {
+  const db = getDb()
+  return db.prepare(`
+    SELECT id, departamento, medida_id, ordem
+    FROM dept_medidas
+    WHERE departamento = ?
+    ORDER BY ordem, id
+  `).all(departamento) as DeptMedida[]
+}
+
+export function upsertDeptMedida(departamento: string, medidaId: number): void {
+  const db = getDb()
+  db.prepare(`
+    INSERT OR IGNORE INTO dept_medidas (departamento, medida_id) VALUES (?, ?)
+  `).run(departamento, medidaId)
+}
+
+export function deleteDeptMedida(departamento: string, medidaId: number): void {
+  const db = getDb()
+  db.prepare(`
+    DELETE FROM dept_medidas WHERE departamento = ? AND medida_id = ?
+  `).run(departamento, medidaId)
+}
+
 export function getMedidas(): import('./types').Medida[] {
   const db = getDb()
   const rows = db.prepare('SELECT * FROM medidas ORDER BY nome').all() as Array<{

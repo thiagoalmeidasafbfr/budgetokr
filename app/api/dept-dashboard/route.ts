@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAnalise, getDRE, getMedidas, getDRELinhas } from '@/lib/query'
+import { getAnalise, getDRE, getMedidas, getDRELinhas, getDeptMedidas, getMedidaResultados } from '@/lib/query'
+import type { Medida } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,10 +46,30 @@ export async function GET(req: NextRequest) {
       return oa - ob
     })
 
-    // All medidas
-    const medidas = getMedidas()
+    // Pinned medidas for this dept — compute sparklines grouped by period
+    const allMedidas = getMedidas()
+    const medidaById: Record<number, Medida> = {}
+    for (const m of allMedidas) medidaById[m.id] = m
 
-    return NextResponse.json({ byPeriodo, dreGrupos, medidas })
+    const deptMedidas = getDeptMedidas(departamento)
+    const medidaCards = deptMedidas.map(dm => {
+      const medida = medidaById[dm.medida_id]
+      if (!medida) return null
+      const resultados = getMedidaResultados(dm.medida_id, {
+        groupByDept: false,
+        groupByPeriod: true,
+        periodos: periodos ?? [],
+      })
+      const byPeriodoMedida = resultados.reduce<Record<string, { budget: number; razao: number }>>((acc, r) => {
+        if (!acc[r.periodo]) acc[r.periodo] = { budget: 0, razao: 0 }
+        acc[r.periodo].budget += r.budget
+        acc[r.periodo].razao  += r.razao
+        return acc
+      }, {})
+      return { medida, byPeriodo: byPeriodoMedida }
+    }).filter(Boolean)
+
+    return NextResponse.json({ byPeriodo, dreGrupos, medidaCards })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: String(e) }, { status: 500 })
