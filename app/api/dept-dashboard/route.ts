@@ -55,19 +55,38 @@ export async function GET(req: NextRequest) {
     const medidaCards = deptMedidas.map(dm => {
       const medida = medidaById[dm.medida_id]
       if (!medida) return null
+      const isRatio = medida.tipo_medida === 'ratio'
       const resultados = getMedidaResultados(dm.medida_id, {
         groupByDept: false,
         groupByPeriod: true,
         periodos: periodos ?? [],
         extraFiltros: [{ column: 'nome_departamento', operator: '=', value: departamento }],
       })
-      const byPeriodoMedida = resultados.reduce<Record<string, { budget: number; razao: number }>>((acc, r) => {
-        if (!acc[r.periodo]) acc[r.periodo] = { budget: 0, razao: 0 }
-        acc[r.periodo].budget += r.budget
-        acc[r.periodo].razao  += r.razao
+
+      type PeriodoData = {
+        budget: number; razao: number
+        num_razao: number; num_budget: number
+        den_razao: number; den_budget: number
+      }
+      const byPeriodoMedida = resultados.reduce<Record<string, PeriodoData>>((acc, r) => {
+        if (!acc[r.periodo]) acc[r.periodo] = { budget: 0, razao: 0, num_razao: 0, num_budget: 0, den_razao: 0, den_budget: 0 }
+        if (isRatio) {
+          acc[r.periodo].num_razao  += r.numerador_razao  ?? 0
+          acc[r.periodo].num_budget += r.numerador_budget ?? 0
+          acc[r.periodo].den_razao  += r.denominador_razao  ?? 0
+          acc[r.periodo].den_budget += r.denominador_budget ?? 0
+          // recompute ratio for the period (in case multiple rows aggregate)
+          const dr = acc[r.periodo].den_razao,  db = acc[r.periodo].den_budget
+          acc[r.periodo].razao  = dr ? acc[r.periodo].num_razao  / Math.abs(dr) * 100 : 0
+          acc[r.periodo].budget = db ? acc[r.periodo].num_budget / Math.abs(db) * 100 : 0
+        } else {
+          acc[r.periodo].budget += r.budget
+          acc[r.periodo].razao  += r.razao
+        }
         return acc
       }, {})
-      return { medida, byPeriodo: byPeriodoMedida }
+
+      return { medida, isRatio, byPeriodo: byPeriodoMedida }
     }).filter(Boolean)
 
     return NextResponse.json({ byPeriodo, dreGrupos, medidaCards })

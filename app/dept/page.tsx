@@ -43,7 +43,12 @@ interface MedidaInfo {
 
 interface MedidaCard {
   medida: MedidaInfo
-  byPeriodo: Record<string, { budget: number; razao: number }>
+  isRatio: boolean
+  byPeriodo: Record<string, {
+    budget: number; razao: number
+    num_razao: number; num_budget: number
+    den_razao: number; den_budget: number
+  }>
 }
 
 interface DashboardData {
@@ -649,23 +654,48 @@ function MedidaPinModal({ departamento, onClose, onRefresh }: MedidaPinModalProp
 function MedidaDisplayCard({ card }: { card: MedidaCard }) {
   const sorted = Object.entries(card.byPeriodo)
     .sort(([a], [b]) => a.localeCompare(b))
-  const sparkData = sorted.slice(-6).map(([periodo, vals]) => ({
+  const sparkDataFixed = sorted.slice(-6).map(([periodo, vals]) => ({
     label: shortPeriodo(periodo),
     razao: vals.razao,
     budget: vals.budget,
   }))
+
   const latestPeriodo = sorted[sorted.length - 1]?.[0]
 
-  // YTD: sum all periods
-  const ytdRazao  = sorted.reduce((s, [, v]) => s + v.razao,  0)
-  const ytdBudget = sorted.reduce((s, [, v]) => s + v.budget, 0)
+  // YTD computation
+  let ytdRazao: number
+  let ytdBudget: number
+  if (card.isRatio) {
+    const totNumRazao  = sorted.reduce((s, [, v]) => s + v.num_razao,  0)
+    const totNumBudget = sorted.reduce((s, [, v]) => s + v.num_budget, 0)
+    const totDenRazao  = sorted.reduce((s, [, v]) => s + v.den_razao,  0)
+    const totDenBudget = sorted.reduce((s, [, v]) => s + v.den_budget, 0)
+    ytdRazao  = totDenRazao  ? totNumRazao  / Math.abs(totDenRazao)  * 100 : 0
+    ytdBudget = totDenBudget ? totNumBudget / Math.abs(totDenBudget) * 100 : 0
+  } else {
+    ytdRazao  = sorted.reduce((s, [, v]) => s + v.razao,  0)
+    ytdBudget = sorted.reduce((s, [, v]) => s + v.budget, 0)
+  }
 
   const unidade = card.medida.unidade ?? ''
+  const isPercent = unidade === '%'
   const formatVal = (v: number) => {
     if (unidade === 'R$') return formatCurrency(v)
-    if (unidade === '%')  return `${v.toFixed(1)}%`
+    if (isPercent)        return `${v.toFixed(1)}%`
     if (unidade)          return `${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ${unidade}`
     return formatCurrency(v)
+  }
+
+  // Variation: realizado - budget (pp for %, absolute otherwise)
+  const delta = ytdRazao - ytdBudget
+  const deltaPositiveIsGood = true // configurable if needed
+  const deltaGood = deltaPositiveIsGood ? delta >= 0 : delta <= 0
+  const formatDelta = (v: number) => {
+    const sign = v >= 0 ? '+' : ''
+    if (isPercent) return `${sign}${v.toFixed(1)} pp`
+    if (unidade === 'R$') return `${sign}${formatCurrency(v)}`
+    if (unidade) return `${sign}${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ${unidade}`
+    return `${sign}${formatCurrency(v)}`
   }
 
   return (
@@ -678,25 +708,35 @@ function MedidaDisplayCard({ card }: { card: MedidaCard }) {
         </div>
 
         {sorted.length > 0 ? (
-          <div>
+          <div className="space-y-1">
+            {/* Realizado YTD — headline */}
             <p className="text-2xl font-bold text-gray-900">{formatVal(ytdRazao)}</p>
+
+            {/* Delta — prominent secondary info */}
             {ytdBudget !== 0 && (
-              <p className={cn('text-xs font-medium', ytdRazao >= ytdBudget ? 'text-emerald-600' : 'text-red-500')}>
-                Budget YTD: {formatVal(ytdBudget)}
-              </p>
+              <div className={cn(
+                'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-sm font-bold',
+                deltaGood ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+              )}>
+                {deltaGood ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                {formatDelta(delta)}
+              </div>
             )}
-            <p className="text-xs text-gray-400">
-              YTD até {latestPeriodo ? shortPeriodo(latestPeriodo) : '—'}
-            </p>
+
+            {/* Budget and period — smaller */}
+            <div className="flex items-center gap-2 text-xs text-gray-400">
+              {ytdBudget !== 0 && <span>Budget: {formatVal(ytdBudget)}</span>}
+              <span>YTD até {latestPeriodo ? shortPeriodo(latestPeriodo) : '—'}</span>
+            </div>
           </div>
         ) : (
           <p className="text-sm text-gray-400 italic">Sem dados</p>
         )}
 
-        {sparkData.length > 1 && (
+        {sparkDataFixed.length > 1 && (
           <div className="mt-auto">
             <ResponsiveContainer width="100%" height={130}>
-              <LineChart data={sparkData} margin={{ top: 20, right: 8, left: 8, bottom: 4 }}>
+              <LineChart data={sparkDataFixed} margin={{ top: 20, right: 8, left: 8, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
                 <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
                 <Tooltip
