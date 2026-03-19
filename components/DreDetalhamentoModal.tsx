@@ -97,6 +97,7 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
     const p = new URLSearchParams()
     if (ctx.node.dre)         p.set('dre',           ctx.node.dre)
     if (ctx.node.agrupamento) p.set('agrupamento',   ctx.node.agrupamento)
+    if (ctx.node.conta)       p.set('conta',          ctx.node.conta)
     if (ctx.periodo)          p.set('periodo',        ctx.periodo)
     if (ctx.tipo !== 'ambos') p.set('tipo',           ctx.tipo)
     if (ctx.departamentos?.length) p.set('departamentos', ctx.departamentos.join(','))
@@ -110,6 +111,7 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
   const title = [
     ctx.node.dre,
     ctx.node.agrupamento !== ctx.node.dre ? ctx.node.agrupamento : null,
+    ctx.node.conta ? ctx.node.name : null,
     ctx.periodo ? `· ${formatPeriodo(ctx.periodo)}` : null,
     ctx.tipo !== 'ambos' ? `· ${ctx.tipo === 'budget' ? 'Budget' : 'Realizado'}` : null,
   ].filter(Boolean).join(' › ')

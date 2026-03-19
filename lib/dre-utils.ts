@@ -67,6 +67,7 @@ function buildAccountChildren(
 
   const result = new Map<string, TreeNode[]>()
   for (const [key, contaMap] of grouped) {
+    const [dre, agrupamento] = key.split('||')
     const children: TreeNode[] = []
     for (const [num, c] of contaMap) {
       const b = c.budget * sinal
@@ -82,6 +83,7 @@ function buildAccountChildren(
         budget: b, razao: r, variacao: v,
         variacao_pct: b ? (v / Math.abs(b)) * 100 : 0,
         children: [], byPeriod: byP, conta: num,
+        dre, agrupamento,
       })
     }
     children.sort((a, b) => (a.conta ?? '').localeCompare(b.conta ?? ''))
