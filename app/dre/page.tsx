@@ -819,7 +819,7 @@ export default function DREPage() {
                           Demonstrativo
                         </th>
                         {dataPeriods.map(p => (
-                          <th key={p} className="text-center px-1.5 py-2 font-medium text-gray-400 text-xs border-l border-gray-100 min-w-[68px]">
+                          <th key={p} className="text-center px-1.5 py-2 font-medium text-gray-400 text-xs border-l-2 border-black min-w-[68px]">
                             {formatPeriodo(p).replace(' ', '\u00a0')}
                           </th>
                         ))}
@@ -866,7 +866,7 @@ export default function DREPage() {
                               return (
                                 <td key={p}
                                   onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'ambos') }}
-                                  className="px-1 py-2 text-center border-l border-gray-100 group/cell">
+                                  className="px-1 py-2 text-center border-l-2 border-black group/cell">
                                   {hasData ? (
                                     <span title={`Orç: ${formatCurrency(cell.budget)}\nReal: ${formatCurrency(cell.razao)}\nVar: ${formatCurrency(v)}`}
                                       className={cn(
@@ -913,7 +913,7 @@ export default function DREPage() {
                           Demonstrativo Gerencial
                         </th>
                         {dataPeriods.map(p => (
-                          <th key={p} colSpan={3} className="text-center px-1 py-2 font-medium text-gray-600 border-l-2 border-gray-300 bg-gray-50">
+                          <th key={p} colSpan={3} className="text-center px-1 py-2 font-medium text-gray-600 border-l-2 border-black bg-gray-50">
                             {formatPeriodo(p)}
                           </th>
                         ))}
@@ -922,7 +922,7 @@ export default function DREPage() {
                         <th className="sticky left-0 bg-gray-50/50 z-10" />
                         {dataPeriods.map(p => (
                           <React.Fragment key={p}>
-                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-gray-300">Orçado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-black">Orçado</th>
                             <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Realizado</th>
                             <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Var.</th>
                           </React.Fragment>
@@ -959,7 +959,7 @@ export default function DREPage() {
                             return (
                               <React.Fragment key={p}>
                                 <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'budget') }}
-                                  className={cn('px-2 py-2 text-right text-xs border-l-2 border-gray-300', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                  className={cn('px-2 py-2 text-right text-xs border-l-2 border-black', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
                                   {formatCurrency(cell.budget)}
                                 </td>
                                 <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'razao') }}
@@ -996,7 +996,7 @@ export default function DREPage() {
                           Demonstrativo Gerencial
                         </th>
                         {allQuarters.map(q => (
-                          <th key={q} colSpan={3} className="text-center px-1 py-2 font-medium text-gray-600 border-l-2 border-gray-300 bg-gray-50">
+                          <th key={q} colSpan={3} className="text-center px-1 py-2 font-medium text-gray-600 border-l-2 border-black bg-gray-50">
                             {q}
                           </th>
                         ))}
@@ -1005,7 +1005,7 @@ export default function DREPage() {
                         <th className="sticky left-0 bg-gray-50/50 z-10" />
                         {allQuarters.map(q => (
                           <React.Fragment key={q}>
-                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-gray-300">Orçado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-black">Orçado</th>
                             <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Realizado</th>
                             <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Var.</th>
                           </React.Fragment>
@@ -1041,7 +1041,7 @@ export default function DREPage() {
                               const v = cell.razao - cell.budget
                               return (
                                 <React.Fragment key={q}>
-                                  <td className={cn('px-2 py-2 text-right text-xs border-l-2 border-gray-300', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                  <td className={cn('px-2 py-2 text-right text-xs border-l-2 border-black', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
                                     {formatCurrency(cell.budget)}
                                   </td>
                                   <td className={cn('px-2 py-2 text-right text-xs border-l border-gray-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
@@ -1156,7 +1156,7 @@ export default function DREPage() {
                             <th colSpan={2} className="text-center px-2 py-2 font-medium text-emerald-600 border-l-2 border-emerald-200 bg-emerald-50/50">
                               {formatOption(compB)}
                             </th>
-                            <th colSpan={2} className="text-center px-2 py-2 font-medium text-gray-600 border-l-2 border-gray-300 bg-gray-100/50">
+                            <th colSpan={2} className="text-center px-2 py-2 font-medium text-gray-600 border-l-2 border-black bg-gray-100/50">
                               Variação (A vs B)
                             </th>
                           </tr>
@@ -1166,7 +1166,7 @@ export default function DREPage() {
                             <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Realizado</th>
                             <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-emerald-200">Orçado</th>
                             <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Realizado</th>
-                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-gray-300">Δ Realizado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-black">Δ Realizado</th>
                             <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">% Var.</th>
                           </tr>
                         </thead>
@@ -1212,7 +1212,7 @@ export default function DREPage() {
                                   {formatCurrency(vB.razao)}
                                 </td>
                                 {/* Delta */}
-                                <td className={cn('px-2 py-2 text-right text-xs font-semibold border-l-2 border-gray-300', colorForVariance(deltaRazao))}>
+                                <td className={cn('px-2 py-2 text-right text-xs font-semibold border-l-2 border-black', colorForVariance(deltaRazao))}>
                                   {formatCurrency(deltaRazao)}
                                 </td>
                                 <td className="px-2 py-2 text-right border-l border-gray-200">
