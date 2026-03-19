@@ -1272,6 +1272,45 @@ export default function DeptDashboardPage() {
     <div className="flex gap-0 min-h-screen">
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
       <div className="w-52 flex-shrink-0 border-r border-gray-100 flex flex-col bg-white">
+        {/* Períodos — sempre visível no topo quando há departamento selecionado */}
+        {selDept && (
+          <div className="px-3 py-2 border-b border-gray-100">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Períodos</p>
+            <div className="space-y-0.5 max-h-48 overflow-y-auto">
+              {allPeriodos.map(p => (
+                <label key={p} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                  <input
+                    type="checkbox"
+                    checked={selPeriods.includes(p)}
+                    onChange={e => setSelPeriods(prev =>
+                      e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}
+                    className="w-3 h-3 accent-indigo-600"
+                  />
+                  <span className="text-xs text-gray-600">{formatPeriodo(p)}</span>
+                </label>
+              ))}
+            </div>
+            {selPeriods.length > 0 && (
+              <button
+                onClick={() => setSelPeriods([])}
+                className="mt-1 text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"
+              >
+                <X size={9} />Limpar
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Configurar KPIs: apenas para master */}
+        {selDept && isMaster && (
+          <div className="p-3 border-b border-gray-100">
+            <Button variant="outline" size="sm" className="w-full text-xs"
+              onClick={() => setShowMgmtModal(true)}>
+              <Settings size={12} />Configurar KPIs
+            </Button>
+          </div>
+        )}
+
         {/* Seletor de departamento: visível apenas para master */}
         {isMaster && (
           <>
@@ -1299,53 +1338,10 @@ export default function DeptDashboardPage() {
 
         {/* Para dept users: exibe o nome do departamento fixo */}
         {!isMaster && forcedDept && (
-          <>
-            <div className="p-3 border-b border-gray-100">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Departamento</p>
-              <p className="text-sm font-semibold text-indigo-700 px-1">{forcedDept}</p>
-            </div>
-            <div className="flex-1" />
-          </>
-        )}
-
-        {selDept && (
-          <>
-            <div className="px-3 py-2 border-t border-gray-100">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Períodos</p>
-              <div className="space-y-0.5 max-h-48 overflow-y-auto">
-                {allPeriodos.map(p => (
-                  <label key={p} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
-                    <input
-                      type="checkbox"
-                      checked={selPeriods.includes(p)}
-                      onChange={e => setSelPeriods(prev =>
-                        e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}
-                      className="w-3 h-3 accent-indigo-600"
-                    />
-                    <span className="text-xs text-gray-600">{formatPeriodo(p)}</span>
-                  </label>
-                ))}
-              </div>
-              {selPeriods.length > 0 && (
-                <button
-                  onClick={() => setSelPeriods([])}
-                  className="mt-1 text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"
-                >
-                  <X size={9} />Limpar
-                </button>
-              )}
-            </div>
-
-            {/* Configurar KPIs: apenas para master */}
-            {isMaster && (
-              <div className="p-3 border-t border-gray-100">
-                <Button variant="outline" size="sm" className="w-full text-xs"
-                  onClick={() => setShowMgmtModal(true)}>
-                  <Settings size={12} />Configurar KPIs
-                </Button>
-              </div>
-            )}
-          </>
+          <div className="p-3 border-b border-gray-100">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Departamento</p>
+            <p className="text-sm font-semibold text-indigo-700 px-1">{forcedDept}</p>
+          </div>
         )}
       </div>
 
