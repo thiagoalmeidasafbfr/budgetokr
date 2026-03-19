@@ -4,6 +4,7 @@ import { ChevronRight, ChevronDown, Filter, X, Download, RefreshCw, ExternalLink
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import YearFilter, { filterPeriodosByYear } from '@/components/YearFilter'
 import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
 import { toQuarterLabel, groupByQuarter, sortQuarterLabels, buildTree, buildTreeFromLinhas, flattenTree } from '@/lib/dre-utils'
 import type { DRERow, DREAccountRow, TreeNode, DRELinha } from '@/lib/dre-utils'
@@ -39,6 +40,7 @@ export default function DREPage() {
   const [ctxMenu,       setCtxMenu]       = useState<ContextMenuState | null>(null)
   const [detModal,      setDetModal]      = useState<ContextMenuState | null>(null)
   const [deptUser,      setDeptUser]      = useState<{ department: string } | null>(null)
+  const [selYear,       setSelYear]       = useState<string>('')
   const ctxRef = useRef<HTMLDivElement>(null)
 
   // Fecha context menu ao clicar fora
@@ -205,7 +207,10 @@ export default function DREPage() {
           <h1 className="text-2xl font-bold text-gray-900">DRE — Demonstrativo de Resultados</h1>
           <p className="text-gray-500 text-sm mt-0.5">P&L por linha contábil · Budget vs Razão · Clique direito para detalhamento</p>
         </div>
-        <Button variant="outline" size="sm" onClick={exportCSV}><Download size={13} /> CSV</Button>
+        <div className="flex items-center gap-2">
+          <YearFilter periodos={periodos} selectedYear={selYear} onYearChange={y => { setSelYear(y); setSelPeriods([]) }} />
+          <Button variant="outline" size="sm" onClick={exportCSV}><Download size={13} /> CSV</Button>
+        </div>
       </div>
 
       <div className="flex gap-4">
@@ -259,7 +264,7 @@ export default function DREPage() {
               <div>
                 <p className="text-xs font-medium text-gray-600 mb-1">Períodos</p>
                 <div className="space-y-0.5 max-h-32 overflow-y-auto">
-                  {periodos.map(p => (
+                  {filterPeriodosByYear(periodos, selYear).map(p => (
                     <label key={p} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
                       <input type="checkbox" checked={selPeriods.includes(p)}
                         onChange={e => setSelPeriods(prev => e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}

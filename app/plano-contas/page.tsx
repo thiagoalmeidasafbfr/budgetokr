@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
+import YearFilter, { filterPeriodosByYear } from '@/components/YearFilter'
 
 interface TreeNode {
   numero: string
@@ -38,6 +39,7 @@ export default function PlanoContasPage() {
   const [search, setSearch]         = useState('')
   const [editingNumero, setEditingNumero] = useState<string | null>(null)
   const [editingName, setEditingName]     = useState('')
+  const [selYear, setSelYear]             = useState<string>('')
   const [importing, setImporting]         = useState(false)
   const [importMsg, setImportMsg]         = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
   const editRef = useRef<HTMLInputElement>(null)
@@ -263,7 +265,8 @@ export default function PlanoContasPage() {
             {data && <span className="ml-2 text-gray-400">· {data.totalContas} contas · {data.maxLevel} níveis</span>}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {data && <YearFilter periodos={data.periodos} selectedYear={selYear} onYearChange={y => { setSelYear(y); setSelPeriods([]) }} />}
           <Button variant="outline" size="sm" onClick={() => loadData(selDepts, selPeriods)}>
             <RefreshCw size={13} /> Atualizar
           </Button>
@@ -350,7 +353,7 @@ export default function PlanoContasPage() {
               <CardContent className="p-3 space-y-2">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Períodos</p>
                 <div className="space-y-0.5 max-h-48 overflow-y-auto">
-                  {data.periodos.map(p => (
+                  {filterPeriodosByYear(data.periodos, selYear).map(p => (
                     <label key={p} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
                       <input type="checkbox" checked={selPeriods.includes(p)}
                         onChange={e => setSelPeriods(prev => e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}

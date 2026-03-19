@@ -1,9 +1,10 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { BarChart3, TrendingDown, TrendingUp, Upload, Target, AlertCircle, Database, FileText, Calendar } from 'lucide-react'
+import { BarChart3, TrendingDown, TrendingUp, Upload, Target, AlertCircle, Database } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatPct, formatPeriodo, cn } from '@/lib/utils'
+import YearFilter from '@/components/YearFilter'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 
@@ -86,8 +87,8 @@ export default function Dashboard() {
     </div>
   )
 
-  // Available years from data
-  const availableYears = [...new Set(analise.map(r => r.periodo?.substring(0, 4)).filter(Boolean))].sort()
+  // Available periods for year filter
+  const allPeriodos = [...new Set(analise.map(r => r.periodo).filter(Boolean))]
 
   // Filter by selected year
   const filtered = selYear
@@ -148,23 +149,7 @@ export default function Dashboard() {
           <p className="text-gray-500 text-sm mt-0.5">Visão consolidada Budget vs Razão{selYear ? ` · ${selYear}` : ''}</p>
         </div>
         <div className="flex items-center gap-2">
-          {availableYears.length > 1 && (
-            <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-0.5">
-              <button
-                onClick={() => setSelYear('')}
-                className={cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-                  !selYear ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
-                Todos
-              </button>
-              {availableYears.map(y => (
-                <button key={y} onClick={() => setSelYear(y)}
-                  className={cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-                    selYear === y ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
-                  {y}
-                </button>
-              ))}
-            </div>
-          )}
+          <YearFilter periodos={allPeriodos} selectedYear={selYear} onYearChange={setSelYear} />
           {medidas.length > 0 && (
             <Link href="/medidas"><Button variant="outline" size="sm"><Target size={13} /> {medidas.length} Medida{medidas.length !== 1 ? 's' : ''}</Button></Link>
           )}

@@ -10,6 +10,7 @@ import {
 } from 'recharts'
 import { buildTree, buildTreeFromLinhas, flattenTree, type DRERow, type DRELinha, type TreeNode } from '@/lib/dre-utils'
 import type { KpiManual, KpiValor } from '@/lib/query'
+import YearFilter, { filterPeriodosByYear } from '@/components/YearFilter'
 
 import { CHART_COLORS as DEFAULT_COLORS } from '@/lib/constants'
 
@@ -1141,6 +1142,7 @@ export default function DeptDashboardPage() {
   const [dreLinhas,        setDreLinhas]        = useState<DRELinha[]>([])
   const [dreExpanded,      setDreExpanded]      = useState<Set<string>>(new Set())
   const [dreFullLoading,   setDreFullLoading]   = useState(false)
+  const [selYear,          setSelYear]          = useState<string>('')
 
   // Carrega usuário logado
   useEffect(() => {
@@ -1309,7 +1311,7 @@ export default function DeptDashboardPage() {
         <div className="px-3 py-2 border-t border-gray-100">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Períodos</p>
           <div className="space-y-0.5 max-h-48 overflow-y-auto">
-            {allPeriodos.map(p => (
+            {filterPeriodosByYear(allPeriodos, selYear).map(p => (
               <label key={p} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
                 <input
                   type="checkbox"
@@ -1365,9 +1367,12 @@ export default function DeptDashboardPage() {
                     : 'Todos os períodos'}
                 </p>
               </div>
-              {loading && (
-                <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-              )}
+              <div className="flex items-center gap-2">
+                <YearFilter periodos={allPeriodos} selectedYear={selYear} onYearChange={y => { setSelYear(y); setSelPeriods([]) }} />
+                {loading && (
+                  <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                )}
+              </div>
             </div>
 
             {/* Section 1 — Summary Cards */}
