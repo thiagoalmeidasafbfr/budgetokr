@@ -109,9 +109,19 @@ export default function Dashboard() {
     .map(([periodo, vals]) => ({ raw: periodo, periodo: formatPeriodo(periodo), ...vals }))
     .sort((a, b) => a.raw.localeCompare(b.raw))
 
+  // Add YTD cumulative variance
+  let ytdBudget = 0, ytdRazao = 0
+  for (const row of periodChartData) {
+    ytdBudget += row.budget
+    ytdRazao += row.razao
+    ;(row as Record<string, unknown>).variacaoYtd = ytdRazao - ytdBudget
+    ;(row as Record<string, unknown>).budgetYtd = ytdBudget
+    ;(row as Record<string, unknown>).razaoYtd = ytdRazao
+  }
+
   const deptVariance = Object.entries(byDept)
     .map(([dept, vals]) => ({ dept, variacao: vals.razao - vals.budget }))
-    .sort((a, b) => Math.abs(b.variacao) - Math.abs(a.variacao))
+    .sort((a, b) => b.variacao - a.variacao)
     .slice(0, 10)
 
   const variacao    = (summary?.total_razao ?? 0) - (summary?.total_budget ?? 0)
