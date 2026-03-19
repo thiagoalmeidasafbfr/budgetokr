@@ -451,7 +451,10 @@ export default function DREPage() {
   const [centrosDisp,   setCentrosDisp]   = useState<Array<{ cc: string; nome: string }>>([])
   const [expanded,      setExpanded]      = useState<Set<string>>(new Set())
   const [loading,       setLoading]       = useState(false)
-  const [viewMode,      setViewMode]      = useState<'total' | 'periodo' | 'trimestre' | 'cascata'>('total')
+  const [viewMode,      setViewMode]      = useState<'total' | 'periodo' | 'trimestre' | 'cascata' | 'comparativo'>('total')
+  const [compMode,      setCompMode]      = useState<'mes' | 'trimestre' | 'ano'>('trimestre')
+  const [compA,         setCompA]         = useState<string>('')
+  const [compB,         setCompB]         = useState<string>('')
   const [periodView,    setPeriodView]    = useState<'compact' | 'full'>('compact')
   const [ctxMenu,       setCtxMenu]       = useState<ContextMenuState | null>(null)
   const [detModal,      setDetModal]      = useState<ContextMenuState | null>(null)
@@ -704,7 +707,7 @@ export default function DREPage() {
           {/* View toggle */}
           <div className="flex items-center gap-2">
             <div className="flex bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5">
-              {([['total', 'Consolidado'], ['periodo', 'Por Período'], ['trimestre', 'Trimestral'], ['cascata', 'Cascata']] as const).map(([v, label]) => (
+              {([['total', 'Consolidado'], ['periodo', 'Por Período'], ['trimestre', 'Trimestral'], ['comparativo', 'Comparativo'], ['cascata', 'Cascata']] as const).map(([v, label]) => (
                 <button key={v} onClick={() => setViewMode(v)}
                   className={cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
                     viewMode === v ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
@@ -1057,6 +1060,181 @@ export default function DREPage() {
                   </table>
                 </div>
               </Card>
+            )
+          })()}
+
+          {!loading && viewMode === 'comparativo' && (() => {
+            // Build comparison period options based on compMode
+            const monthOptions = dataPeriods
+            const quarterOptions = sortQuarterLabels([...new Set(dataPeriods.map(p => toQuarterLabel(p)))])
+            const yearOptions = [...new Set(dataPeriods.map(p => p.split('-')[0]))].sort()
+
+            const options = compMode === 'mes' ? monthOptions
+              : compMode === 'trimestre' ? quarterOptions
+              : yearOptions
+
+            const formatOption = (o: string) =>
+              compMode === 'mes' ? formatPeriodo(o)
+              : o // quarters already formatted like 1T24, years like 2024
+
+            // Get data for each comparison side
+            const getNodeValues = (node: TreeNode, key: string): { budget: number; razao: number } => {
+              if (compMode === 'mes') {
+                return node.byPeriod[key] ?? { budget: 0, razao: 0 }
+              } else if (compMode === 'trimestre') {
+                const byQ = groupByQuarter(node.byPeriod)
+                return byQ[key] ?? { budget: 0, razao: 0 }
+              } else {
+                // year: sum all months in that year
+                let budget = 0, razao = 0
+                for (const [p, v] of Object.entries(node.byPeriod)) {
+                  if (p.startsWith(key + '-')) {
+                    budget += v.budget
+                    razao += v.razao
+                  }
+                }
+                return { budget, razao }
+              }
+            }
+
+            const hasSelection = compA && compB && compA !== compB
+
+            return (
+              <div className="space-y-3">
+                {/* Comparison controls */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-4 flex-wrap">
+                      <div className="flex bg-gray-100 rounded-md p-0.5 gap-0.5">
+                        {([['mes', 'Mês'], ['trimestre', 'Trimestre'], ['ano', 'Ano']] as const).map(([v, l]) => (
+                          <button key={v} onClick={() => { setCompMode(v); setCompA(''); setCompB('') }}
+                            className={cn('px-3 py-1.5 rounded text-xs font-medium transition-colors',
+                              compMode === v ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700')}>
+                            {l}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <select value={compA} onChange={e => setCompA(e.target.value)}
+                          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+                          <option value="">Período A</option>
+                          {options.map(o => <option key={o} value={o}>{formatOption(o)}</option>)}
+                        </select>
+
+                        <span className="text-sm font-medium text-gray-400">vs</span>
+
+                        <select value={compB} onChange={e => setCompB(e.target.value)}
+                          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+                          <option value="">Período B</option>
+                          {options.map(o => <option key={o} value={o}>{formatOption(o)}</option>)}
+                        </select>
+                      </div>
+
+                      {hasSelection && (
+                        <Badge variant="secondary" className="text-xs">
+                          {formatOption(compA)} vs {formatOption(compB)}
+                        </Badge>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Comparison table */}
+                {hasSelection ? (
+                  <Card>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-gray-50">
+                            <th className="text-left px-4 py-2 font-medium text-gray-500 sticky left-0 bg-gray-50 z-10 min-w-[220px]">
+                              Demonstrativo Gerencial
+                            </th>
+                            <th colSpan={2} className="text-center px-2 py-2 font-medium text-indigo-600 border-l-2 border-indigo-200 bg-indigo-50/50">
+                              {formatOption(compA)}
+                            </th>
+                            <th colSpan={2} className="text-center px-2 py-2 font-medium text-emerald-600 border-l-2 border-emerald-200 bg-emerald-50/50">
+                              {formatOption(compB)}
+                            </th>
+                            <th colSpan={2} className="text-center px-2 py-2 font-medium text-gray-600 border-l-2 border-gray-300 bg-gray-100/50">
+                              Variação (A vs B)
+                            </th>
+                          </tr>
+                          <tr className="border-b bg-gray-50/50">
+                            <th className="sticky left-0 bg-gray-50/50 z-10" />
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-indigo-200">Orçado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Realizado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-emerald-200">Orçado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Realizado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-gray-300">Δ Realizado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">% Var.</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {flatRows.map((row, i) => {
+                            const vA = getNodeValues(row, compA)
+                            const vB = getNodeValues(row, compB)
+                            const deltaRazao = vA.razao - vB.razao
+                            const deltaPct = vB.razao ? ((deltaRazao) / Math.abs(vB.razao)) * 100 : 0
+                            return (
+                              <tr key={i}
+                                onContextMenu={e => openCtxMenu(e, row, undefined, 'ambos')}
+                                className={cn('border-b transition-colors cursor-context-menu',
+                                  row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50')}>
+                                <td className={cn('px-4 py-2 sticky left-0 bg-white z-10',
+                                  row.isSubtotal ? 'font-bold text-gray-900 bg-gray-50/80'
+                                    : row.isGroup ? 'font-medium text-gray-800 bg-gray-50/80'
+                                    : 'text-gray-700')}
+                                  style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
+                                  <div className="flex items-center gap-1">
+                                    {row.isGroup && !row.isSubtotal ? (
+                                      <button onClick={() => toggleExpand(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                        {expanded.has(row.name)
+                                          ? <ChevronDown size={13} className="text-gray-400" />
+                                          : <ChevronRight size={13} className="text-gray-400" />}
+                                      </button>
+                                    ) : <span className="w-4" />}
+                                    <span className="truncate">{row.name}</span>
+                                  </div>
+                                </td>
+                                {/* Period A */}
+                                <td className={cn('px-2 py-2 text-right text-xs border-l-2 border-indigo-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                  {formatCurrency(vA.budget)}
+                                </td>
+                                <td className={cn('px-2 py-2 text-right text-xs border-l border-gray-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                  {formatCurrency(vA.razao)}
+                                </td>
+                                {/* Period B */}
+                                <td className={cn('px-2 py-2 text-right text-xs border-l-2 border-emerald-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                  {formatCurrency(vB.budget)}
+                                </td>
+                                <td className={cn('px-2 py-2 text-right text-xs border-l border-gray-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                  {formatCurrency(vB.razao)}
+                                </td>
+                                {/* Delta */}
+                                <td className={cn('px-2 py-2 text-right text-xs font-semibold border-l-2 border-gray-300', colorForVariance(deltaRazao))}>
+                                  {formatCurrency(deltaRazao)}
+                                </td>
+                                <td className="px-2 py-2 text-right border-l border-gray-200">
+                                  <span className={cn('text-xs font-medium px-1.5 py-0.5 rounded-full', bgColorForVariance(deltaRazao))}>
+                                    {formatPct(deltaPct)}
+                                  </span>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                ) : (
+                  <Card>
+                    <CardContent className="p-10 text-center text-gray-400 text-sm">
+                      Selecione dois períodos diferentes para comparar.
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
             )
           })()}
 
