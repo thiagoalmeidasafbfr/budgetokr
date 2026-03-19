@@ -327,7 +327,8 @@ export function getAnalise(
   filters: FilterCondition[],
   departamentos?: string[],
   periodos?: string[],
-  groupByCentro = false
+  groupByCentro = false,
+  ano?: string
 ) {
   const db = getDb()
   const { where, params } = buildFilterSQL(filters)
@@ -341,6 +342,9 @@ export function getAnalise(
   if (periodos?.length) {
     extraConditions.push(`strftime('%Y-%m', l.data_lancamento) IN (${periodos.map(() => '?').join(',')})`)
     extraParams.push(...periodos)
+  } else if (ano) {
+    extraConditions.push(`strftime('%Y', l.data_lancamento) = ?`)
+    extraParams.push(ano)
   }
 
   const allExtra = [...(where ? [where] : []), ...extraConditions].join(' AND ')
@@ -450,7 +454,8 @@ export function getCentrosByDepartamentos(departamentos: string[]): Array<{ cc: 
 export function getDRE(
   periodos?: string[],
   departamentos?: string[],
-  centros?: string[]
+  centros?: string[],
+  ano?: string
 ): DRERow[] {
   const db = getDb()
   const conditions: string[] = []
@@ -459,6 +464,9 @@ export function getDRE(
   if (periodos?.length) {
     conditions.push(`strftime('%Y-%m', l.data_lancamento) IN (${periodos.map(() => '?').join(',')})`)
     params.push(...periodos)
+  } else if (ano) {
+    conditions.push(`strftime('%Y', l.data_lancamento) = ?`)
+    params.push(ano)
   }
   if (departamentos?.length) {
     conditions.push(`cc.nome_departamento IN (${departamentos.map(() => '?').join(',')})`)
@@ -501,7 +509,8 @@ export interface DREAccountRow {
 export function getDREByAccount(
   periodos?: string[],
   departamentos?: string[],
-  centros?: string[]
+  centros?: string[],
+  ano?: string
 ): DREAccountRow[] {
   const db = getDb()
   const conditions: string[] = []
@@ -510,6 +519,9 @@ export function getDREByAccount(
   if (periodos?.length) {
     conditions.push(`strftime('%Y-%m', l.data_lancamento) IN (${periodos.map(() => '?').join(',')})`)
     params.push(...periodos)
+  } else if (ano) {
+    conditions.push(`strftime('%Y', l.data_lancamento) = ?`)
+    params.push(ano)
   }
   if (departamentos?.length) {
     conditions.push(`cc.nome_departamento IN (${departamentos.map(() => '?').join(',')})`)

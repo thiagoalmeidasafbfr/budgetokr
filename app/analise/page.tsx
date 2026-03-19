@@ -82,16 +82,17 @@ export default function AnalisePage() {
 
   // Auto-apply filters whenever selection or groupBy changes
   useEffect(() => {
-    loadData(selDepts, selPeriods, groupBy)
+    loadData(selDepts, selPeriods, groupBy, selYear)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selDepts, selPeriods, groupBy])
+  }, [selDepts, selPeriods, groupBy, selYear])
 
-  const loadData = useCallback(async (depts: string[], prds: string[], gb: GroupBy) => {
+  const loadData = useCallback(async (depts: string[], prds: string[], gb: GroupBy, ano?: string) => {
     setLoading(true)
     const params = new URLSearchParams()
     if (depts.length)        params.set('departamentos', depts.join(','))
     if (prds.length)         params.set('periodos', prds.join(','))
     if (gb === 'centro_custo') params.set('groupByCentro', 'true')
+    if (ano)                 params.set('ano', ano)
     const res = await fetch(`/api/analise?${params}`, { cache: 'no-store' })
     if (res.ok) setData(await res.json())
     setLoading(false)

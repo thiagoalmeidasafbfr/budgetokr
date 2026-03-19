@@ -52,11 +52,12 @@ export async function GET(req: NextRequest) {
       ? [forcedDept]
       : sp.get('departamentos')?.split(',').filter(Boolean)
     const periodos       = sp.get('periodos')?.split(',').filter(Boolean)
+    const ano            = sp.get('ano') ?? undefined
     const filtersRaw     = sp.get('filtros')
     const filtros: FilterCondition[] = filtersRaw ? JSON.parse(filtersRaw) : []
     const groupByCentro  = sp.get('groupByCentro') === 'true'
 
-    const data = getAnalise(filtros, departamentos, periodos, groupByCentro)
+    const data = getAnalise(filtros, departamentos, periodos, groupByCentro, ano)
     return NextResponse.json(data)
   } catch (e) {
     console.error(e)

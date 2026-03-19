@@ -105,6 +105,7 @@ export async function GET(req: NextRequest) {
     const deptosRaw = sp.get('departamentos')
     const periodos = periodosRaw ? periodosRaw.split(',').filter(Boolean) : []
     const deptos = deptosRaw ? deptosRaw.split(',').filter(Boolean) : []
+    const ano = sp.get('ano') ?? ''
 
     // 1. Load all contas
     const contas = db.prepare(`
@@ -125,6 +126,9 @@ export async function GET(req: NextRequest) {
     if (periodos.length) {
       conditions.push(`strftime('%Y-%m', l.data_lancamento) IN (${periodos.map(() => '?').join(',')})`)
       params.push(...periodos)
+    } else if (ano) {
+      conditions.push(`strftime('%Y', l.data_lancamento) = ?`)
+      params.push(ano)
     }
     if (deptos.length) {
       conditions.push(`cc.nome_departamento IN (${deptos.map(() => '?').join(',')})`)

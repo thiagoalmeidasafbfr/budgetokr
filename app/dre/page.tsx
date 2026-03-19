@@ -96,12 +96,13 @@ export default function DREPage() {
     init()
   }, [])
 
-  const loadData = useCallback(async (depts: string[], prds: string[], centros: string[]) => {
+  const loadData = useCallback(async (depts: string[], prds: string[], centros: string[], ano?: string) => {
     setLoading(true)
     const params = new URLSearchParams()
     if (depts.length)   params.set('departamentos', depts.join(','))
     if (prds.length)    params.set('periodos', prds.join(','))
     if (centros.length) params.set('centros', centros.join(','))
+    if (ano)            params.set('ano', ano)
     const acctParams = new URLSearchParams(params)
     acctParams.set('type', 'accounts')
     const [res, acctRes] = await Promise.all([
@@ -113,7 +114,7 @@ export default function DREPage() {
     setLoading(false)
   }, [])
 
-  const applyFilters = () => loadData(selDepts, selPeriods, selCentros)
+  const applyFilters = () => loadData(selDepts, selPeriods, selCentros, selYear)
 
   const toggleExpand = (name: string) => {
     setExpanded(prev => {
@@ -208,7 +209,7 @@ export default function DREPage() {
           <p className="text-gray-500 text-sm mt-0.5">P&L por linha contábil · Budget vs Razão · Clique direito para detalhamento</p>
         </div>
         <div className="flex items-center gap-2">
-          <YearFilter periodos={periodos} selectedYear={selYear} onYearChange={y => { setSelYear(y); setSelPeriods([]) }} />
+          <YearFilter periodos={periodos} selectedYear={selYear} onYearChange={y => { setSelYear(y); setSelPeriods([]); loadData(selDepts, [], selCentros, y) }} />
           <Button variant="outline" size="sm" onClick={exportCSV}><Download size={13} /> CSV</Button>
         </div>
       </div>
@@ -278,7 +279,7 @@ export default function DREPage() {
                 <Button size="sm" onClick={applyFilters} className="flex-1 text-xs h-7"><RefreshCw size={10} /> Filtrar</Button>
                 {(selDepts.length > 0 || selPeriods.length > 0 || selCentros.length > 0) && (
                   <Button size="sm" variant="outline" onClick={() => {
-                    setSelDepts([]); setSelPeriods([]); setSelCentros([])
+                    setSelDepts([]); setSelPeriods([]); setSelCentros([]); setSelYear('')
                     loadData([], [], [])
                   }} className="h-7 px-2"><X size={10} /></Button>
                 )}

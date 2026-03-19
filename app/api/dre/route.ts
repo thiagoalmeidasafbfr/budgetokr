@@ -35,13 +35,14 @@ export async function GET(req: NextRequest) {
       ? [forcedDept]
       : sp.get('departamentos')?.split(',').filter(Boolean)
     const centros       = sp.get('centros')?.split(',').filter(Boolean)
+    const ano           = sp.get('ano') ?? undefined
 
     if (type === 'accounts') {
-      const data = getDREByAccount(periodos, departamentos, centros)
+      const data = getDREByAccount(periodos, departamentos, centros, ano)
       return NextResponse.json(data)
     }
 
-    const data = getDRE(periodos, departamentos, centros)
+    const data = getDRE(periodos, departamentos, centros, ano)
     return NextResponse.json(data)
   } catch (e) {
     console.error(e)

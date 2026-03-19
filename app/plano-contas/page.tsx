@@ -45,11 +45,12 @@ export default function PlanoContasPage() {
   const editRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const loadData = useCallback(async (depts: string[], periods: string[]) => {
+  const loadData = useCallback(async (depts: string[], periods: string[], ano?: string) => {
     setLoading(true)
     const params = new URLSearchParams()
     if (depts.length) params.set('departamentos', depts.join(','))
     if (periods.length) params.set('periodos', periods.join(','))
+    if (ano) params.set('ano', ano)
     const res = await fetch(`/api/plano-contas?${params}`)
     if (res.ok) {
       const d = await res.json()
@@ -60,7 +61,7 @@ export default function PlanoContasPage() {
 
   useEffect(() => { loadData([], []) }, [loadData])
 
-  const applyFilters = () => loadData(selDepts, selPeriods)
+  const applyFilters = () => loadData(selDepts, selPeriods, selYear)
 
   // Expand/collapse
   const toggle = (numero: string) => {
@@ -244,7 +245,7 @@ export default function PlanoContasPage() {
       const result = await res.json()
       if (res.ok) {
         setImportMsg({ type: 'ok', text: `${result.updated} contas importadas/atualizadas.` })
-        loadData(selDepts, selPeriods) // reload tree
+        loadData(selDepts, selPeriods, selYear) // reload tree
       } else {
         setImportMsg({ type: 'err', text: result.error || 'Erro na importação.' })
       }
@@ -266,8 +267,8 @@ export default function PlanoContasPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {data && <YearFilter periodos={data.periodos} selectedYear={selYear} onYearChange={y => { setSelYear(y); setSelPeriods([]) }} />}
-          <Button variant="outline" size="sm" onClick={() => loadData(selDepts, selPeriods)}>
+          {data && <YearFilter periodos={data.periodos} selectedYear={selYear} onYearChange={y => { setSelYear(y); setSelPeriods([]); loadData(selDepts, [], y) }} />}
+          <Button variant="outline" size="sm" onClick={() => loadData(selDepts, selPeriods, selYear)}>
             <RefreshCw size={13} /> Atualizar
           </Button>
           <Button variant="outline" size="sm" onClick={exportCSV}>
@@ -368,7 +369,7 @@ export default function PlanoContasPage() {
                       Aplicar
                     </Button>
                     <Button size="sm" variant="outline" className="text-xs h-7"
-                      onClick={() => { setSelDepts([]); setSelPeriods([]); loadData([], []) }}>
+                      onClick={() => { setSelDepts([]); setSelPeriods([]); setSelYear(''); loadData([], []) }}>
                       Limpar
                     </Button>
                   </div>

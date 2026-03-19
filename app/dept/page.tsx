@@ -1172,12 +1172,13 @@ export default function DeptDashboardPage() {
     })
   }, [])
 
-  // Load dashboard data when dept/periods change
-  const loadDashboard = useCallback(async (dept: string, periods: string[]) => {
+  // Load dashboard data when dept/periods/year change
+  const loadDashboard = useCallback(async (dept: string, periods: string[], ano?: string) => {
     if (!dept) { setDashData(null); return }
     setLoading(true)
     const params = new URLSearchParams({ departamento: dept })
     if (periods.length) params.set('periodos', periods.join(','))
+    if (ano)            params.set('ano', ano)
     const res = await fetch(`/api/dept-dashboard?${params}`, { cache: 'no-store' })
     if (res.ok) {
       const data = await res.json()
@@ -1187,14 +1188,15 @@ export default function DeptDashboardPage() {
   }, [])
 
   useEffect(() => {
-    loadDashboard(selDept, selPeriods)
-  }, [selDept, selPeriods, loadDashboard])
+    loadDashboard(selDept, selPeriods, selYear)
+  }, [selDept, selPeriods, selYear, loadDashboard])
 
-  const loadDreCompleta = useCallback(async (dept: string, periods: string[]) => {
+  const loadDreCompleta = useCallback(async (dept: string, periods: string[], ano?: string) => {
     if (!dept) return
     setDreFullLoading(true)
     const p = new URLSearchParams({ departamentos: dept })
     if (periods.length) p.set('periodos', periods.join(','))
+    if (ano)            p.set('ano', ano)
     const [hier, linhas, data] = await Promise.all([
       fetch('/api/dre?type=hierarchy').then(r => r.json()),
       fetch('/api/dre?type=linhas').then(r => r.json()),
@@ -1207,7 +1209,7 @@ export default function DeptDashboardPage() {
   }, [])
 
   useEffect(() => {
-    if (dreView === 'completa' && selDept) loadDreCompleta(selDept, selPeriods)
+    if (dreView === 'completa' && selDept) loadDreCompleta(selDept, selPeriods, selYear)
   }, [dreView, selDept, selPeriods, loadDreCompleta])
 
   // Load KPIs for selected department

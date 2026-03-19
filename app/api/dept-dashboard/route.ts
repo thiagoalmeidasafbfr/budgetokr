@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
     const sp = new URL(req.url).searchParams
     const periodosRaw = sp.get('periodos')
     const periodos = periodosRaw ? periodosRaw.split(',').filter(Boolean) : undefined
+    const ano = sp.get('ano') ?? undefined
 
     const user = getUserFromHeaders(req)
     const forcedDept = user?.role === 'dept' ? user.department : undefined
@@ -22,10 +23,10 @@ export async function GET(req: NextRequest) {
     }
 
     // Get analysis rows filtered by department
-    const byPeriodo = getAnalise([], [departamento], periodos, false)
+    const byPeriodo = getAnalise([], [departamento], periodos, false, ano)
 
     // Get DRE data for the department and aggregate by dre name
-    const dreRows = getDRE(periodos, [departamento])
+    const dreRows = getDRE(periodos, [departamento], undefined, ano)
     const dreMap: Record<string, { dre: string; budget: number; razao: number; ordem_dre: number }> = {}
     for (const row of dreRows) {
       if (!dreMap[row.dre]) {
