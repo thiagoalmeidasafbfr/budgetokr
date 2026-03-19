@@ -27,6 +27,39 @@ interface LancamentoAgg {
  * - periodos: comma-separated YYYY-MM (optional filter)
  * - departamentos: comma-separated names (optional filter)
  */
+/**
+ * PUT /api/plano-contas
+ *
+ * Upsert a conta contábil (create parent accounts or rename existing ones).
+ * Body: { numero_conta_contabil: string, nome_conta_contabil: string }
+ */
+export async function PUT(req: NextRequest) {
+  try {
+    const db = getDb()
+    const body = await req.json()
+    const { numero_conta_contabil, nome_conta_contabil } = body
+
+    if (!numero_conta_contabil || typeof numero_conta_contabil !== 'string') {
+      return NextResponse.json({ error: 'numero_conta_contabil é obrigatório' }, { status: 400 })
+    }
+
+    const nivel = numero_conta_contabil.split('.').length
+
+    // Upsert: insert or update name
+    db.prepare(`
+      INSERT INTO contas_contabeis (numero_conta_contabil, nome_conta_contabil, nivel)
+      VALUES (?, ?, ?)
+      ON CONFLICT(numero_conta_contabil)
+      DO UPDATE SET nome_conta_contabil = excluded.nome_conta_contabil
+    `).run(numero_conta_contabil, nome_conta_contabil ?? '', nivel)
+
+    return NextResponse.json({ ok: true })
+  } catch (e) {
+    console.error('[plano-contas PUT]', e)
+    return NextResponse.json({ error: String(e) }, { status: 500 })
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const db = getDb()

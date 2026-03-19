@@ -1,6 +1,6 @@
 'use client'
-import React, { useState, useEffect, useCallback } from 'react'
-import { ChevronRight, ChevronDown, Filter, X, Download, RefreshCw, ChevronsUpDown } from 'lucide-react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { ChevronRight, ChevronDown, Filter, X, Download, RefreshCw, ChevronsUpDown, Pencil } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -36,6 +36,9 @@ export default function PlanoContasPage() {
   const [selPeriods, setSelPeriods] = useState<string[]>([])
   const [expandLevel, setExpandLevel] = useState(1)
   const [search, setSearch]         = useState('')
+  const [editingNumero, setEditingNumero] = useState<string | null>(null)
+  const [editingName, setEditingName]     = useState('')
+  const editRef = useRef<HTMLInputElement>(null)
 
   const loadData = useCallback(async (depts: string[], periods: string[]) => {
     setLoading(true)
@@ -81,6 +84,43 @@ export default function PlanoContasPage() {
   }
 
   const collapseAll = () => { setExpanded(new Set()); setExpandLevel(1) }
+
+  // Inline name editing
+  const startEditing = (numero: string, currentName: string) => {
+    setEditingNumero(numero)
+    setEditingName(currentName)
+    setTimeout(() => editRef.current?.focus(), 50)
+  }
+
+  const saveAccountName = async () => {
+    if (!editingNumero) return
+    const trimmed = editingName.trim()
+    try {
+      await fetch('/api/plano-contas', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ numero_conta_contabil: editingNumero, nome_conta_contabil: trimmed }),
+      })
+      // Update tree locally without full reload
+      if (data) {
+        const updateNode = (nodes: TreeNode[]): TreeNode[] =>
+          nodes.map(n => ({
+            ...n,
+            nome: n.numero === editingNumero ? trimmed : n.nome,
+            children: updateNode(n.children),
+          }))
+        setData({ ...data, tree: updateNode(data.tree) })
+      }
+    } catch (e) {
+      console.error('Erro ao salvar nome:', e)
+    }
+    setEditingNumero(null)
+  }
+
+  const cancelEditing = () => {
+    setEditingNumero(null)
+    setEditingName('')
+  }
 
   // Flatten tree for rendering
   const flattenTree = (nodes: TreeNode[], depth: number = 0, parentMatch: boolean = false): Array<TreeNode & { depth: number; hasChildren: boolean; isExpanded: boolean; visible: boolean }> => {
@@ -321,13 +361,43 @@ export default function PlanoContasPage() {
                                 )}>
                                   {row.numero}
                                 </span>
-                                <span className={cn(
-                                  'truncate',
-                                  isBold && 'font-semibold',
-                                  row.nivel === 1 && 'text-white'
-                                )}>
-                                  {row.nome || <span className="italic text-gray-300">sem nome</span>}
-                                </span>
+                                {editingNumero === row.numero ? (
+                                  <input
+                                    ref={editRef}
+                                    value={editingName}
+                                    onChange={e => setEditingName(e.target.value)}
+                                    onBlur={saveAccountName}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') saveAccountName()
+                                      if (e.key === 'Escape') cancelEditing()
+                                    }}
+                                    className="border border-indigo-400 rounded px-1.5 py-0.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-400 min-w-[200px]"
+                                    placeholder="Nome da conta..."
+                                  />
+                                ) : (
+                                  <span
+                                    className={cn(
+                                      'truncate group/name',
+                                      isBold && 'font-semibold',
+                                      row.nivel === 1 && 'text-white',
+                                      !row.nome && 'cursor-pointer'
+                                    )}
+                                    onClick={() => !row.nome && startEditing(row.numero, '')}
+                                  >
+                                    {row.nome || <span className="italic text-gray-300 hover:text-indigo-400">sem nome — clique para editar</span>}
+                                    {row.nome && (
+                                      <button
+                                        onClick={e => { e.stopPropagation(); startEditing(row.numero, row.nome) }}
+                                        className={cn(
+                                          'inline-flex ml-1.5 opacity-0 group-hover/name:opacity-100 transition-opacity',
+                                          row.nivel === 1 ? 'text-white/50 hover:text-white' : 'text-gray-300 hover:text-indigo-500'
+                                        )}
+                                      >
+                                        <Pencil size={11} />
+                                      </button>
+                                    )}
+                                  </span>
+                                )}
                                 {isParent && row.contaCount > 0 && (
                                   <Badge variant="secondary" className={cn(
                                     'ml-1 text-[10px] px-1.5 py-0',
