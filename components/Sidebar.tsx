@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, TrendingUp, LineChart, GitCompare,
   Target, Layers, FileText, Database, Upload,
-  ChevronRight, Building2, BookOpen, LayoutList,
+  ChevronRight, Building2, BookOpen, LayoutList, Gauge,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -26,7 +26,7 @@ const nav: NavItem[] = [
     sublabel: 'Resumo consolidado',
   },
 
-  // ─ Análise Financeira ──────────────────────────────────────────────────────
+  // ─ Análise Financeira e Qualitativa ────────────────────────────────────────
   { type: 'section', label: 'Análise Financeira' },
   {
     type: 'link', href: '/dre',
@@ -40,20 +40,26 @@ const nav: NavItem[] = [
     label: 'Análise',
     sublabel: 'Budget vs Realizado',
   },
-
-  // ─ KPIs & Medidas ──────────────────────────────────────────────────────────
-  { type: 'section', label: 'KPIs & Medidas' },
   {
     type: 'link', href: '/dept',
     icon: Layers,
     label: 'Por Departamento',
-    sublabel: 'KPIs e metas por área',
+    sublabel: 'KPIs e DRE por área',
+  },
+
+  // ─ KPIs & Medidas ──────────────────────────────────────────────────────────
+  { type: 'section', label: 'KPIs & Medidas' },
+  {
+    type: 'link', href: '/kpis',
+    icon: Gauge,
+    label: 'KPIs',
+    sublabel: 'Configurar indicadores',
   },
   {
     type: 'link', href: '/medidas',
     icon: Target,
     label: 'Medidas Calculadas',
-    sublabel: 'Criar e gerir medidas',
+    sublabel: 'Indicadores financeiros',
   },
 
   // ─ Gestão de Dados ─────────────────────────────────────────────────────────
