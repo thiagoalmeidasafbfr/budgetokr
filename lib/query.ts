@@ -409,9 +409,23 @@ export interface DRERow {
   razao: number
 }
 
+export function getCentrosByDepartamentos(departamentos: string[]): Array<{ cc: string; nome: string }> {
+  const db = getDb()
+  if (!departamentos.length) return []
+  const rows = db.prepare(`
+    SELECT DISTINCT l.centro_custo as cc, COALESCE(cc2.nome_centro_custo, l.centro_custo) as nome
+    FROM lancamentos l
+    LEFT JOIN centros_custo cc2 ON l.centro_custo = cc2.centro_custo
+    WHERE cc2.nome_departamento IN (${departamentos.map(() => '?').join(',')})
+    ORDER BY nome
+  `).all(...departamentos) as Array<{ cc: string; nome: string }>
+  return rows
+}
+
 export function getDRE(
   periodos?: string[],
-  departamentos?: string[]
+  departamentos?: string[],
+  centros?: string[]
 ): DRERow[] {
   const db = getDb()
   const conditions: string[] = []
@@ -424,6 +438,10 @@ export function getDRE(
   if (departamentos?.length) {
     conditions.push(`cc.nome_departamento IN (${departamentos.map(() => '?').join(',')})`)
     params.push(...departamentos)
+  }
+  if (centros?.length) {
+    conditions.push(`l.centro_custo IN (${centros.map(() => '?').join(',')})`)
+    params.push(...centros)
   }
 
   const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''

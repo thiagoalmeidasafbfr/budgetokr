@@ -7,42 +7,41 @@ export const dynamic = 'force-dynamic'
 // equivalente ao "Abrir detalhamento" do sistema atual.
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
-  const dre          = searchParams.get('dre')          ?? ''
-  const agrupamento  = searchParams.get('agrupamento')  ?? ''
-  const periodo      = searchParams.get('periodo')      ?? ''
-  const tipo         = searchParams.get('tipo')         ?? 'ambos'  // budget | razao | ambos
-  const departamento = searchParams.get('departamento') ?? ''
-  const periodosRaw  = searchParams.get('periodos')     ?? ''
+  const dre             = searchParams.get('dre')             ?? ''
+  const agrupamento     = searchParams.get('agrupamento')     ?? ''
+  const periodo         = searchParams.get('periodo')         ?? ''
+  const tipo            = searchParams.get('tipo')            ?? 'ambos'
+  const departamento    = searchParams.get('departamento')    ?? ''
+  const periodosRaw     = searchParams.get('periodos')        ?? ''
+  const departamentosRaw = searchParams.get('departamentos')  ?? ''
+  const centrosRaw      = searchParams.get('centros')         ?? ''
 
   const db = getDb()
   const conditions: string[] = []
   const params: unknown[] = []
 
-  // Filtro de tipo
   if (tipo === 'budget' || tipo === 'razao') {
     conditions.push(`l.tipo = ?`)
     params.push(tipo)
   }
 
-  // Filtro de DRE (grupo pai)
   if (dre) {
     conditions.push(`ca.dre = ?`)
     params.push(dre)
   }
 
-  // Filtro de agrupamento_arvore (filho)
   if (agrupamento) {
     conditions.push(`ca.agrupamento_arvore = ?`)
     params.push(agrupamento)
   }
 
-  // Filtro de período (single)
+  // Período único (vem do clique numa célula de período específico)
   if (periodo) {
     conditions.push(`strftime('%Y-%m', l.data_lancamento) = ?`)
     params.push(periodo)
   }
 
-  // Filtro de períodos (múltiplos, comma-separated)
+  // Períodos múltiplos (filtro ativo da DRE principal) — só aplica se não há período único
   if (periodosRaw && !periodo) {
     const periodos = periodosRaw.split(',').filter(Boolean)
     if (periodos.length) {
@@ -51,10 +50,26 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Filtro de departamento
-  if (departamento) {
+  // Departamentos múltiplos (filtro ativo da DRE principal)
+  if (departamentosRaw) {
+    const depts = departamentosRaw.split(',').filter(Boolean)
+    if (depts.length) {
+      conditions.push(`cc.nome_departamento IN (${depts.map(() => '?').join(',')})`)
+      params.push(...depts)
+    }
+  } else if (departamento) {
+    // fallback: parâmetro legado de departamento único
     conditions.push(`cc.nome_departamento = ?`)
     params.push(departamento)
+  }
+
+  // Centros de custo (subfiltro da DRE principal)
+  if (centrosRaw) {
+    const centros = centrosRaw.split(',').filter(Boolean)
+    if (centros.length) {
+      conditions.push(`l.centro_custo IN (${centros.map(() => '?').join(',')})`)
+      params.push(...centros)
+    }
   }
 
   const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''

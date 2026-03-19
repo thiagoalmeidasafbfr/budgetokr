@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getDRE, getDREHierarchy, getDRELinhas, getDistinctValues } from '@/lib/query'
+import { getDRE, getDREHierarchy, getDRELinhas, getDistinctValues, getCentrosByDepartamentos } from '@/lib/query'
 import type { FilterColumn } from '@/lib/types'
 
 export async function GET(req: NextRequest) {
@@ -21,10 +21,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(getDistinctValues(col))
     }
 
-    const periodos     = sp.get('periodos')?.split(',').filter(Boolean)
-    const departamentos = sp.get('departamentos')?.split(',').filter(Boolean)
+    if (type === 'centros') {
+      const depts = sp.get('departamentos')?.split(',').filter(Boolean) ?? []
+      return NextResponse.json(getCentrosByDepartamentos(depts))
+    }
 
-    const data = getDRE(periodos, departamentos)
+    const periodos      = sp.get('periodos')?.split(',').filter(Boolean)
+    const departamentos = sp.get('departamentos')?.split(',').filter(Boolean)
+    const centros       = sp.get('centros')?.split(',').filter(Boolean)
+
+    const data = getDRE(periodos, departamentos, centros)
     return NextResponse.json(data)
   } catch (e) {
     console.error(e)

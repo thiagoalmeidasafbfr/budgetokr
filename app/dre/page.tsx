@@ -1,6 +1,6 @@
 'use client'
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { ChevronRight, ChevronDown, Filter, X, Download, RefreshCw, ExternalLink } from 'lucide-react'
+import { ChevronRight, ChevronDown, Filter, X, Download, RefreshCw, ExternalLink, ArrowUpDown, Columns3 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -37,8 +37,11 @@ interface ContextMenuState {
   x: number
   y: number
   node: TreeNode
-  periodo?: string  // se direito-clicou numa célula de período específico
+  periodo?: string        // se direito-clicou numa célula de período específico
   tipo: 'budget' | 'razao' | 'ambos'
+  departamentos?: string[] // filtros ativos da DRE principal
+  periodos?: string[]      // filtros ativos da DRE principal
+  centros?: string[]       // subfiltro de centros de custo
 }
 
 interface DetalhamentoLinha {
@@ -57,6 +60,34 @@ interface DetalhamentoLinha {
   fonte: string
 }
 
+// Column definitions for the detalhamento table
+type DetColKey = 'data' | 'tipo' | 'centro' | 'dre' | 'agrupamento' | 'conta' | 'valor' | 'contrapartida' | 'obs'
+const DET_COLS: { key: DetColKey; label: string; align?: 'right' }[] = [
+  { key: 'data',          label: 'Data Lançamento' },
+  { key: 'tipo',          label: 'Tipo' },
+  { key: 'centro',        label: 'Centro de Custo' },
+  { key: 'dre',           label: 'DRE Gerencial' },
+  { key: 'agrupamento',   label: 'Agrupamento' },
+  { key: 'conta',         label: 'Conta Contábil' },
+  { key: 'valor',         label: 'Valor', align: 'right' },
+  { key: 'contrapartida', label: 'Conta Contrapartida' },
+  { key: 'obs',           label: 'Observação' },
+]
+
+function colValue(r: DetalhamentoLinha, key: DetColKey): string | number {
+  switch (key) {
+    case 'data':          return r.data_lancamento
+    case 'tipo':          return r.tipo
+    case 'centro':        return `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}`
+    case 'dre':           return r.dre
+    case 'agrupamento':   return r.agrupamento_arvore
+    case 'conta':         return `${r.numero_conta_contabil} — ${r.nome_conta_contabil}`
+    case 'valor':         return r.debito_credito
+    case 'contrapartida': return r.nome_conta_contrapartida
+    case 'obs':           return r.observacao ?? ''
+  }
+}
+
 function DetalhamentoModal({
   ctx,
   onClose,
@@ -64,15 +95,34 @@ function DetalhamentoModal({
   ctx: ContextMenuState
   onClose: () => void
 }) {
-  const [rows, setRows] = useState<DetalhamentoLinha[]>([])
-  const [loading, setLoading] = useState(true)
+  const [rows,       setRows]       = useState<DetalhamentoLinha[]>([])
+  const [loading,    setLoading]    = useState(true)
+  const [textFilter, setTextFilter] = useState('')
+  const [sortCol,    setSortCol]    = useState<DetColKey>('data')
+  const [sortDir,    setSortDir]    = useState<'asc' | 'desc'>('asc')
+  const [visibleCols, setVisibleCols] = useState<Set<DetColKey>>(new Set(DET_COLS.map(c => c.key)))
+  const [showCols,   setShowCols]   = useState(false)
+  const colsRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showCols) return
+    const handler = (e: MouseEvent) => {
+      if (colsRef.current && !colsRef.current.contains(e.target as Node)) setShowCols(false)
+    }
+    window.addEventListener('mousedown', handler)
+    return () => window.removeEventListener('mousedown', handler)
+  }, [showCols])
 
   useEffect(() => {
     const p = new URLSearchParams()
-    if (ctx.node.dre)        p.set('dre',         ctx.node.dre)
-    if (ctx.node.agrupamento) p.set('agrupamento', ctx.node.agrupamento)
-    if (ctx.periodo)          p.set('periodo',     ctx.periodo)
-    if (ctx.tipo !== 'ambos') p.set('tipo',        ctx.tipo)
+    if (ctx.node.dre)         p.set('dre',           ctx.node.dre)
+    if (ctx.node.agrupamento) p.set('agrupamento',   ctx.node.agrupamento)
+    if (ctx.periodo)          p.set('periodo',        ctx.periodo)
+    if (ctx.tipo !== 'ambos') p.set('tipo',           ctx.tipo)
+    // Pass active main-page filters
+    if (ctx.departamentos?.length) p.set('departamentos', ctx.departamentos.join(','))
+    if (ctx.periodos?.length && !ctx.periodo) p.set('periodos', ctx.periodos.join(','))
+    if (ctx.centros?.length)       p.set('centros',       ctx.centros.join(','))
     fetch(`/api/dre/detalhamento?${p}`)
       .then(r => r.json())
       .then(data => { setRows(data); setLoading(false) })
@@ -85,17 +135,52 @@ function DetalhamentoModal({
     ctx.tipo !== 'ambos' ? `· ${ctx.tipo === 'budget' ? 'Budget' : 'Realizado'}` : null,
   ].filter(Boolean).join(' › ')
 
-  const total = rows.reduce((s, r) => s + r.debito_credito, 0)
+  // Apply text filter then sort
+  const displayed = rows
+    .filter(r => {
+      if (!textFilter) return true
+      const q = textFilter.toLowerCase()
+      return DET_COLS.some(c => String(colValue(r, c.key)).toLowerCase().includes(q))
+    })
+    .sort((a, b) => {
+      const va = colValue(a, sortCol)
+      const vb = colValue(b, sortCol)
+      const cmp = typeof va === 'number' && typeof vb === 'number'
+        ? va - vb
+        : String(va).localeCompare(String(vb))
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+
+  const total = displayed.reduce((s, r) => s + r.debito_credito, 0)
+
+  const toggleSort = (key: DetColKey) => {
+    if (sortCol === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(key); setSortDir('asc') }
+  }
+
+  const visibleDefs = DET_COLS.filter(c => visibleCols.has(c.key))
+
+  // Count active filters coming from the main page
+  const activeFiltersCount = (ctx.departamentos?.length ?? 0) + (ctx.periodos?.length ?? 0) + (ctx.centros?.length ?? 0)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-10 px-4 overflow-auto"
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-6 px-4 overflow-auto"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] max-h-[92vh] flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] max-h-[94vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <div>
             <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">DRE — Lançamentos</p>
             <h2 className="text-base font-bold text-gray-900 mt-0.5">{title}</h2>
+            {activeFiltersCount > 0 && (
+              <p className="text-xs text-indigo-600 mt-0.5">
+                {[
+                  ctx.departamentos?.length ? `${ctx.departamentos.length} dept.` : null,
+                  ctx.periodos?.length && !ctx.periodo ? `${ctx.periodos.length} período(s)` : null,
+                  ctx.centros?.length ? `${ctx.centros.length} CC(s)` : null,
+                ].filter(Boolean).join(' · ')} filtrado(s) da DRE
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {!loading && rows.length > 0 && (
@@ -110,6 +195,48 @@ function DetalhamentoModal({
           </div>
         </div>
 
+        {/* Toolbar */}
+        {!loading && (
+          <div className="flex items-center gap-2 px-5 py-2 border-b bg-gray-50">
+            <input
+              type="text"
+              value={textFilter}
+              onChange={e => setTextFilter(e.target.value)}
+              placeholder="Buscar em todos os campos…"
+              className="flex-1 text-xs border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+            />
+            {/* Column visibility */}
+            <div className="relative" ref={colsRef}>
+              <button
+                onClick={() => setShowCols(v => !v)}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-400 hover:text-indigo-700 text-gray-600 transition-colors">
+                <Columns3 size={13} /> Colunas
+              </button>
+              {showCols && (
+                <div className="absolute right-0 top-full mt-1 z-10 bg-white border border-gray-200 rounded-xl shadow-xl p-3 min-w-[180px] space-y-1">
+                  {DET_COLS.map(c => (
+                    <label key={c.key} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                      <input type="checkbox"
+                        checked={visibleCols.has(c.key)}
+                        onChange={e => setVisibleCols(prev => {
+                          const next = new Set(prev)
+                          e.target.checked ? next.add(c.key) : next.delete(c.key)
+                          return next
+                        })}
+                        className="w-3 h-3 accent-indigo-600"
+                      />
+                      <span className="text-xs text-gray-700">{c.label}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            <span className="text-xs text-gray-400 whitespace-nowrap">
+              {displayed.length} de {rows.length} lançamentos
+            </span>
+          </div>
+        )}
+
         {/* Body */}
         {loading ? (
           <div className="flex-1 flex items-center justify-center">
@@ -120,44 +247,52 @@ function DetalhamentoModal({
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-gray-700 text-white">
                 <tr>
-                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Data Lançamento</th>
-                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Tipo</th>
-                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Centro de Custo</th>
-                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">DRE Gerencial</th>
-                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Agrupamento</th>
-                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Conta Contábil</th>
-                  <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Valor</th>
-                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Conta Contrapartida</th>
-                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Observação</th>
+                  {visibleDefs.map(c => (
+                    <th key={c.key}
+                      onClick={() => toggleSort(c.key)}
+                      className={cn(
+                        'px-3 py-2 font-medium whitespace-nowrap cursor-pointer select-none hover:bg-gray-600 transition-colors',
+                        c.align === 'right' ? 'text-right' : 'text-left'
+                      )}>
+                      <span className="inline-flex items-center gap-1">
+                        {c.label}
+                        <ArrowUpDown size={10} className={cn('opacity-40', sortCol === c.key && 'opacity-100 text-indigo-300')} />
+                        {sortCol === c.key && <span className="text-indigo-300 text-[9px]">{sortDir === 'asc' ? '▲' : '▼'}</span>}
+                      </span>
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
+                {displayed.map((r, i) => (
                   <tr key={r.id} className={cn('border-b border-gray-100', i % 2 === 0 ? 'bg-white' : 'bg-gray-50/60')}>
-                    <td className="px-3 py-1.5 whitespace-nowrap font-mono">{r.data_lancamento}</td>
-                    <td className="px-3 py-1.5">
+                    {visibleCols.has('data')          && <td className="px-3 py-1.5 whitespace-nowrap font-mono">{r.data_lancamento}</td>}
+                    {visibleCols.has('tipo')          && <td className="px-3 py-1.5">
                       <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium',
                         r.tipo === 'budget' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700')}>
                         {r.tipo === 'budget' ? 'Budget' : 'Real'}
                       </span>
-                    </td>
-                    <td className="px-3 py-1.5 whitespace-nowrap">{r.centro_custo}{r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap">{r.dre}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap">{r.agrupamento_arvore}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap">{r.numero_conta_contabil} — {r.nome_conta_contabil}</td>
-                    <td className={cn('px-3 py-1.5 text-right whitespace-nowrap font-semibold', r.debito_credito < 0 ? 'text-red-600' : 'text-gray-800')}>
+                    </td>}
+                    {visibleCols.has('centro')        && <td className="px-3 py-1.5 whitespace-nowrap">{r.centro_custo}{r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}</td>}
+                    {visibleCols.has('dre')           && <td className="px-3 py-1.5 whitespace-nowrap">{r.dre}</td>}
+                    {visibleCols.has('agrupamento')   && <td className="px-3 py-1.5 whitespace-nowrap">{r.agrupamento_arvore}</td>}
+                    {visibleCols.has('conta')         && <td className="px-3 py-1.5 whitespace-nowrap">{r.numero_conta_contabil} — {r.nome_conta_contabil}</td>}
+                    {visibleCols.has('valor')         && <td className={cn('px-3 py-1.5 text-right whitespace-nowrap font-semibold', r.debito_credito < 0 ? 'text-red-600' : 'text-gray-800')}>
                       {formatCurrency(r.debito_credito)}
-                    </td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-gray-500">{r.nome_conta_contrapartida}</td>
-                    <td className="px-3 py-1.5 max-w-xs truncate text-gray-500">{r.observacao}</td>
+                    </td>}
+                    {visibleCols.has('contrapartida') && <td className="px-3 py-1.5 whitespace-nowrap text-gray-500">{r.nome_conta_contrapartida}</td>}
+                    {visibleCols.has('obs')           && <td className="px-3 py-1.5 max-w-xs truncate text-gray-500">{r.observacao}</td>}
                   </tr>
                 ))}
               </tbody>
               <tfoot className="sticky bottom-0 bg-gray-800 text-white font-bold">
                 <tr>
-                  <td colSpan={6} className="px-3 py-2 text-right">Total ({rows.length} lançamentos)</td>
-                  <td className={cn('px-3 py-2 text-right', total < 0 ? 'text-red-300' : 'text-emerald-300')}>{formatCurrency(total)}</td>
-                  <td colSpan={2} />
+                  <td colSpan={visibleDefs.filter(c => c.key !== 'valor').length} className="px-3 py-2 text-right">
+                    Total ({displayed.length} lançamentos)
+                  </td>
+                  <td className={cn('px-3 py-2 text-right', total < 0 ? 'text-red-300' : 'text-emerald-300')}>
+                    {visibleCols.has('valor') ? formatCurrency(total) : '—'}
+                  </td>
                 </tr>
               </tfoot>
             </table>
@@ -344,6 +479,8 @@ export default function DREPage() {
   const [periodos,      setPeriodos]      = useState<string[]>([])
   const [selDepts,      setSelDepts]      = useState<string[]>([])
   const [selPeriods,    setSelPeriods]    = useState<string[]>([])
+  const [selCentros,    setSelCentros]    = useState<string[]>([])
+  const [centrosDisp,   setCentrosDisp]   = useState<Array<{ cc: string; nome: string }>>([])
   const [expanded,      setExpanded]      = useState<Set<string>>(new Set())
   const [loading,       setLoading]       = useState(false)
   const [viewMode,      setViewMode]      = useState<'total' | 'periodo' | 'cascata'>('total')
@@ -360,10 +497,26 @@ export default function DREPage() {
     return () => window.removeEventListener('click', handler)
   }, [ctxMenu])
 
+  // Carrega centros de custo disponíveis quando departamentos selecionados mudam
+  useEffect(() => {
+    if (!selDepts.length) { setCentrosDisp([]); setSelCentros([]); return }
+    const p = new URLSearchParams({ type: 'centros', departamentos: selDepts.join(',') })
+    fetch(`/api/dre?${p}`).then(r => r.json()).then(data => {
+      setCentrosDisp(Array.isArray(data) ? data : [])
+      // Remove centros que não pertencem mais ao departamento selecionado
+      setSelCentros(prev => prev.filter(c => (data as Array<{cc:string}>).some(d => d.cc === c)))
+    })
+  }, [selDepts])
+
   const openCtxMenu = (e: React.MouseEvent, node: TreeNode, periodo?: string, tipo: 'budget' | 'razao' | 'ambos' = 'ambos') => {
     e.preventDefault()
     e.stopPropagation()
-    setCtxMenu({ x: e.clientX, y: e.clientY, node, periodo, tipo })
+    setCtxMenu({
+      x: e.clientX, y: e.clientY, node, periodo, tipo,
+      departamentos: selDepts.length ? selDepts : undefined,
+      periodos:      selPeriods.length ? selPeriods : undefined,
+      centros:       selCentros.length ? selCentros : undefined,
+    })
   }
 
   useEffect(() => {
@@ -382,22 +535,22 @@ export default function DREPage() {
           .filter(Boolean)
       )].sort() as string[]
       setPeriodos(uniquePeriods)
-      // Starts collapsed — user expands as needed
     })
-    loadData([], [])
+    loadData([], [], [])
   }, [])
 
-  const loadData = useCallback(async (depts: string[], prds: string[]) => {
+  const loadData = useCallback(async (depts: string[], prds: string[], centros: string[]) => {
     setLoading(true)
     const params = new URLSearchParams()
-    if (depts.length) params.set('departamentos', depts.join(','))
-    if (prds.length)  params.set('periodos', prds.join(','))
+    if (depts.length)   params.set('departamentos', depts.join(','))
+    if (prds.length)    params.set('periodos', prds.join(','))
+    if (centros.length) params.set('centros', centros.join(','))
     const res = await fetch(`/api/dre?${params}`)
     if (res.ok) setRawData(await res.json())
     setLoading(false)
   }, [])
 
-  const applyFilters = () => loadData(selDepts, selPeriods)
+  const applyFilters = () => loadData(selDepts, selPeriods, selCentros)
 
   const toggleExpand = (name: string) => {
     setExpanded(prev => {
@@ -500,7 +653,7 @@ export default function DREPage() {
               </p>
               <div>
                 <p className="text-xs font-medium text-gray-600 mb-1">Departamentos</p>
-                <div className="space-y-0.5 max-h-40 overflow-y-auto">
+                <div className="space-y-0.5 max-h-36 overflow-y-auto">
                   {departamentos.map(d => (
                     <label key={d} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
                       <input type="checkbox" checked={selDepts.includes(d)}
@@ -511,6 +664,26 @@ export default function DREPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Centro de Custo sub-filter — só aparece quando há departamentos selecionados */}
+              {selDepts.length > 0 && centrosDisp.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-indigo-600 mb-1 flex items-center gap-1">
+                    <ChevronRight size={10} /> Centros de Custo
+                  </p>
+                  <div className="space-y-0.5 max-h-32 overflow-y-auto pl-2 border-l-2 border-indigo-100">
+                    {centrosDisp.map(c => (
+                      <label key={c.cc} className="flex items-center gap-1.5 cursor-pointer hover:bg-indigo-50 rounded px-1 py-0.5">
+                        <input type="checkbox" checked={selCentros.includes(c.cc)}
+                          onChange={e => setSelCentros(prev => e.target.checked ? [...prev, c.cc] : prev.filter(x => x !== c.cc))}
+                          className="w-3 h-3 accent-indigo-600" />
+                        <span className="text-xs text-gray-600 truncate" title={c.nome}>{c.nome || c.cc}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <p className="text-xs font-medium text-gray-600 mb-1">Períodos</p>
                 <div className="space-y-0.5 max-h-32 overflow-y-auto">
@@ -526,8 +699,11 @@ export default function DREPage() {
               </div>
               <div className="flex gap-1">
                 <Button size="sm" onClick={applyFilters} className="flex-1 text-xs h-7"><RefreshCw size={10} /> Filtrar</Button>
-                {(selDepts.length > 0 || selPeriods.length > 0) && (
-                  <Button size="sm" variant="outline" onClick={() => { setSelDepts([]); setSelPeriods([]); loadData([],[]) }} className="h-7 px-2"><X size={10} /></Button>
+                {(selDepts.length > 0 || selPeriods.length > 0 || selCentros.length > 0) && (
+                  <Button size="sm" variant="outline" onClick={() => {
+                    setSelDepts([]); setSelPeriods([]); setSelCentros([])
+                    loadData([], [], [])
+                  }} className="h-7 px-2"><X size={10} /></Button>
                 )}
               </div>
             </CardContent>
@@ -559,9 +735,13 @@ export default function DREPage() {
             </div>
 
             {/* Active filter badges */}
-            {(selDepts.length > 0 || selPeriods.length > 0) && (
+            {(selDepts.length > 0 || selPeriods.length > 0 || selCentros.length > 0) && (
               <div className="flex flex-wrap gap-1 ml-2">
                 {selDepts.map(d => <Badge key={d} variant="secondary" className="gap-1">{d}<button onClick={() => setSelDepts(p => p.filter(x => x !== d))}><X size={9} /></button></Badge>)}
+                {selCentros.map(c => {
+                  const nome = centrosDisp.find(x => x.cc === c)?.nome ?? c
+                  return <Badge key={c} variant="secondary" className="gap-1 bg-indigo-50 text-indigo-700 border-indigo-200">{nome}<button onClick={() => setSelCentros(p => p.filter(x => x !== c))}><X size={9} /></button></Badge>
+                })}
                 {selPeriods.map(p => <Badge key={p} variant="outline" className="gap-1">{formatPeriodo(p)}<button onClick={() => setSelPeriods(prev => prev.filter(x => x !== p))}><X size={9} /></button></Badge>)}
               </div>
             )}
