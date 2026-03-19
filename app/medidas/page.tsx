@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import type { Medida, FilterCondition, FilterColumn, FilterOperator } from '@/lib/types'
+import type { Medida, FilterCondition, FilterColumn, FilterOperator, FilterLogic } from '@/lib/types'
 
 const COLORS = ['#6366f1','#8b5cf6','#ec4899','#ef4444','#f97316','#eab308','#22c55e','#14b8a6','#0ea5e9','#64748b']
 
@@ -39,7 +39,9 @@ interface MedidaForm {
   tipo_medida: 'simples' | 'ratio'
   tipo_fonte: 'budget' | 'razao' | 'ambos'
   filtros: FilterCondition[]
+  filtros_operador: FilterLogic
   denominador_filtros: FilterCondition[]
+  denominador_filtros_operador: FilterLogic
   denominador_tipo_fonte: 'budget' | 'razao' | 'ambos'
   departamentos: string[]
 }
@@ -48,7 +50,9 @@ const emptyForm = (): MedidaForm => ({
   nome: '', descricao: '', unidade: '', cor: '#6366f1',
   tipo_medida: 'simples', tipo_fonte: 'ambos',
   filtros: [],
+  filtros_operador: 'AND',
   denominador_filtros: [],
+  denominador_filtros_operador: 'AND',
   denominador_tipo_fonte: 'ambos',
   departamentos: [],
 })
@@ -130,7 +134,9 @@ export default function MedidasPage() {
       tipo_medida: m.tipo_medida ?? 'simples',
       tipo_fonte: m.tipo_fonte,
       filtros: m.filtros,
+      filtros_operador: m.filtros_operador ?? 'AND',
       denominador_filtros: m.denominador_filtros ?? [],
+      denominador_filtros_operador: m.denominador_filtros_operador ?? 'AND',
       denominador_tipo_fonte: m.denominador_tipo_fonte ?? 'ambos',
       departamentos: m.departamentos ?? [],
     })
@@ -153,7 +159,8 @@ export default function MedidasPage() {
           <p className="font-medium">Como funciona</p>
           <p className="text-indigo-600 text-xs mt-0.5">
             <strong>Simples:</strong> soma de <code className="bg-indigo-100 px-1 rounded">debito_credito</code> filtrada. Ex: SG&A = agrupamento = &quot;Operating Expenses&quot;.<br />
-            <strong>Ratio:</strong> Numerador ÷ Denominador. Ex: SG&A Marketing / Receita Marketing = % do custo sobre receita.
+            <strong>Ratio:</strong> Numerador &divide; Denominador. Ex: SG&A Marketing / Receita Marketing = % do custo sobre receita.<br />
+            <strong>E / OU:</strong> Use &quot;E&quot; para que todos os critérios sejam atendidos simultaneamente. Use &quot;OU&quot; para que qualquer um dos critérios seja atendido.
           </p>
         </div>
       </div>
@@ -163,7 +170,7 @@ export default function MedidasPage() {
         <Card className="ring-1 ring-indigo-100">
           <CardHeader>
             <CardTitle>{editing === -1 ? 'Nova Medida' : 'Editar Medida'}</CardTitle>
-            <CardDescription>Filtros aplicam AND entre si. Dimensões resolvidas via JOIN automático.</CardDescription>
+            <CardDescription>Defina filtros e escolha se devem ser combinados com E (todos devem ser verdadeiros) ou OU (qualquer um pode ser verdadeiro).</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             {/* Name + color */}
@@ -247,7 +254,7 @@ export default function MedidasPage() {
               </div>
               {form.tipo_medida === 'ratio' && (
                 <p className="text-xs text-gray-400 mt-1.5">
-                  Define duas métricas (Numerador e Denominador). O resultado é o percentual Numerador ÷ Denominador × 100.
+                  Define duas métricas (Numerador e Denominador). O resultado é o percentual Numerador &divide; Denominador &times; 100.
                 </p>
               )}
             </div>
@@ -261,7 +268,8 @@ export default function MedidasPage() {
                 />
                 <FilterSection
                   title="Filtros"
-                  subtitle="todos aplicados com AND"
+                  logic={form.filtros_operador}
+                  onLogicChange={v => setForm(f => ({ ...f, filtros_operador: v }))}
                   filtros={form.filtros}
                   groupedCols={groupedCols}
                   suggestions={suggestions}
@@ -273,7 +281,7 @@ export default function MedidasPage() {
                   onFocus={(key) => { setSuggestions(key); loadDistinct(key.split('-')[1] as FilterColumn) }}
                   onBlur={() => setTimeout(() => setSuggestions(null), 150)}
                 />
-                <FormulaPreview label={form.nome} tipo={form.tipo_fonte} filtros={form.filtros} />
+                <FormulaPreview label={form.nome} tipo={form.tipo_fonte} filtros={form.filtros} logic={form.filtros_operador} />
               </>
             )}
 
@@ -291,6 +299,8 @@ export default function MedidasPage() {
                   />
                   <FilterSection
                     title="Filtros do Numerador"
+                    logic={form.filtros_operador}
+                    onLogicChange={v => setForm(f => ({ ...f, filtros_operador: v }))}
                     filtros={form.filtros}
                     groupedCols={groupedCols}
                     suggestions={suggestions}
@@ -323,6 +333,8 @@ export default function MedidasPage() {
                   />
                   <FilterSection
                     title="Filtros do Denominador"
+                    logic={form.denominador_filtros_operador}
+                    onLogicChange={v => setForm(f => ({ ...f, denominador_filtros_operador: v }))}
                     filtros={form.denominador_filtros}
                     groupedCols={groupedCols}
                     suggestions={suggestions}
@@ -340,8 +352,10 @@ export default function MedidasPage() {
                   label={form.nome}
                   tipoNum={form.tipo_fonte}
                   filtrosNum={form.filtros}
+                  logicNum={form.filtros_operador}
                   tipoDen={form.denominador_tipo_fonte}
                   filtrosDen={form.denominador_filtros}
+                  logicDen={form.denominador_filtros_operador}
                 />
               </div>
             )}
@@ -381,6 +395,11 @@ export default function MedidasPage() {
                     <Badge variant="outline" className="gap-1"><Divide size={10} />Ratio</Badge>
                   )}
                   <Badge variant="outline">{m.filtros.length} filtro{m.filtros.length !== 1 ? 's' : ''}</Badge>
+                  {m.filtros.length > 1 && (
+                    <Badge variant="outline" className={m.filtros_operador === 'OR' ? 'text-amber-600 border-amber-300' : 'text-blue-600 border-blue-300'}>
+                      {m.filtros_operador === 'OR' ? 'OU' : 'E'}
+                    </Badge>
+                  )}
                   {m.tipo_medida === 'ratio' && (
                     <Badge variant="outline" className="text-amber-600">{m.denominador_filtros?.length ?? 0} filtro(s) den.</Badge>
                   )}
@@ -398,7 +417,7 @@ export default function MedidasPage() {
                     })}
                     {m.tipo_medida === 'ratio' && m.denominador_filtros?.length > 0 && (
                       <>
-                        <span className="text-gray-400 text-xs">÷</span>
+                        <span className="text-gray-400 text-xs">&divide;</span>
                         {m.denominador_filtros.map((f, i) => {
                           const col = FILTER_COLUMNS.find(c => c.value === f.column)?.label ?? f.column
                           return (
@@ -444,11 +463,13 @@ function FonteSelector({ value, onChange }: { value: 'budget'|'razao'|'ambos'; o
 }
 
 function FilterSection({
-  title, subtitle, filtros, groupedCols, suggestions, distinctVals, prefix,
+  title, filtros, logic, onLogicChange, groupedCols, suggestions, distinctVals, prefix,
   onAdd, onUpdate, onRemove, onFocus, onBlur,
 }: {
-  title: string; subtitle?: string
+  title: string
   filtros: FilterCondition[]
+  logic: FilterLogic
+  onLogicChange: (v: FilterLogic) => void
   groupedCols: Record<string, Array<{ value: FilterColumn; label: string; group: string }>>
   suggestions: string | null
   distinctVals: Record<string, string[]>
@@ -462,9 +483,22 @@ function FilterSection({
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <label className="text-sm font-medium text-gray-700">
-          {title}{subtitle && <span className="text-gray-400 font-normal ml-1">({subtitle})</span>}
-        </label>
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-gray-700">{title}</label>
+          {filtros.length > 1 && (
+            <div className="flex bg-gray-100 rounded-md p-0.5 gap-0.5">
+              {(['AND', 'OR'] as const).map(v => (
+                <button key={v} onClick={() => onLogicChange(v)}
+                  className={cn('px-2 py-0.5 rounded text-xs font-semibold transition-colors',
+                    logic === v
+                      ? (v === 'AND' ? 'bg-blue-600 text-white' : 'bg-amber-500 text-white')
+                      : 'text-gray-500 hover:text-gray-700')}>
+                  {v === 'AND' ? 'E' : 'OU'}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <Button size="sm" variant="outline" onClick={onAdd}><Plus size={13} /> Adicionar</Button>
       </div>
 
@@ -479,8 +513,12 @@ function FilterSection({
         {filtros.map((f, i) => (
           <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg p-3">
             <span className={cn('text-xs font-medium px-2 py-0.5 rounded flex-shrink-0',
-              i === 0 ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-200 text-gray-500')}>
-              {i === 0 ? 'ONDE' : 'E'}
+              i === 0
+                ? 'bg-indigo-100 text-indigo-600'
+                : logic === 'OR'
+                  ? 'bg-amber-100 text-amber-600'
+                  : 'bg-gray-200 text-gray-500')}>
+              {i === 0 ? 'ONDE' : logic === 'OR' ? 'OU' : 'E'}
             </span>
             <select value={f.column}
               onChange={e => { onUpdate(i, { column: e.target.value as FilterColumn, value: '' }); onFocus(`${prefix}-${e.target.value}`) }}
@@ -526,8 +564,9 @@ function FilterSection({
   )
 }
 
-function FormulaPreview({ label, tipo, filtros }: { label: string; tipo: string; filtros: FilterCondition[] }) {
+function FormulaPreview({ label, tipo, filtros, logic }: { label: string; tipo: string; filtros: FilterCondition[]; logic: FilterLogic }) {
   if (filtros.length === 0) return null
+  const joiner = logic === 'OR' ? 'OR' : 'AND'
   return (
     <div className="bg-gray-900 rounded-lg px-4 py-3 text-xs font-mono text-green-400 overflow-x-auto">
       <span className="text-gray-400">-- {label || 'medida'}</span><br />
@@ -535,30 +574,42 @@ function FormulaPreview({ label, tipo, filtros }: { label: string; tipo: string;
       <span className="text-blue-400"> LEFT JOIN</span> contas_contabeis ca <span className="text-blue-400">ON</span> l.numero_conta_contabil = ca.numero_conta_contabil<br />
       <span className="text-blue-400"> LEFT JOIN</span> centros_custo cc <span className="text-blue-400">ON</span> l.centro_custo = cc.centro_custo<br />
       <span className="text-blue-400">WHERE</span> l.tipo = <span className="text-yellow-400">&apos;{tipo !== 'ambos' ? tipo : 'budget|razao'}&apos;</span>
-      {filtros.map((f, i) => (
-        <span key={i}><br />&nbsp;&nbsp;<span className="text-blue-400">AND</span> <span className="text-white">{f.column}</span> = <span className="text-yellow-400">&apos;{f.value}&apos;</span></span>
-      ))}
+      {filtros.length > 0 && (
+        <>
+          <br />&nbsp;&nbsp;<span className="text-blue-400">AND</span> {logic === 'OR' && filtros.length > 1 ? '(' : ''}
+          {filtros.map((f, i) => (
+            <span key={i}>
+              {i > 0 && <><br />&nbsp;&nbsp;&nbsp;&nbsp;<span className={logic === 'OR' ? 'text-amber-400' : 'text-blue-400'}>{joiner}</span> </>}
+              <span className="text-white">{f.column}</span> {f.operator} <span className="text-yellow-400">&apos;{f.value}&apos;</span>
+            </span>
+          ))}
+          {logic === 'OR' && filtros.length > 1 ? ')' : ''}
+        </>
+      )}
     </div>
   )
 }
 
-function RatioFormulaPreview({ label, tipoNum, filtrosNum, tipoDen, filtrosDen }: {
-  label: string; tipoNum: string; filtrosNum: FilterCondition[]; tipoDen: string; filtrosDen: FilterCondition[]
+function RatioFormulaPreview({ label, tipoNum, filtrosNum, logicNum, tipoDen, filtrosDen, logicDen }: {
+  label: string; tipoNum: string; filtrosNum: FilterCondition[]; logicNum: FilterLogic
+  tipoDen: string; filtrosDen: FilterCondition[]; logicDen: FilterLogic
 }) {
+  const joinerNum = logicNum === 'OR' ? 'OR' : 'AND'
+  const joinerDen = logicDen === 'OR' ? 'OR' : 'AND'
   return (
     <div className="bg-gray-900 rounded-lg px-4 py-3 text-xs font-mono text-green-400 overflow-x-auto">
-      <span className="text-gray-400">-- {label || 'ratio'} = Numerador / Denominador × 100</span><br />
+      <span className="text-gray-400">-- {label || 'ratio'} = Numerador / Denominador &times; 100</span><br />
       <span className="text-indigo-400">( SUM numerador WHERE tipo=&apos;{tipoNum !== 'ambos' ? tipoNum : 'budget|razao'}&apos;</span>
       {filtrosNum.map((f, i) => (
-        <span key={i}> AND <span className="text-white">{f.column}</span>=<span className="text-yellow-400">&apos;{f.value}&apos;</span></span>
+        <span key={i}> {i === 0 ? 'AND' : joinerNum} <span className="text-white">{f.column}</span>=<span className="text-yellow-400">&apos;{f.value}&apos;</span></span>
       ))}
       <span className="text-indigo-400"> )</span><br />
-      <span className="text-gray-400">÷</span><br />
+      <span className="text-gray-400">&divide;</span><br />
       <span className="text-amber-400">( SUM denominador WHERE tipo=&apos;{tipoDen !== 'ambos' ? tipoDen : 'budget|razao'}&apos;</span>
       {filtrosDen.map((f, i) => (
-        <span key={i}> AND <span className="text-white">{f.column}</span>=<span className="text-yellow-400">&apos;{f.value}&apos;</span></span>
+        <span key={i}> {i === 0 ? 'AND' : joinerDen} <span className="text-white">{f.column}</span>=<span className="text-yellow-400">&apos;{f.value}&apos;</span></span>
       ))}
-      <span className="text-amber-400"> ) × 100</span>
+      <span className="text-amber-400"> ) &times; 100</span>
     </div>
   )
 }

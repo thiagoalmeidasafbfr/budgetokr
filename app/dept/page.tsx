@@ -1,7 +1,6 @@
 'use client'
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import { Plus, Settings, Edit2, Trash2, Save, X, BarChart3, TrendingUp, TrendingDown, Target, ExternalLink, Download, CheckSquare, Square, ArrowUpDown, Columns3, ChevronRight, ChevronDown, LogOut, User } from 'lucide-react'
+import { Plus, Settings, Edit2, Trash2, Save, X, BarChart3, TrendingUp, TrendingDown, Target, ExternalLink, Download, CheckSquare, Square, ArrowUpDown, Columns3, ChevronRight, ChevronDown } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
@@ -1135,9 +1134,7 @@ export default function DeptDashboardPage() {
   const [editValoresKpi,   setEditValoresKpi]   = useState<KpiManual | null>(null)
   const [detModal,         setDetModal]         = useState<DetModalState | null>(null)
   const [userRole,         setUserRole]         = useState<'master' | 'dept' | null>(null)
-  const [userId,           setUserId]           = useState<string>('')
   const [forcedDept,       setForcedDept]       = useState<string | null>(null)
-  const router = useRouter()
   const [dreView,          setDreView]          = useState<'resumida' | 'completa'>('resumida')
   const [dreFullData,      setDreFullData]      = useState<DRERow[]>([])
   const [dreHierarchy,     setDreHierarchy]     = useState<Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }>>([])
@@ -1150,7 +1147,6 @@ export default function DeptDashboardPage() {
     fetch('/api/me').then(r => r.ok ? r.json() : null).then(u => {
       if (!u) return
       setUserRole(u.role)
-      setUserId(u.userId ?? '')
       if (u.role === 'dept' && u.department) {
         setForcedDept(u.department)
         setSelDept(u.department)
@@ -1272,37 +1268,8 @@ export default function DeptDashboardPage() {
     variacao_pct: g.budget ? ((g.razao - g.budget) / Math.abs(g.budget)) * 100 : 0,
   }))
 
-  const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    router.push('/login')
-    router.refresh()
-  }
-
   return (
-    <div className="flex gap-0 min-h-screen relative">
-      {/* User + Logout — fixo no canto superior direito */}
-      {userId && (
-        <div className="fixed top-3 right-4 z-50 flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm">
-          <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
-            <User size={12} className="text-indigo-600" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-gray-700 truncate">{userId}</p>
-            <p className="text-[10px] text-gray-400 truncate">
-              {isMaster ? 'Administrador' : (forcedDept || 'Departamento')}
-            </p>
-          </div>
-          <button
-            onClick={handleLogout}
-            title="Sair"
-            className="flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 hover:bg-red-100 hover:text-red-600 text-gray-500 transition-colors flex-shrink-0 text-[10px] font-medium"
-          >
-            <LogOut size={11} />
-            Sair
-          </button>
-        </div>
-      )}
-
+    <div className="flex gap-0 min-h-screen">
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
       <div className="w-52 flex-shrink-0 border-r border-gray-100 flex flex-col bg-white">
         {/* Seletor de departamento: visível apenas para master */}
@@ -1311,13 +1278,13 @@ export default function DeptDashboardPage() {
             <div className="p-3 border-b border-gray-100">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Departamento</p>
             </div>
-            <div className="overflow-y-auto p-2 space-y-0.5" style={{ maxHeight: '30vh' }}>
+            <div className="overflow-y-auto p-2 space-y-0.5" style={{ maxHeight: '40vh' }}>
               {departamentos.map(d => (
                 <button
                   key={d}
                   onClick={() => { setSelDept(d); setSelPeriods([]) }}
                   className={cn(
-                    'w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                    'w-full text-left px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
                     selDept === d
                       ? 'bg-indigo-50 text-indigo-700'
                       : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
@@ -1338,34 +1305,32 @@ export default function DeptDashboardPage() {
           </div>
         )}
 
-        {/* Períodos — logo abaixo do departamento */}
-        {selDept && (
-          <div className="px-3 py-2 border-t border-gray-100">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Períodos</p>
-            <div className="space-y-0.5 max-h-48 overflow-y-auto">
-              {allPeriodos.map(p => (
-                <label key={p} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
-                  <input
-                    type="checkbox"
-                    checked={selPeriods.includes(p)}
-                    onChange={e => setSelPeriods(prev =>
-                      e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}
-                    className="w-3 h-3 accent-indigo-600"
-                  />
-                  <span className="text-xs text-gray-600">{formatPeriodo(p)}</span>
-                </label>
-              ))}
-            </div>
-            {selPeriods.length > 0 && (
-              <button
-                onClick={() => setSelPeriods([])}
-                className="mt-1 text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"
-              >
-                <X size={9} />Limpar
-              </button>
-            )}
+        {/* Períodos — sempre visível */}
+        <div className="px-3 py-2 border-t border-gray-100">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Períodos</p>
+          <div className="space-y-0.5 max-h-48 overflow-y-auto">
+            {allPeriodos.map(p => (
+              <label key={p} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                <input
+                  type="checkbox"
+                  checked={selPeriods.includes(p)}
+                  onChange={e => setSelPeriods(prev =>
+                    e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}
+                  className="w-3 h-3 accent-indigo-600"
+                />
+                <span className="text-xs text-gray-600">{formatPeriodo(p)}</span>
+              </label>
+            ))}
           </div>
-        )}
+          {selPeriods.length > 0 && (
+            <button
+              onClick={() => setSelPeriods([])}
+              className="mt-1 text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"
+            >
+              <X size={9} />Limpar
+            </button>
+          )}
+        </div>
 
         {/* Configurar KPIs: apenas para master */}
         {selDept && isMaster && (

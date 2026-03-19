@@ -55,6 +55,8 @@ export interface FilterCondition {
   value: string
 }
 
+export type FilterLogic = 'AND' | 'OR'
+
 export interface Medida {
   id: number
   nome: string
@@ -64,7 +66,9 @@ export interface Medida {
   tipo_fonte: 'budget' | 'razao' | 'ambos'
   tipo_medida: 'simples' | 'ratio'
   filtros: FilterCondition[]
+  filtros_operador: FilterLogic
   denominador_filtros: FilterCondition[]
+  denominador_filtros_operador: FilterLogic
   denominador_tipo_fonte: 'budget' | 'razao' | 'ambos'
   departamentos: string[]   // [] = visible to all; otherwise only listed depts
   created_at: string

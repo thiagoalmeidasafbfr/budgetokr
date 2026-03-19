@@ -114,9 +114,9 @@ export function Sidebar() {
     href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/')
 
   return (
-    <aside className="w-60 flex-shrink-0 bg-white border-r border-gray-100 flex flex-col min-h-screen">
+    <aside className="w-60 flex-shrink-0 bg-white border-r border-gray-100 flex flex-col h-screen sticky top-0">
       {/* Logo */}
-      <div className="px-4 py-4 border-b border-gray-100">
+      <div className="px-4 py-4 border-b border-gray-100 flex-shrink-0">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-sm">
             <TrendingUp size={15} className="text-white" />
@@ -129,7 +129,7 @@ export function Sidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto min-h-0">
         {user && nav.map((item, i) => {
           // Esconde itens masterOnly para usuários de dept
           if (item.masterOnly && !isMaster) return null
@@ -214,10 +214,10 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Footer: usuário + logout */}
-      <div className="px-3 py-3 border-t border-gray-100 space-y-2">
-        {user && (
-          <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gray-50">
+      {/* Footer: usuário + logout — fixado no fundo */}
+      {user && (
+        <div className="flex-shrink-0 px-3 py-2 border-t border-gray-100 bg-white">
+          <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
               <User size={12} className="text-indigo-600" />
             </div>
@@ -230,15 +230,13 @@ export function Sidebar() {
             <button
               onClick={handleLogout}
               title="Sair"
-              className="flex items-center gap-1 px-2 py-1 rounded-md bg-gray-200 hover:bg-red-100 hover:text-red-600 text-gray-500 transition-colors flex-shrink-0 text-[10px] font-medium"
+              className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-red-50 hover:text-red-600 text-gray-400 transition-colors flex-shrink-0 text-[10px] font-medium"
             >
               <LogOut size={11} />
-              Sair
             </button>
           </div>
-        )}
-        <p className="text-[10px] text-gray-300 text-center">v2.0.0 · Star Schema</p>
-      </div>
+        </div>
+      )}
     </aside>
   )
 }

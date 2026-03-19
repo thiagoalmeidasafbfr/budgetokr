@@ -11,7 +11,7 @@ if (!fs.existsSync(DATA_DIR)) {
 
 let db: Database.Database | null = null;
 
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 
 export function getDb(): Database.Database {
   if (!db) {
@@ -94,6 +94,11 @@ function initSchema(db: Database.Database) {
     // v7 → v8: departamentos field on medidas for dept assignment
     if (version < 8) {
       try { db.exec(`ALTER TABLE medidas ADD COLUMN departamentos TEXT DEFAULT '[]'`) } catch { /* ok */ }
+    }
+    // v8 → v9: AND/OR operator for filter conditions
+    if (version < 9) {
+      try { db.exec(`ALTER TABLE medidas ADD COLUMN filtros_operador TEXT DEFAULT 'AND'`) } catch { /* ok */ }
+      try { db.exec(`ALTER TABLE medidas ADD COLUMN denominador_filtros_operador TEXT DEFAULT 'AND'`) } catch { /* ok */ }
     }
     if (!row) {
       db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(SCHEMA_VERSION);
@@ -203,8 +208,11 @@ function initSchema(db: Database.Database) {
       tipo_fonte              TEXT    DEFAULT 'ambos',   -- 'budget' | 'razao' | 'ambos'
       tipo_medida             TEXT    DEFAULT 'simples', -- 'simples' | 'ratio'
       filtros                 TEXT    NOT NULL DEFAULT '[]',
+      filtros_operador        TEXT    DEFAULT 'AND',     -- 'AND' | 'OR'
       denominador_filtros     TEXT    DEFAULT '[]',      -- só para tipo_medida='ratio'
+      denominador_filtros_operador TEXT DEFAULT 'AND',   -- 'AND' | 'OR'
       denominador_tipo_fonte  TEXT    DEFAULT 'ambos',
+      departamentos           TEXT    DEFAULT '[]',
       created_at              DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at              DATETIME DEFAULT CURRENT_TIMESTAMP
     );
