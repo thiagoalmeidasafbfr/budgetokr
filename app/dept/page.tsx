@@ -1145,16 +1145,16 @@ export default function DeptDashboardPage() {
   // Carrega usuário logado
   useEffect(() => {
     fetch('/api/me').then(r => r.ok ? r.json() : null).then(u => {
-      if (!u) return
+      if (!u) { setUserRole('master'); return }  // fallback: show full UI
       setUserRole(u.role)
       if (u.role === 'dept' && u.department) {
         setForcedDept(u.department)
         setSelDept(u.department)
       }
-    }).catch(() => {})
+    }).catch(() => setUserRole('master'))  // fallback: show full UI
   }, [])
 
-  const isMaster = userRole === 'master'
+  const isMaster = userRole !== 'dept'
 
   // Load department and period lists
   useEffect(() => {

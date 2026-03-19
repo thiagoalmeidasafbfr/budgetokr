@@ -97,10 +97,27 @@ export function Sidebar() {
   const pathname = usePathname()
   const router   = useRouter()
   const [user, setUser] = useState<SessionUser | null>(null)
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    fetch('/api/me').then(r => r.ok ? r.json() : null).then(setUser).catch(() => setUser(null))
-  }, [pathname])
+    fetch('/api/me')
+      .then(r => {
+        if (r.status === 401) {
+          // Not logged in — redirect to login (unless already there)
+          if (pathname !== '/login' && pathname !== '/logout') {
+            router.push('/login')
+          }
+          setLoaded(true)
+          return null
+        }
+        return r.ok ? r.json() : null
+      })
+      .then(u => { if (u) setUser(u); setLoaded(true) })
+      .catch(() => setLoaded(true))
+  }, [pathname, router])
+
+  // Hide sidebar on login page
+  if (pathname === '/login') return null
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' })
@@ -130,7 +147,12 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto min-h-0">
-        {user && nav.map((item, i) => {
+        {!loaded && (
+          <div className="space-y-2 px-3 py-2">
+            {[1,2,3,4].map(i => <div key={i} className="h-8 bg-gray-100 rounded-lg animate-pulse" />)}
+          </div>
+        )}
+        {loaded && user && nav.map((item, i) => {
           // Esconde itens masterOnly para usuários de dept
           if (item.masterOnly && !isMaster) return null
 
