@@ -37,14 +37,12 @@ const nav: NavItem[] = [
     icon: LineChart,
     label: 'DRE',
     sublabel: 'P&L · Resultado',
-    masterOnly: true,
   },
   {
     type: 'link', href: '/analise',
     icon: GitCompare,
     label: 'Análise',
     sublabel: 'Budget vs Realizado',
-    masterOnly: true,
   },
   {
     type: 'link', href: '/dept',
@@ -101,8 +99,8 @@ export function Sidebar() {
   const [user, setUser] = useState<SessionUser | null>(null)
 
   useEffect(() => {
-    fetch('/api/me').then(r => r.ok ? r.json() : null).then(setUser).catch(() => {})
-  }, [])
+    fetch('/api/me').then(r => r.ok ? r.json() : null).then(setUser).catch(() => setUser(null))
+  }, [pathname])
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' })

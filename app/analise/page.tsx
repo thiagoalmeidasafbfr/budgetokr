@@ -53,18 +53,23 @@ export default function AnalisePage() {
   const [viewMode,      setViewMode]      = useState<ViewMode>('table')
   const [groupBy,       setGroupBy]       = useState<GroupBy>('departamento')
   const [loading,       setLoading]       = useState(false)
+  const [deptUser,      setDeptUser]      = useState<{ department: string } | null>(null)
 
   useEffect(() => {
-    Promise.all([
-      fetch('/api/analise?type=distinct&col=nome_departamento', { cache: 'no-store' }).then(r => r.json()),
-      fetch('/api/analise?type=distinct&col=data_lancamento',   { cache: 'no-store' }).then(r => r.json()),
-      fetch('/api/medidas', { cache: 'no-store' }).then(r => r.json()),
-    ]).then(([depts, dates, meds]) => {
+    async function init() {
+      const me = await fetch('/api/me').then(r => r.ok ? r.json() : null).catch(() => null)
+      const isDept = me?.role === 'dept' && me.department
+      if (isDept) { setDeptUser({ department: me.department }); setSelDepts([me.department]) }
+      const [depts, dates, meds] = await Promise.all([
+        fetch('/api/analise?type=distinct&col=nome_departamento', { cache: 'no-store' }).then(r => r.json()),
+        fetch('/api/analise?type=distinct&col=data_lancamento',   { cache: 'no-store' }).then(r => r.json()),
+        fetch('/api/medidas', { cache: 'no-store' }).then(r => r.json()),
+      ])
       setDepartamentos(Array.isArray(depts) ? depts : [])
-      const uniquePeriods = [...new Set((Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean))].sort() as string[]
-      setPeriodos(uniquePeriods)
+      setPeriodos([...new Set((Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean))].sort() as string[])
       setMedidas(Array.isArray(meds) ? meds : [])
-    })
+    }
+    init()
   }, [])
 
   // Auto-apply filters whenever selection or groupBy changes
@@ -235,19 +240,26 @@ export default function AnalisePage() {
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
                 <Filter size={11} /> Filtros
               </p>
-              <div>
-                <p className="text-xs font-medium text-gray-600 mb-1">Departamentos</p>
-                <div className="space-y-0.5 max-h-40 overflow-y-auto">
-                  {departamentos.map(d => (
-                    <label key={d} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
-                      <input type="checkbox" checked={selDepts.includes(d)}
-                        onChange={e => setSelDepts(prev => e.target.checked ? [...prev, d] : prev.filter(x => x !== d))}
-                        className="w-3 h-3 accent-indigo-600" />
-                      <span className="text-xs text-gray-600 truncate">{d || '—'}</span>
-                    </label>
-                  ))}
+              {deptUser ? (
+                <div>
+                  <p className="text-xs font-medium text-gray-600 mb-1">Departamento</p>
+                  <p className="text-xs text-indigo-700 font-semibold px-1 py-0.5 bg-indigo-50 rounded">{deptUser.department}</p>
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <p className="text-xs font-medium text-gray-600 mb-1">Departamentos</p>
+                  <div className="space-y-0.5 max-h-40 overflow-y-auto">
+                    {departamentos.map(d => (
+                      <label key={d} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                        <input type="checkbox" checked={selDepts.includes(d)}
+                          onChange={e => setSelDepts(prev => e.target.checked ? [...prev, d] : prev.filter(x => x !== d))}
+                          className="w-3 h-3 accent-indigo-600" />
+                        <span className="text-xs text-gray-600 truncate">{d || '—'}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div>
                 <p className="text-xs font-medium text-gray-600 mb-1">Períodos</p>
                 <div className="space-y-0.5 max-h-32 overflow-y-auto">
