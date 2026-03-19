@@ -9,18 +9,24 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-let db: Database.Database | null = null;
+// Use globalThis to persist DB across HMR in dev mode
+const globalForDb = globalThis as unknown as { __budgetokr_db?: Database.Database; __budgetokr_schema_v?: number }
 
 const SCHEMA_VERSION = 9;
 
 export function getDb(): Database.Database {
-  if (!db) {
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-    initSchema(db);
+  // Re-run migrations if schema version changed (e.g. after code deploy)
+  if (globalForDb.__budgetokr_db && globalForDb.__budgetokr_schema_v === SCHEMA_VERSION) {
+    return globalForDb.__budgetokr_db;
   }
-  return db;
+  if (!globalForDb.__budgetokr_db) {
+    globalForDb.__budgetokr_db = new Database(DB_PATH);
+    globalForDb.__budgetokr_db.pragma('journal_mode = WAL');
+    globalForDb.__budgetokr_db.pragma('foreign_keys = ON');
+  }
+  initSchema(globalForDb.__budgetokr_db);
+  globalForDb.__budgetokr_schema_v = SCHEMA_VERSION;
+  return globalForDb.__budgetokr_db;
 }
 
 function initSchema(db: Database.Database) {

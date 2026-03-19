@@ -22,51 +22,68 @@ const STAR_SCHEMA_JOIN = `
   LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil
 `
 
-export function buildFilterSQL(filters: FilterCondition[], logic: FilterLogic = 'AND'): { where: string; params: unknown[] } {
+export function buildFilterSQL(filters: FilterCondition[], defaultLogic: FilterLogic = 'AND'): { where: string; params: unknown[] } {
   if (!filters?.length) return { where: '', params: [] }
 
-  const parts: string[] = []
   const params: unknown[] = []
+  const sqlParts: string[] = []
 
   for (const f of filters) {
     const col = COL_SOURCE[f.column] ?? `l.${f.column}`
+    let part = ''
     switch (f.operator) {
       case '=':
-        parts.push(`LOWER(${col}) = LOWER(?)`)
+        part = `LOWER(${col}) = LOWER(?)`
         params.push(f.value)
         break
       case '!=':
-        parts.push(`LOWER(${col}) != LOWER(?)`)
+        part = `LOWER(${col}) != LOWER(?)`
         params.push(f.value)
         break
       case 'contains':
-        parts.push(`LOWER(${col}) LIKE LOWER(?)`)
+        part = `LOWER(${col}) LIKE LOWER(?)`
         params.push(`%${f.value}%`)
         break
       case 'not_contains':
-        parts.push(`LOWER(${col}) NOT LIKE LOWER(?)`)
+        part = `LOWER(${col}) NOT LIKE LOWER(?)`
         params.push(`%${f.value}%`)
         break
       case 'starts_with':
-        parts.push(`LOWER(${col}) LIKE LOWER(?)`)
+        part = `LOWER(${col}) LIKE LOWER(?)`
         params.push(`${f.value}%`)
         break
       case 'in': {
         const vals = f.value.split(',').map(v => v.trim()).filter(Boolean)
         if (vals.length) {
-          parts.push(`LOWER(${col}) IN (${vals.map(() => 'LOWER(?)').join(',')})`)
+          part = `LOWER(${col}) IN (${vals.map(() => 'LOWER(?)').join(',')})`
           params.push(...vals)
         }
         break
       }
     }
+    if (part) sqlParts.push(part)
   }
 
-  const joiner = logic === 'OR' ? ' OR ' : ' AND '
-  const combined = parts.length > 1 && logic === 'OR'
-    ? `(${parts.join(joiner)})`
-    : parts.join(joiner)
-  return { where: combined, params }
+  if (sqlParts.length === 0) return { where: '', params: [] }
+  if (sqlParts.length === 1) return { where: sqlParts[0], params }
+
+  // Build expression using per-filter logic connectors
+  // First filter has no connector; subsequent filters use their logic field (or defaultLogic)
+  let result = sqlParts[0]
+  for (let i = 1; i < sqlParts.length; i++) {
+    const connector = filters[i].logic || defaultLogic
+    result += ` ${connector} ${sqlParts[i]}`
+  }
+
+  // If there's a mix of AND and OR, we need proper SQL precedence.
+  // AND has higher precedence than OR in SQL, which is correct behavior:
+  //   A OR B AND C  =>  A OR (B AND C)
+  // But users might expect left-to-right evaluation.
+  // Wrap in parens to be safe when there's any OR.
+  const hasOr = filters.some((f, i) => i > 0 && (f.logic || defaultLogic) === 'OR')
+  if (hasOr) result = `(${result})`
+
+  return { where: result, params }
 }
 
 // ─── Star schema query ────────────────────────────────────────────────────────

@@ -53,6 +53,7 @@ export interface FilterCondition {
   column: FilterColumn
   operator: FilterOperator
   value: string
+  logic?: 'AND' | 'OR'  // connector to previous condition; ignored for first filter
 }
 
 export type FilterLogic = 'AND' | 'OR'
@@ -66,7 +67,7 @@ export interface Medida {
   tipo_fonte: 'budget' | 'razao' | 'ambos'
   tipo_medida: 'simples' | 'ratio'
   filtros: FilterCondition[]
-  filtros_operador: FilterLogic
+  filtros_operador: FilterLogic       // legacy/default for filters without per-line logic
   denominador_filtros: FilterCondition[]
   denominador_filtros_operador: FilterLogic
   denominador_tipo_fonte: 'budget' | 'razao' | 'ambos'
