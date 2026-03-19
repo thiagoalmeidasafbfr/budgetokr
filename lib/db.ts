@@ -12,7 +12,7 @@ if (!fs.existsSync(DATA_DIR)) {
 // Use globalThis to persist DB across HMR in dev mode
 const globalForDb = globalThis as unknown as { __budgetokr_db?: Database.Database; __budgetokr_schema_v?: number }
 
-const SCHEMA_VERSION = 9;
+const SCHEMA_VERSION = 10;
 
 export function getDb(): Database.Database {
   // Re-run migrations if schema version changed (e.g. after code deploy)
@@ -105,6 +105,18 @@ function initSchema(db: Database.Database) {
     if (version < 9) {
       try { db.exec(`ALTER TABLE medidas ADD COLUMN filtros_operador TEXT DEFAULT 'AND'`) } catch { /* ok */ }
       try { db.exec(`ALTER TABLE medidas ADD COLUMN denominador_filtros_operador TEXT DEFAULT 'AND'`) } catch { /* ok */ }
+    }
+    // v9 → v10: nivel hierárquico do plano de contas
+    if (version < 10) {
+      try { db.exec(`ALTER TABLE contas_contabeis ADD COLUMN nivel INTEGER DEFAULT 0`) } catch { /* ok */ }
+      // Popula o nível baseado na quantidade de segmentos separados por "."
+      try {
+        db.exec(`
+          UPDATE contas_contabeis
+          SET nivel = LENGTH(numero_conta_contabil) - LENGTH(REPLACE(numero_conta_contabil, '.', '')) + 1
+          WHERE nivel = 0 OR nivel IS NULL
+        `)
+      } catch { /* ok */ }
     }
     if (!row) {
       db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(SCHEMA_VERSION);

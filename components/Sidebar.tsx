@@ -6,7 +6,7 @@ import {
   LayoutDashboard, TrendingUp, LineChart, GitCompare,
   Target, Layers, FileText, Database, Upload,
   ChevronRight, Building2, BookOpen, LayoutList, Gauge,
-  LogOut, User,
+  LogOut, User, ListTree,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -49,6 +49,12 @@ const nav: NavItem[] = [
     icon: Layers,
     label: 'Por Departamento',
     sublabel: 'KPIs e DRE por área',
+  },
+  {
+    type: 'link', href: '/plano-contas',
+    icon: ListTree,
+    label: 'Plano de Contas',
+    sublabel: 'Hierarquia por nível',
   },
 
   { type: 'section', label: 'KPIs & Medidas', masterOnly: true },
