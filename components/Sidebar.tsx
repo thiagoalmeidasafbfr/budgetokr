@@ -130,7 +130,7 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
-        {nav.map((item, i) => {
+        {user && nav.map((item, i) => {
           // Esconde itens masterOnly para usuários de dept
           if (item.masterOnly && !isMaster) return null
 
