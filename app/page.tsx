@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { BarChart3, TrendingDown, TrendingUp, Upload, Target, AlertCircle, Database, FileText } from 'lucide-react'
+import { BarChart3, TrendingDown, TrendingUp, Upload, Target, AlertCircle, Database, FileText, Calendar } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatPct, formatPeriodo, cn } from '@/lib/utils'
@@ -34,6 +34,7 @@ export default function Dashboard() {
   const [medidas, setMedidas] = useState<Array<{ id: number; nome: string; cor: string }>>([])
   const [loading, setLoading] = useState(true)
   const [empty,   setEmpty]   = useState(false)
+  const [selYear, setSelYear] = useState<string>('')
 
   useEffect(() => {
     Promise.all([
@@ -85,9 +86,16 @@ export default function Dashboard() {
     </div>
   )
 
+  // Available years from data
+  const availableYears = [...new Set(analise.map(r => r.periodo?.substring(0, 4)).filter(Boolean))].sort()
+
+  // Filter by selected year
+  const filtered = selYear
+    ? analise.filter(r => r.periodo?.startsWith(selYear))
+    : analise
+
   // Aggregate by department — usa nome_departamento como chave de exibição
-  const byDept = analise.reduce<Record<string, { budget: number; razao: number; codigo: string }>>((acc, r) => {
-    // chave de exibição: nome do departamento (fallback para código)
+  const byDept = filtered.reduce<Record<string, { budget: number; razao: number; codigo: string }>>((acc, r) => {
     const label = (r.nome_departamento && r.nome_departamento.trim())
       ? r.nome_departamento.trim()
       : (r.departamento || '—')
@@ -98,7 +106,7 @@ export default function Dashboard() {
   }, {})
 
   // Aggregate by period
-  const byPeriod = analise.reduce<Record<string, { budget: number; razao: number }>>((acc, r) => {
+  const byPeriod = filtered.reduce<Record<string, { budget: number; razao: number }>>((acc, r) => {
     if (!acc[r.periodo]) acc[r.periodo] = { budget: 0, razao: 0 }
     acc[r.periodo].budget += r.budget
     acc[r.periodo].razao  += r.razao
@@ -124,17 +132,39 @@ export default function Dashboard() {
     .sort((a, b) => b.variacao - a.variacao)
     .slice(0, 10)
 
-  const variacao    = (summary?.total_razao ?? 0) - (summary?.total_budget ?? 0)
-  const variacaoPct = summary?.total_budget ? (variacao / Math.abs(summary.total_budget)) * 100 : 0
+  // Recompute totals from filtered data
+  const filteredBudget = filtered.reduce((s, r) => s + r.budget, 0)
+  const filteredRazao = filtered.reduce((s, r) => s + r.razao, 0)
+  const useBudget = selYear ? filteredBudget : (summary?.total_budget ?? 0)
+  const useRazao = selYear ? filteredRazao : (summary?.total_razao ?? 0)
+  const variacao    = useRazao - useBudget
+  const variacaoPct = useBudget ? (variacao / Math.abs(useBudget)) * 100 : 0
 
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-500 text-sm mt-0.5">Visão consolidada Budget vs Razão</p>
+          <p className="text-gray-500 text-sm mt-0.5">Visão consolidada Budget vs Razão{selYear ? ` · ${selYear}` : ''}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {availableYears.length > 1 && (
+            <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-0.5">
+              <button
+                onClick={() => setSelYear('')}
+                className={cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                  !selYear ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+                Todos
+              </button>
+              {availableYears.map(y => (
+                <button key={y} onClick={() => setSelYear(y)}
+                  className={cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                    selYear === y ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+                  {y}
+                </button>
+              ))}
+            </div>
+          )}
           {medidas.length > 0 && (
             <Link href="/medidas"><Button variant="outline" size="sm"><Target size={13} /> {medidas.length} Medida{medidas.length !== 1 ? 's' : ''}</Button></Link>
           )}
@@ -144,8 +174,8 @@ export default function Dashboard() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <SCard title="Budget Total"   value={formatCurrency(summary?.total_budget ?? 0)} sub={`${summary?.linhas_budget.toLocaleString()} linhas`}   icon={<BarChart3 size={16} className="text-indigo-500" />}  bg="bg-indigo-50" />
-        <SCard title="Razão Total"    value={formatCurrency(summary?.total_razao  ?? 0)} sub={`${summary?.linhas_razao.toLocaleString()} linhas`}    icon={<TrendingUp size={16} className="text-emerald-500" />} bg="bg-emerald-50" />
+        <SCard title="Budget Total"   value={formatCurrency(useBudget)} sub={selYear ? selYear : `${summary?.linhas_budget.toLocaleString()} linhas`}   icon={<BarChart3 size={16} className="text-indigo-500" />}  bg="bg-indigo-50" />
+        <SCard title="Razão Total"    value={formatCurrency(useRazao)} sub={selYear ? selYear : `${summary?.linhas_razao.toLocaleString()} linhas`}    icon={<TrendingUp size={16} className="text-emerald-500" />} bg="bg-emerald-50" />
         <SCard title="Variação"       value={formatCurrency(variacao)}                    sub={formatPct(variacaoPct)}
           icon={variacao >= 0 ? <TrendingUp size={16} className="text-emerald-500" /> : <TrendingDown size={16} className="text-red-400" />}
           bg={variacao >= 0 ? 'bg-emerald-50' : 'bg-red-50'} highlight />
