@@ -488,6 +488,58 @@ export function getDRE(
   return db.prepare(sql).all(...params) as DRERow[]
 }
 
+export interface DREAccountRow {
+  dre: string
+  agrupamento_arvore: string
+  numero_conta_contabil: string
+  nome_conta_contabil: string
+  periodo: string
+  budget: number
+  razao: number
+}
+
+export function getDREByAccount(
+  periodos?: string[],
+  departamentos?: string[],
+  centros?: string[]
+): DREAccountRow[] {
+  const db = getDb()
+  const conditions: string[] = []
+  const params: unknown[] = []
+
+  if (periodos?.length) {
+    conditions.push(`strftime('%Y-%m', l.data_lancamento) IN (${periodos.map(() => '?').join(',')})`)
+    params.push(...periodos)
+  }
+  if (departamentos?.length) {
+    conditions.push(`cc.nome_departamento IN (${departamentos.map(() => '?').join(',')})`)
+    params.push(...departamentos)
+  }
+  if (centros?.length) {
+    conditions.push(`l.centro_custo IN (${centros.map(() => '?').join(',')})`)
+    params.push(...centros)
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+
+  const sql = `
+    SELECT
+      COALESCE(ca.dre, 'Sem classificação') as dre,
+      COALESCE(ca.agrupamento_arvore, '') as agrupamento_arvore,
+      l.numero_conta_contabil,
+      COALESCE(ca.nome_conta_contabil, l.nome_conta_contabil, '') as nome_conta_contabil,
+      strftime('%Y-%m', l.data_lancamento) as periodo,
+      SUM(CASE WHEN l.tipo = 'budget' THEN l.debito_credito ELSE 0 END) as budget,
+      SUM(CASE WHEN l.tipo = 'razao'  THEN l.debito_credito ELSE 0 END) as razao
+    ${STAR_SCHEMA_JOIN}
+    ${whereClause}
+    GROUP BY ca.dre, ca.agrupamento_arvore, l.numero_conta_contabil, periodo
+    ORDER BY ca.dre, ca.agrupamento_arvore, l.numero_conta_contabil, periodo
+  `
+
+  return db.prepare(sql).all(...params) as DREAccountRow[]
+}
+
 export function getDREHierarchy(): Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }> {
   const db = getDb()
   return db.prepare(`

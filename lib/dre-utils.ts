@@ -13,6 +13,7 @@ export interface TreeNode {
   isSubtotal?: boolean
   isSeparator?: boolean
   isBold?: boolean
+  isAccount?: boolean
   depth: number
   ordem: number
   budget: number
@@ -23,6 +24,70 @@ export interface TreeNode {
   byPeriod: Record<string, { budget: number; razao: number }>
   dre?: string
   agrupamento?: string
+  conta?: string
+}
+
+export interface DREAccountRow {
+  dre: string
+  agrupamento_arvore: string
+  numero_conta_contabil: string
+  nome_conta_contabil: string
+  periodo: string
+  budget: number
+  razao: number
+}
+
+/** Build account-level children grouped by dre||agrupamento */
+function buildAccountChildren(
+  accountData: DREAccountRow[],
+  sinal: number = 1
+): Map<string, TreeNode[]> {
+  // Group by dre||agrupamento → conta
+  const grouped = new Map<string, Map<string, {
+    nome: string; budget: number; razao: number
+    byPeriod: Record<string, { budget: number; razao: number }>
+  }>>()
+
+  for (const row of accountData) {
+    const key = `${row.dre}||${row.agrupamento_arvore}`
+    if (!grouped.has(key)) grouped.set(key, new Map())
+    const contaMap = grouped.get(key)!
+    const num = row.numero_conta_contabil || ''
+    if (!num) continue
+    if (!contaMap.has(num)) contaMap.set(num, { nome: row.nome_conta_contabil || '', budget: 0, razao: 0, byPeriod: {} })
+    const c = contaMap.get(num)!
+    c.budget += row.budget
+    c.razao += row.razao
+    if (row.periodo) {
+      if (!c.byPeriod[row.periodo]) c.byPeriod[row.periodo] = { budget: 0, razao: 0 }
+      c.byPeriod[row.periodo].budget += row.budget
+      c.byPeriod[row.periodo].razao += row.razao
+    }
+  }
+
+  const result = new Map<string, TreeNode[]>()
+  for (const [key, contaMap] of grouped) {
+    const children: TreeNode[] = []
+    for (const [num, c] of contaMap) {
+      const b = c.budget * sinal
+      const r = c.razao * sinal
+      const v = r - b
+      const byP: Record<string, { budget: number; razao: number }> = {}
+      for (const [p, pv] of Object.entries(c.byPeriod)) {
+        byP[p] = { budget: pv.budget * sinal, razao: pv.razao * sinal }
+      }
+      children.push({
+        name: c.nome ? `${num} — ${c.nome}` : num,
+        isGroup: false, isAccount: true, depth: 2, ordem: 999,
+        budget: b, razao: r, variacao: v,
+        variacao_pct: b ? (v / Math.abs(b)) * 100 : 0,
+        children: [], byPeriod: byP, conta: num,
+      })
+    }
+    children.sort((a, b) => (a.conta ?? '').localeCompare(b.conta ?? ''))
+    result.set(key, children)
+  }
+  return result
 }
 
 // ── Quarter utilities ─────────────────────────────────────────────────────────
@@ -71,7 +136,8 @@ export interface DRERow {
 export function buildTreeFromLinhas(
   data: DRERow[],
   hierarchy: Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }>,
-  dreLinhas: DRELinha[]
+  dreLinhas: DRELinha[],
+  accountData?: DREAccountRow[]
 ): TreeNode[] {
   const lineAgg = new Map<string, {
     budget: number; razao: number
@@ -160,6 +226,7 @@ export function buildTreeFromLinhas(
       }
       const childSet = hierMap.get(linha.nome) ?? new Set<string>()
       const children: TreeNode[] = []
+      const acctMap = accountData ? buildAccountChildren(accountData, linha.sinal) : new Map()
       for (const child of childSet) {
         const cAgg = lineAgg.get(`${linha.nome}||${child}`)
         if (!cAgg) continue
@@ -170,11 +237,13 @@ export function buildTreeFromLinhas(
           cByP[p] = { budget: v.budget * linha.sinal, razao: v.razao * linha.sinal }
         }
         const cv = cr - cb
+        // Get account-level children for this agrupamento
+        const acctChildren = acctMap.get(`${linha.nome}||${child}`) ?? []
         children.push({
-          name: child, isGroup: false, depth: 1, ordem: 999,
+          name: child, isGroup: acctChildren.length > 0, depth: 1, ordem: 999,
           budget: cb, razao: cr, variacao: cv,
           variacao_pct: cb ? (cv / Math.abs(cb)) * 100 : 0,
-          children: [], byPeriod: cByP, dre: linha.nome, agrupamento: child,
+          children: acctChildren, byPeriod: cByP, dre: linha.nome, agrupamento: child,
         })
       }
       const var_ = razao - budget
@@ -195,7 +264,8 @@ export function buildTreeFromLinhas(
 
 export function buildTree(
   data: DRERow[],
-  hierarchy: Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }>
+  hierarchy: Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }>,
+  accountData?: DREAccountRow[]
 ): TreeNode[] {
   const groupMap = new Map<string, { ordem: number; children: Set<string> }>()
   for (const h of hierarchy) {
@@ -233,6 +303,7 @@ export function buildTree(
     let groupBudget = 0, groupRazao = 0
     const groupByPeriod: Record<string, { budget: number; razao: number }> = {}
 
+    const acctMap = accountData ? buildAccountChildren(accountData) : new Map()
     for (const child of childSet) {
       const key = `${parent}||${child}`
       usedKeys.add(key)
@@ -245,11 +316,12 @@ export function buildTree(
         groupByPeriod[p].razao  += vals.razao
       }
       const variacao = agg.razao - agg.budget
+      const acctChildren = acctMap.get(key) ?? []
       children.push({
-        name: child, isGroup: false, depth: 1, ordem: agg.ordem_dre,
+        name: child, isGroup: acctChildren.length > 0, depth: 1, ordem: agg.ordem_dre,
         budget: agg.budget, razao: agg.razao, variacao,
         variacao_pct: agg.budget ? (variacao / Math.abs(agg.budget)) * 100 : 0,
-        children: [], byPeriod: agg.byPeriod, dre: parent, agrupamento: child,
+        children: acctChildren, byPeriod: agg.byPeriod, dre: parent, agrupamento: child,
       })
     }
 
@@ -297,7 +369,13 @@ export function flattenTree(tree: TreeNode[], expanded: Set<string>): TreeNode[]
   for (const node of tree) {
     result.push(node)
     if (node.isGroup && expanded.has(node.name)) {
-      for (const child of node.children) result.push(child)
+      for (const child of node.children) {
+        result.push(child)
+        // 3rd level: account-level children under agrupamento
+        if (child.isGroup && child.children.length > 0 && expanded.has(child.agrupamento || child.name)) {
+          for (const acct of child.children) result.push(acct)
+        }
+      }
     }
   }
   return result

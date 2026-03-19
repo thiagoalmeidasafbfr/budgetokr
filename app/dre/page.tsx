@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
 import { toQuarterLabel, groupByQuarter, sortQuarterLabels, buildTree, buildTreeFromLinhas, flattenTree } from '@/lib/dre-utils'
-import type { DRERow, TreeNode, DRELinha } from '@/lib/dre-utils'
+import type { DRERow, DREAccountRow, TreeNode, DRELinha } from '@/lib/dre-utils'
 import dynamic from 'next/dynamic'
 import type { ContextMenuState } from '@/components/DreDetalhamentoModal'
 
@@ -20,6 +20,7 @@ const WaterfallChart = dynamic(() => import('@/components/DreWaterfallChart'), {
 
 export default function DREPage() {
   const [rawData,       setRawData]       = useState<DRERow[]>([])
+  const [accountData,   setAccountData]   = useState<DREAccountRow[]>([])
   const [hierarchy,     setHierarchy]     = useState<Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }>>([])
   const [dreLinhas,     setDreLinhas]     = useState<DRELinha[]>([])
   const [departamentos, setDepartamentos] = useState<string[]>([])
@@ -99,8 +100,14 @@ export default function DREPage() {
     if (depts.length)   params.set('departamentos', depts.join(','))
     if (prds.length)    params.set('periodos', prds.join(','))
     if (centros.length) params.set('centros', centros.join(','))
-    const res = await fetch(`/api/dre?${params}`)
+    const acctParams = new URLSearchParams(params)
+    acctParams.set('type', 'accounts')
+    const [res, acctRes] = await Promise.all([
+      fetch(`/api/dre?${params}`),
+      fetch(`/api/dre?${acctParams}`),
+    ])
     if (res.ok) setRawData(await res.json())
+    if (acctRes.ok) setAccountData(await acctRes.json())
     setLoading(false)
   }, [])
 
@@ -116,7 +123,11 @@ export default function DREPage() {
   }
 
   const expandAll = () => {
-    const groups = new Set(hierarchy.map(h => h.dre).filter(Boolean))
+    const groups = new Set<string>()
+    // Add DRE group names (level 1)
+    for (const h of hierarchy) if (h.dre) groups.add(h.dre)
+    // Add agrupamento names (level 2) for 3rd level expansion
+    for (const h of hierarchy) if (h.agrupamento_arvore) groups.add(h.agrupamento_arvore)
     setExpanded(groups)
   }
   const collapseAll = () => setExpanded(new Set())
@@ -124,8 +135,8 @@ export default function DREPage() {
   // Build tree from raw data
   // Se há estrutura dre_linhas cadastrada, usa ela para definir ordem, subtotais e sinais
   const tree = dreLinhas.length > 0
-    ? buildTreeFromLinhas(rawData, hierarchy, dreLinhas)
-    : buildTree(rawData, hierarchy)
+    ? buildTreeFromLinhas(rawData, hierarchy, dreLinhas, accountData)
+    : buildTree(rawData, hierarchy, accountData)
 
   // Get all periods from data
   const dataPeriods = [...new Set(rawData.map(r => r.periodo).filter(Boolean))].sort()
@@ -333,12 +344,16 @@ export default function DREPage() {
                             ? 'bg-gray-50/80 hover:bg-gray-100/80'
                             : 'border-gray-50 hover:bg-gray-50',
                         )}>
-                        <td className={cn('px-5 py-2.5', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-700')}
+                        <td className={cn('px-5 py-2.5',
+                          row.isSubtotal ? 'font-bold text-gray-900'
+                            : row.isGroup ? 'font-medium text-gray-800'
+                            : row.isAccount ? 'text-gray-500 text-xs'
+                            : 'text-gray-700')}
                           style={{ paddingLeft: `${20 + row.depth * 24}px` }}>
                           <div className="flex items-center gap-1.5">
                             {row.isGroup && !row.isSubtotal ? (
-                              <button onClick={() => toggleExpand(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
-                                {expanded.has(row.name)
+                              <button onClick={() => toggleExpand(row.agrupamento || row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                {expanded.has(row.agrupamento || row.name)
                                   ? <ChevronDown size={14} className="text-gray-400" />
                                   : <ChevronRight size={14} className="text-gray-400" />}
                               </button>
@@ -428,8 +443,8 @@ export default function DREPage() {
                               style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
                               <div className="flex items-center gap-1">
                                 {row.isGroup && !row.isSubtotal ? (
-                                  <button onClick={() => toggleExpand(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
-                                    {expanded.has(row.name)
+                                  <button onClick={() => toggleExpand(row.agrupamento || row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                    {expanded.has(row.agrupamento || row.name)
                                       ? <ChevronDown size={13} className="text-gray-400" />
                                       : <ChevronRight size={13} className="text-gray-400" />}
                                   </button>
@@ -523,8 +538,8 @@ export default function DREPage() {
                             style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
                             <div className="flex items-center gap-1">
                               {row.isGroup && !row.isSubtotal ? (
-                                <button onClick={() => toggleExpand(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
-                                  {expanded.has(row.name)
+                                <button onClick={() => toggleExpand(row.agrupamento || row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                  {expanded.has(row.agrupamento || row.name)
                                     ? <ChevronDown size={13} className="text-gray-400" />
                                     : <ChevronRight size={13} className="text-gray-400" />}
                                 </button>
@@ -606,8 +621,8 @@ export default function DREPage() {
                               style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
                               <div className="flex items-center gap-1">
                                 {row.isGroup && !row.isSubtotal ? (
-                                  <button onClick={() => toggleExpand(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
-                                    {expanded.has(row.name)
+                                  <button onClick={() => toggleExpand(row.agrupamento || row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                    {expanded.has(row.agrupamento || row.name)
                                       ? <ChevronDown size={13} className="text-gray-400" />
                                       : <ChevronRight size={13} className="text-gray-400" />}
                                   </button>
@@ -767,8 +782,8 @@ export default function DREPage() {
                                   style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
                                   <div className="flex items-center gap-1">
                                     {row.isGroup && !row.isSubtotal ? (
-                                      <button onClick={() => toggleExpand(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
-                                        {expanded.has(row.name)
+                                      <button onClick={() => toggleExpand(row.agrupamento || row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                        {expanded.has(row.agrupamento || row.name)
                                           ? <ChevronDown size={13} className="text-gray-400" />
                                           : <ChevronRight size={13} className="text-gray-400" />}
                                       </button>

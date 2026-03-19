@@ -1,6 +1,6 @@
 'use client'
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { ChevronRight, ChevronDown, Filter, X, Download, RefreshCw, ChevronsUpDown, Pencil } from 'lucide-react'
+import { ChevronRight, ChevronDown, Filter, X, Download, Upload, RefreshCw, ChevronsUpDown, Pencil } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -38,7 +38,10 @@ export default function PlanoContasPage() {
   const [search, setSearch]         = useState('')
   const [editingNumero, setEditingNumero] = useState<string | null>(null)
   const [editingName, setEditingName]     = useState('')
+  const [importing, setImporting]         = useState(false)
+  const [importMsg, setImportMsg]         = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
   const editRef = useRef<HTMLInputElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const loadData = useCallback(async (depts: string[], periods: string[]) => {
     setLoading(true)
@@ -169,6 +172,87 @@ export default function PlanoContasPage() {
     a.href = url; a.download = `plano-contas-${Date.now()}.csv`; a.click()
   }
 
+  // CSV import
+  const handleImportCSV = async (file: File) => {
+    setImporting(true)
+    setImportMsg(null)
+    try {
+      const text = await file.text()
+      const lines = text.split(/\r?\n/).filter(l => l.trim())
+      if (lines.length < 2) {
+        setImportMsg({ type: 'err', text: 'CSV vazio ou sem dados.' })
+        setImporting(false)
+        return
+      }
+
+      // Parse header to find column indices
+      const headerLine = lines[0]
+      const sep = headerLine.includes(';') ? ';' : ','
+      const parseCSVLine = (line: string) => {
+        const result: string[] = []
+        let current = ''
+        let inQuotes = false
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i]
+          if (ch === '"') {
+            if (inQuotes && line[i + 1] === '"') { current += '"'; i++ }
+            else inQuotes = !inQuotes
+          } else if (ch === sep && !inQuotes) {
+            result.push(current.trim())
+            current = ''
+          } else {
+            current += ch
+          }
+        }
+        result.push(current.trim())
+        return result
+      }
+
+      const headers = parseCSVLine(headerLine).map(h => h.toLowerCase().replace(/['"]/g, ''))
+      const iNumero = headers.findIndex(h => h.includes('número') || h.includes('numero'))
+      const iNome = headers.findIndex(h => h.includes('nome'))
+      const iAgrup = headers.findIndex(h => h.includes('agrupamento'))
+      const iDre = headers.findIndex(h => h.includes('dre'))
+
+      if (iNumero === -1) {
+        setImportMsg({ type: 'err', text: 'Coluna "Número" não encontrada no CSV.' })
+        setImporting(false)
+        return
+      }
+
+      const rows: Array<{ numero: string; nome: string; agrupamento?: string; dre?: string }> = []
+      for (let i = 1; i < lines.length; i++) {
+        const cols = parseCSVLine(lines[i])
+        const numero = cols[iNumero]?.replace(/['"]/g, '')
+        const nome = iNome >= 0 ? cols[iNome]?.replace(/['"]/g, '') : ''
+        if (!numero) continue
+        rows.push({
+          numero,
+          nome: nome || '',
+          agrupamento: iAgrup >= 0 ? cols[iAgrup]?.replace(/['"]/g, '') : '',
+          dre: iDre >= 0 ? cols[iDre]?.replace(/['"]/g, '') : '',
+        })
+      }
+
+      const res = await fetch('/api/plano-contas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows }),
+      })
+      const result = await res.json()
+      if (res.ok) {
+        setImportMsg({ type: 'ok', text: `${result.updated} contas importadas/atualizadas.` })
+        loadData(selDepts, selPeriods) // reload tree
+      } else {
+        setImportMsg({ type: 'err', text: result.error || 'Erro na importação.' })
+      }
+    } catch (e) {
+      setImportMsg({ type: 'err', text: `Erro: ${e}` })
+    }
+    setImporting(false)
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -184,10 +268,26 @@ export default function PlanoContasPage() {
             <RefreshCw size={13} /> Atualizar
           </Button>
           <Button variant="outline" size="sm" onClick={exportCSV}>
-            <Download size={13} /> CSV
+            <Download size={13} /> Exportar CSV
           </Button>
+          <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={importing}>
+            <Upload size={13} /> {importing ? 'Importando...' : 'Importar CSV'}
+          </Button>
+          <input ref={fileRef} type="file" accept=".csv" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleImportCSV(f) }} />
         </div>
       </div>
+
+      {/* Import feedback */}
+      {importMsg && (
+        <div className={cn(
+          'flex items-center gap-2 px-4 py-2 rounded-lg text-sm',
+          importMsg.type === 'ok' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'
+        )}>
+          <span>{importMsg.text}</span>
+          <button onClick={() => setImportMsg(null)} className="ml-auto"><X size={14} /></button>
+        </div>
+      )}
 
       <div className="flex gap-4">
         {/* Sidebar filters */}

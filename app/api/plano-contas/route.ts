@@ -18,15 +18,51 @@ interface LancamentoAgg {
 }
 
 /**
- * GET /api/plano-contas
+ * POST /api/plano-contas/import
  *
- * Retorna a árvore hierárquica do plano de contas com valores de budget/razão.
- *
- * Query params:
- * - tipo: 'budget' | 'razao' | 'ambos' (default: 'ambos')
- * - periodos: comma-separated YYYY-MM (optional filter)
- * - departamentos: comma-separated names (optional filter)
+ * Bulk import/update account names from CSV.
+ * Expects CSV with semicolon separator and columns: Nível;Número;Nome;Agrupamento;DRE;...
+ * Only updates accounts where Nome is non-empty.
  */
+export async function POST(req: NextRequest) {
+  try {
+    const db = getDb()
+    const body = await req.json()
+    const { rows } = body as { rows: Array<{ numero: string; nome: string; agrupamento?: string; dre?: string }> }
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return NextResponse.json({ error: 'Nenhuma linha para importar' }, { status: 400 })
+    }
+
+    const upsert = db.prepare(`
+      INSERT INTO contas_contabeis (numero_conta_contabil, nome_conta_contabil, agrupamento_arvore, dre, nivel)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(numero_conta_contabil)
+      DO UPDATE SET
+        nome_conta_contabil = CASE WHEN excluded.nome_conta_contabil != '' THEN excluded.nome_conta_contabil ELSE contas_contabeis.nome_conta_contabil END,
+        agrupamento_arvore = CASE WHEN excluded.agrupamento_arvore != '' THEN excluded.agrupamento_arvore ELSE contas_contabeis.agrupamento_arvore END,
+        dre = CASE WHEN excluded.dre != '' THEN excluded.dre ELSE contas_contabeis.dre END
+    `)
+
+    const tx = db.transaction(() => {
+      let updated = 0
+      for (const row of rows) {
+        if (!row.numero) continue
+        const nivel = row.numero.split('.').length
+        upsert.run(row.numero, row.nome || '', row.agrupamento || '', row.dre || '', nivel)
+        updated++
+      }
+      return updated
+    })
+
+    const updated = tx()
+    return NextResponse.json({ ok: true, updated })
+  } catch (e) {
+    console.error('[plano-contas POST]', e)
+    return NextResponse.json({ error: String(e) }, { status: 500 })
+  }
+}
+
 /**
  * PUT /api/plano-contas
  *
