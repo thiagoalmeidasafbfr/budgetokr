@@ -1,6 +1,6 @@
 'use client'
-import React, { useState, useEffect, useCallback } from 'react'
-import { Plus, Settings, Edit2, Trash2, Save, X, BarChart3, TrendingUp, TrendingDown, Target, ExternalLink, Download, CheckSquare, Square } from 'lucide-react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { Plus, Settings, Edit2, Trash2, Save, X, BarChart3, TrendingUp, TrendingDown, Target, ExternalLink, Download, CheckSquare, Square, ArrowUpDown, Columns3, ChevronRight, ChevronDown } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
@@ -8,6 +8,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Legend, LineChart, Line, LabelList,
 } from 'recharts'
+import { buildTree, buildTreeFromLinhas, flattenTree, type DRERow, type DRELinha, type TreeNode } from '@/lib/dre-utils'
 import type { KpiManual, KpiValor } from '@/lib/query'
 
 const DEFAULT_COLORS = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6']
@@ -77,50 +78,107 @@ interface DetalhamentoLinha {
 
 interface DetModalState {
   dre: string
+  agrupamento?: string
   departamento: string
   periodos: string[]
+  tipo: 'budget' | 'razao' | 'ambos'
+}
+
+type DetColKey = 'data' | 'tipo' | 'centro' | 'dre' | 'agrupamento' | 'conta' | 'valor' | 'contrapartida' | 'obs'
+const DET_COLS: { key: DetColKey; label: string; align?: 'right' }[] = [
+  { key: 'data',          label: 'Data Lançamento' },
+  { key: 'tipo',          label: 'Tipo' },
+  { key: 'centro',        label: 'Centro de Custo' },
+  { key: 'dre',           label: 'DRE Gerencial' },
+  { key: 'agrupamento',   label: 'Agrupamento' },
+  { key: 'conta',         label: 'Conta Contábil' },
+  { key: 'valor',         label: 'Valor', align: 'right' },
+  { key: 'contrapartida', label: 'Conta Contrapartida' },
+  { key: 'obs',           label: 'Observação' },
+]
+function detColValue(r: DetalhamentoLinha, key: DetColKey): string | number {
+  switch (key) {
+    case 'data':          return r.data_lancamento
+    case 'tipo':          return r.tipo
+    case 'centro':        return `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}`
+    case 'dre':           return r.dre
+    case 'agrupamento':   return r.agrupamento_arvore
+    case 'conta':         return `${r.numero_conta_contabil} — ${r.nome_conta_contabil}`
+    case 'valor':         return r.debito_credito
+    case 'contrapartida': return r.nome_conta_contrapartida
+    case 'obs':           return r.observacao ?? ''
+  }
 }
 
 function DetalhamentoModal({ ctx, onClose }: { ctx: DetModalState; onClose: () => void }) {
-  const [rows,    setRows]    = useState<DetalhamentoLinha[]>([])
-  const [loading, setLoading] = useState(true)
+  const [rows,        setRows]        = useState<DetalhamentoLinha[]>([])
+  const [loading,     setLoading]     = useState(true)
+  const [textFilter,  setTextFilter]  = useState('')
+  const [sortCol,     setSortCol]     = useState<DetColKey>('data')
+  const [sortDir,     setSortDir]     = useState<'asc' | 'desc'>('asc')
+  const [visibleCols, setVisibleCols] = useState<Set<DetColKey>>(new Set(DET_COLS.map(c => c.key)))
+  const [showCols,    setShowCols]    = useState(false)
+  const colsRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showCols) return
+    const h = (e: MouseEvent) => { if (colsRef.current && !colsRef.current.contains(e.target as Node)) setShowCols(false) }
+    window.addEventListener('mousedown', h)
+    return () => window.removeEventListener('mousedown', h)
+  }, [showCols])
 
   useEffect(() => {
     const p = new URLSearchParams()
-    if (ctx.dre)           p.set('dre',          ctx.dre)
-    if (ctx.departamento)  p.set('departamento', ctx.departamento)
-    if (ctx.periodos.length) p.set('periodos',   ctx.periodos.join(','))
+    if (ctx.dre)              p.set('dre',          ctx.dre)
+    if (ctx.agrupamento)      p.set('agrupamento',  ctx.agrupamento)
+    if (ctx.departamento)     p.set('departamento', ctx.departamento)
+    if (ctx.periodos.length)  p.set('periodos',     ctx.periodos.join(','))
+    if (ctx.tipo !== 'ambos') p.set('tipo',         ctx.tipo)
     fetch(`/api/dre/detalhamento?${p}`)
       .then(r => r.json())
       .then(data => { setRows(data); setLoading(false) })
   }, [ctx])
 
-  const total = rows.reduce((s, r) => s + r.debito_credito, 0)
+  const title = [ctx.dre, ctx.agrupamento !== ctx.dre ? ctx.agrupamento : null,
+    ctx.tipo !== 'ambos' ? `· ${ctx.tipo === 'budget' ? 'Budget' : 'Realizado'}` : null,
+  ].filter(Boolean).join(' › ')
+
+  const displayed = rows
+    .filter(r => {
+      if (!textFilter) return true
+      const q = textFilter.toLowerCase()
+      return DET_COLS.some(c => String(detColValue(r, c.key)).toLowerCase().includes(q))
+    })
+    .sort((a, b) => {
+      const va = detColValue(a, sortCol), vb = detColValue(b, sortCol)
+      const cmp = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb))
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+
+  const total = displayed.reduce((s, r) => s + r.debito_credito, 0)
+  const toggleSort = (key: DetColKey) => {
+    if (sortCol === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(key); setSortDir('asc') }
+  }
+  const visibleDefs = DET_COLS.filter(c => visibleCols.has(c.key))
 
   const exportCSV = () => {
-    const header = ['Data', 'Tipo', 'Centro de Custo', 'DRE', 'Agrupamento', 'Conta Contábil', 'Valor', 'Conta Contrapartida', 'Observação']
-    const csvRows = rows.map(r => [
-      r.data_lancamento, r.tipo,
-      `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}`,
-      r.dre, r.agrupamento_arvore,
-      `${r.numero_conta_contabil} — ${r.nome_conta_contabil}`,
-      r.debito_credito, r.nome_conta_contrapartida, r.observacao,
-    ])
-    const csv = [header, ...csvRows].map(row => row.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')).join('\n')
+    const header = DET_COLS.map(c => c.label)
+    const csvRows = rows.map(r => DET_COLS.map(c => String(detColValue(r, c.key) ?? '')))
+    const csv = [header, ...csvRows].map(row => row.map(v => `"${v.replace(/"/g, '""')}"`).join(';')).join('\n')
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
-    const url  = URL.createObjectURL(blob)
-    const a    = document.createElement('a')
+    const url = URL.createObjectURL(blob); const a = document.createElement('a')
     a.href = url; a.download = `dre-lancamentos-${Date.now()}.csv`; a.click()
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-10 px-4 overflow-auto"
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-6 px-4 overflow-auto"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] max-h-[92vh] flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] max-h-[94vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <div>
             <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">DRE — Lançamentos</p>
-            <h2 className="text-base font-bold text-gray-900 mt-0.5">{ctx.dre}</h2>
+            <h2 className="text-base font-bold text-gray-900 mt-0.5">{title || ctx.dre}</h2>
           </div>
           <div className="flex items-center gap-2">
             {!loading && rows.length > 0 && (
@@ -134,6 +192,32 @@ function DetalhamentoModal({ ctx, onClose }: { ctx: DetModalState; onClose: () =
             </button>
           </div>
         </div>
+        {!loading && (
+          <div className="flex items-center gap-2 px-5 py-2 border-b bg-gray-50">
+            <input type="text" value={textFilter} onChange={e => setTextFilter(e.target.value)}
+              placeholder="Buscar em todos os campos…"
+              className="flex-1 text-xs border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white" />
+            <div className="relative" ref={colsRef}>
+              <button onClick={() => setShowCols(v => !v)}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-400 hover:text-indigo-700 text-gray-600 transition-colors">
+                <Columns3 size={13} /> Colunas
+              </button>
+              {showCols && (
+                <div className="absolute right-0 top-full mt-1 z-10 bg-white border border-gray-200 rounded-xl shadow-xl p-3 min-w-[180px] space-y-1">
+                  {DET_COLS.map(c => (
+                    <label key={c.key} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                      <input type="checkbox" checked={visibleCols.has(c.key)}
+                        onChange={e => setVisibleCols(prev => { const n = new Set(prev); e.target.checked ? n.add(c.key) : n.delete(c.key); return n })}
+                        className="w-3 h-3 accent-indigo-600" />
+                      <span className="text-xs text-gray-700">{c.label}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            <span className="text-xs text-gray-400 whitespace-nowrap">{displayed.length} de {rows.length} lançamentos</span>
+          </div>
+        )}
         {loading ? (
           <div className="flex-1 flex items-center justify-center p-10">
             <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
@@ -143,40 +227,36 @@ function DetalhamentoModal({ ctx, onClose }: { ctx: DetModalState; onClose: () =
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-gray-700 text-white">
                 <tr>
-                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Data Lançamento</th>
-                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Tipo</th>
-                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Centro de Custo</th>
-                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">DRE Gerencial</th>
-                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Agrupamento</th>
-                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Conta Contábil</th>
-                  <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Valor</th>
-                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Observação</th>
+                  {visibleDefs.map(c => (
+                    <th key={c.key} onClick={() => toggleSort(c.key)}
+                      className={cn('px-3 py-2 font-medium whitespace-nowrap cursor-pointer select-none hover:bg-gray-600', c.align === 'right' ? 'text-right' : 'text-left')}>
+                      <span className="inline-flex items-center gap-1">
+                        {c.label}
+                        <ArrowUpDown size={10} className={cn('opacity-40', sortCol === c.key && 'opacity-100 text-indigo-300')} />
+                        {sortCol === c.key && <span className="text-indigo-300 text-[9px]">{sortDir === 'asc' ? '▲' : '▼'}</span>}
+                      </span>
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
+                {displayed.map((r, i) => (
                   <tr key={r.id} className={cn('border-b border-gray-100', i % 2 === 0 ? 'bg-white' : 'bg-gray-50/60')}>
-                    <td className="px-3 py-1.5 whitespace-nowrap font-mono">{r.data_lancamento}</td>
-                    <td className="px-3 py-1.5">
-                      <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium',
-                        r.tipo === 'budget' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700')}>
-                        {r.tipo === 'budget' ? 'Budget' : 'Real'}
-                      </span>
-                    </td>
-                    <td className="px-3 py-1.5 whitespace-nowrap">{r.centro_custo}{r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap">{r.dre}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap">{r.agrupamento_arvore}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap">{r.numero_conta_contabil} — {r.nome_conta_contabil}</td>
-                    <td className={cn('px-3 py-1.5 text-right whitespace-nowrap font-semibold', r.debito_credito < 0 ? 'text-red-600' : 'text-gray-800')}>
-                      {formatCurrency(r.debito_credito)}
-                    </td>
-                    <td className="px-3 py-1.5 max-w-xs truncate text-gray-500">{r.observacao}</td>
+                    {visibleCols.has('data')          && <td className="px-3 py-1.5 whitespace-nowrap font-mono">{r.data_lancamento}</td>}
+                    {visibleCols.has('tipo')          && <td className="px-3 py-1.5"><span className={cn('text-xs px-1.5 py-0.5 rounded font-medium', r.tipo === 'budget' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700')}>{r.tipo === 'budget' ? 'Budget' : 'Real'}</span></td>}
+                    {visibleCols.has('centro')        && <td className="px-3 py-1.5 whitespace-nowrap">{r.centro_custo}{r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}</td>}
+                    {visibleCols.has('dre')           && <td className="px-3 py-1.5 whitespace-nowrap">{r.dre}</td>}
+                    {visibleCols.has('agrupamento')   && <td className="px-3 py-1.5 whitespace-nowrap">{r.agrupamento_arvore}</td>}
+                    {visibleCols.has('conta')         && <td className="px-3 py-1.5 whitespace-nowrap">{r.numero_conta_contabil} — {r.nome_conta_contabil}</td>}
+                    {visibleCols.has('valor')         && <td className={cn('px-3 py-1.5 text-right whitespace-nowrap font-semibold', r.debito_credito < 0 ? 'text-red-600' : 'text-gray-800')}>{formatCurrency(r.debito_credito)}</td>}
+                    {visibleCols.has('contrapartida') && <td className="px-3 py-1.5 whitespace-nowrap text-gray-500">{r.nome_conta_contrapartida}</td>}
+                    {visibleCols.has('obs')           && <td className="px-3 py-1.5 max-w-xs truncate text-gray-500">{r.observacao}</td>}
                   </tr>
                 ))}
               </tbody>
               <tfoot className="sticky bottom-0 bg-gray-800 text-white font-bold">
                 <tr>
-                  <td colSpan={6} className="px-3 py-2 text-right">Total ({rows.length} lançamentos)</td>
+                  <td colSpan={visibleDefs.filter(c => c.key !== 'valor').length} className="px-3 py-2 text-right">Total ({displayed.length} lançamentos)</td>
                   <td className={cn('px-3 py-2 text-right', total < 0 ? 'text-red-300' : 'text-emerald-300')}>{formatCurrency(total)}</td>
                   <td />
                 </tr>
@@ -185,6 +265,82 @@ function DetalhamentoModal({ ctx, onClose }: { ctx: DetModalState; onClose: () =
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// ─── DRE Completa (tree view) ────────────────────────────────────────────────
+
+function DreFull({
+  rawData, hierarchy, dreLinhas, expanded, onToggle, loading, onDetalhamento,
+}: {
+  rawData: DRERow[]
+  hierarchy: Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }>
+  dreLinhas: DRELinha[]
+  expanded: Set<string>
+  onToggle: (name: string) => void
+  loading: boolean
+  onDetalhamento: (dre: string, agrupamento: string | undefined, tipo: 'budget' | 'razao' | 'ambos') => void
+}) {
+  if (loading) return (
+    <div className="flex items-center justify-center py-12">
+      <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
+  const tree = dreLinhas.length > 0
+    ? buildTreeFromLinhas(rawData, hierarchy, dreLinhas)
+    : buildTree(rawData, hierarchy)
+  const flat = flattenTree(tree, expanded)
+  if (!flat.length) return <div className="px-5 py-8 text-center text-sm text-gray-400">Sem dados para o período selecionado.</div>
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b bg-gray-50">
+            <th className="text-left px-5 py-3 font-medium text-gray-500">Demonstrativo Gerencial</th>
+            <th className="text-right px-5 py-3 font-medium text-gray-500 hover:text-indigo-600 cursor-pointer select-none">Orçado</th>
+            <th className="text-right px-5 py-3 font-medium text-gray-500 hover:text-emerald-600 cursor-pointer select-none">Realizado</th>
+            <th className="text-right px-5 py-3 font-medium text-gray-500">Variação</th>
+            <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          {flat.map((row, i) => (
+            <tr key={i} className={cn('border-b transition-colors group', row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50', row.isSeparator && 'border-t-2 border-gray-300')}>
+              <td className={cn('px-5 py-2.5', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-700')}
+                style={{ paddingLeft: `${20 + row.depth * 24}px` }}>
+                <div className="flex items-center gap-1.5">
+                  {row.isGroup && !row.isSubtotal ? (
+                    <button onClick={() => onToggle(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                      {expanded.has(row.name) ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
+                    </button>
+                  ) : <span className="w-5" />}
+                  <span onClick={() => !row.isSubtotal && onDetalhamento(row.dre ?? row.name, row.agrupamento, 'ambos')}
+                    className={cn(!row.isSubtotal && 'cursor-pointer hover:text-indigo-700')}>
+                    {row.name}
+                  </span>
+                </div>
+              </td>
+              <td className={cn('px-5 py-2.5 text-right cursor-pointer hover:text-indigo-700 hover:bg-indigo-50/60', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}
+                onClick={() => !row.isSubtotal && onDetalhamento(row.dre ?? row.name, row.agrupamento, 'budget')}>
+                {formatCurrency(row.budget)}
+              </td>
+              <td className={cn('px-5 py-2.5 text-right cursor-pointer hover:text-emerald-700 hover:bg-emerald-50/60', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}
+                onClick={() => !row.isSubtotal && onDetalhamento(row.dre ?? row.name, row.agrupamento, 'razao')}>
+                {formatCurrency(row.razao)}
+              </td>
+              <td className={cn('px-5 py-2.5 text-right font-semibold', colorForVariance(row.variacao))}>
+                {formatCurrency(row.variacao)}
+              </td>
+              <td className="px-5 py-2.5 text-right">
+                <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(row.variacao))}>
+                  {formatPct(row.variacao_pct)}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -979,6 +1135,12 @@ export default function DeptDashboardPage() {
   const [detModal,         setDetModal]         = useState<DetModalState | null>(null)
   const [userRole,         setUserRole]         = useState<'master' | 'dept' | null>(null)
   const [forcedDept,       setForcedDept]       = useState<string | null>(null)
+  const [dreView,          setDreView]          = useState<'resumida' | 'completa'>('resumida')
+  const [dreFullData,      setDreFullData]      = useState<DRERow[]>([])
+  const [dreHierarchy,     setDreHierarchy]     = useState<Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }>>([])
+  const [dreLinhas,        setDreLinhas]        = useState<DRELinha[]>([])
+  const [dreExpanded,      setDreExpanded]      = useState<Set<string>>(new Set())
+  const [dreFullLoading,   setDreFullLoading]   = useState(false)
 
   // Carrega usuário logado
   useEffect(() => {
@@ -1025,6 +1187,26 @@ export default function DeptDashboardPage() {
   useEffect(() => {
     loadDashboard(selDept, selPeriods)
   }, [selDept, selPeriods, loadDashboard])
+
+  const loadDreCompleta = useCallback(async (dept: string, periods: string[]) => {
+    if (!dept) return
+    setDreFullLoading(true)
+    const p = new URLSearchParams({ departamentos: dept })
+    if (periods.length) p.set('periodos', periods.join(','))
+    const [hier, linhas, data] = await Promise.all([
+      fetch('/api/dre?type=hierarchy').then(r => r.json()),
+      fetch('/api/dre?type=linhas').then(r => r.json()),
+      fetch(`/api/dre?${p}`).then(r => r.json()),
+    ])
+    setDreHierarchy(Array.isArray(hier) ? hier : [])
+    setDreLinhas(Array.isArray(linhas) ? linhas : [])
+    setDreFullData(Array.isArray(data) ? data : [])
+    setDreFullLoading(false)
+  }, [])
+
+  useEffect(() => {
+    if (dreView === 'completa' && selDept) loadDreCompleta(selDept, selPeriods)
+  }, [dreView, selDept, selPeriods, loadDreCompleta])
 
   // Load KPIs for selected department
   const loadKpis = useCallback(async (dept: string) => {
@@ -1271,20 +1453,30 @@ export default function DeptDashboardPage() {
               )}
             </div>
 
-            {/* Section 3 — DRE Resumida */}
+            {/* Section 3 — DRE */}
             {dreRows.length > 0 && (
               <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold text-gray-700">DRE Resumida</CardTitle>
+                <CardHeader className="pb-2 flex-row items-center justify-between">
+                  <CardTitle className="text-sm font-semibold text-gray-700">DRE por Departamento</CardTitle>
+                  <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
+                    {(['resumida', 'completa'] as const).map(v => (
+                      <button key={v} onClick={() => setDreView(v)}
+                        className={cn('px-3 py-1 rounded-md text-xs font-medium transition-colors capitalize',
+                          dreView === v ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700')}>
+                        {v === 'resumida' ? 'Resumida' : 'Completa'}
+                      </button>
+                    ))}
+                  </div>
                 </CardHeader>
                 <CardContent className="p-0">
+                  {dreView === 'resumida' ? (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b bg-gray-50">
                           <th className="text-left px-5 py-3 font-medium text-gray-500">DRE Gerencial</th>
-                          <th className="text-right px-5 py-3 font-medium text-gray-500">Budget</th>
-                          <th className="text-right px-5 py-3 font-medium text-gray-500">Realizado</th>
+                          <th className="text-right px-5 py-3 font-medium text-gray-500 cursor-pointer select-none hover:text-indigo-600">Budget</th>
+                          <th className="text-right px-5 py-3 font-medium text-gray-500 cursor-pointer select-none hover:text-indigo-600">Realizado</th>
                           <th className="text-right px-5 py-3 font-medium text-gray-500">Variação</th>
                           <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>
                           <th className="px-5 py-3" />
@@ -1292,11 +1484,19 @@ export default function DeptDashboardPage() {
                       </thead>
                       <tbody>
                         {dreRows.map((row, i) => (
-                          <tr key={i} className="border-b border-gray-50 hover:bg-indigo-50/40 transition-colors cursor-pointer group"
-                            onClick={() => setDetModal({ dre: row.dre, departamento: selDept, periodos: selPeriods })}>
-                            <td className="px-5 py-3 font-medium text-gray-900">{row.dre}</td>
-                            <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.budget)}</td>
-                            <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.razao)}</td>
+                          <tr key={i} className="border-b border-gray-50 hover:bg-indigo-50/40 transition-colors group">
+                            <td className="px-5 py-3 font-medium text-gray-900 cursor-pointer"
+                              onClick={() => setDetModal({ dre: row.dre, departamento: selDept, periodos: selPeriods, tipo: 'ambos' })}>
+                              {row.dre}
+                            </td>
+                            <td className="px-5 py-3 text-right text-gray-600 cursor-pointer hover:text-indigo-700 hover:bg-indigo-50/60"
+                              onClick={() => setDetModal({ dre: row.dre, departamento: selDept, periodos: selPeriods, tipo: 'budget' })}>
+                              {formatCurrency(row.budget)}
+                            </td>
+                            <td className="px-5 py-3 text-right text-gray-600 cursor-pointer hover:text-emerald-700 hover:bg-emerald-50/60"
+                              onClick={() => setDetModal({ dre: row.dre, departamento: selDept, periodos: selPeriods, tipo: 'razao' })}>
+                              {formatCurrency(row.razao)}
+                            </td>
                             <td className={cn('px-5 py-3 text-right font-semibold', colorForVariance(row.variacao))}>
                               {formatCurrency(row.variacao)}
                             </td>
@@ -1305,7 +1505,8 @@ export default function DeptDashboardPage() {
                                 {formatPct(row.variacao_pct)}
                               </span>
                             </td>
-                            <td className="px-3 py-3 text-gray-300 group-hover:text-indigo-400">
+                            <td className="px-3 py-3 text-gray-300 group-hover:text-indigo-400 cursor-pointer"
+                              onClick={() => setDetModal({ dre: row.dre, departamento: selDept, periodos: selPeriods, tipo: 'ambos' })}>
                               <ExternalLink size={13} />
                             </td>
                           </tr>
@@ -1329,6 +1530,19 @@ export default function DeptDashboardPage() {
                       </tfoot>
                     </table>
                   </div>
+                  ) : (
+                    /* DRE Completa */
+                    <DreFull
+                      rawData={dreFullData}
+                      hierarchy={dreHierarchy}
+                      dreLinhas={dreLinhas}
+                      expanded={dreExpanded}
+                      onToggle={name => setDreExpanded(prev => { const n = new Set(prev); n.has(name) ? n.delete(name) : n.add(name); return n })}
+                      loading={dreFullLoading}
+                      onDetalhamento={(dre, agrupamento, tipo) =>
+                        setDetModal({ dre, agrupamento, departamento: selDept, periodos: selPeriods, tipo })}
+                    />
+                  )}
                 </CardContent>
               </Card>
             )}

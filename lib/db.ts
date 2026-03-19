@@ -11,7 +11,7 @@ if (!fs.existsSync(DATA_DIR)) {
 
 let db: Database.Database | null = null;
 
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 export function getDb(): Database.Database {
   if (!db) {
@@ -90,6 +90,10 @@ function initSchema(db: Database.Database) {
         );
       `)
       try { db.exec(`ALTER TABLE medidas ADD COLUMN unidade TEXT DEFAULT ''`) } catch { /* ok */ }
+    }
+    // v7 → v8: departamentos field on medidas for dept assignment
+    if (version < 8) {
+      try { db.exec(`ALTER TABLE medidas ADD COLUMN departamentos TEXT DEFAULT '[]'`) } catch { /* ok */ }
     }
     if (!row) {
       db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(SCHEMA_VERSION);

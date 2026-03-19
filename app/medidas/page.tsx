@@ -41,6 +41,7 @@ interface MedidaForm {
   filtros: FilterCondition[]
   denominador_filtros: FilterCondition[]
   denominador_tipo_fonte: 'budget' | 'razao' | 'ambos'
+  departamentos: string[]
 }
 
 const emptyForm = (): MedidaForm => ({
@@ -49,6 +50,7 @@ const emptyForm = (): MedidaForm => ({
   filtros: [],
   denominador_filtros: [],
   denominador_tipo_fonte: 'ambos',
+  departamentos: [],
 })
 
 export default function MedidasPage() {
@@ -58,8 +60,12 @@ export default function MedidasPage() {
   const [distinctVals, setDistinctVals] = useState<Record<string, string[]>>({})
   const [suggestions,  setSuggestions]  = useState<string | null>(null) // "num-i" or "den-i"
   const [loading,      setLoading]      = useState(false)
+  const [allDepts,     setAllDepts]     = useState<string[]>([])
 
   useEffect(() => { loadMedidas() }, [])
+  useEffect(() => {
+    fetch('/api/analise?type=distinct&col=nome_departamento').then(r => r.json()).then(d => setAllDepts(Array.isArray(d) ? d : []))
+  }, [])
 
   const loadMedidas = () =>
     fetch('/api/medidas').then(r => r.json()).then(d => setMedidas(Array.isArray(d) ? d : []))
@@ -126,6 +132,7 @@ export default function MedidasPage() {
       filtros: m.filtros,
       denominador_filtros: m.denominador_filtros ?? [],
       denominador_tipo_fonte: m.denominador_tipo_fonte ?? 'ambos',
+      departamentos: m.departamentos ?? [],
     })
     setEditing(m.id)
   }
@@ -193,6 +200,38 @@ export default function MedidasPage() {
                   placeholder="R$, %, x…" />
               </div>
             </div>
+
+            {/* Atribuição de departamentos */}
+            {allDepts.length > 0 && (
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  Visível para departamentos
+                  <span className="ml-1.5 text-xs text-gray-400 font-normal">(vazio = todos)</span>
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {allDepts.map(d => {
+                    const selected = form.departamentos.includes(d)
+                    return (
+                      <button key={d} type="button"
+                        onClick={() => setForm(f => ({
+                          ...f,
+                          departamentos: selected
+                            ? f.departamentos.filter(x => x !== d)
+                            : [...f.departamentos, d],
+                        }))}
+                        className={cn(
+                          'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
+                          selected
+                            ? 'bg-indigo-600 text-white border-indigo-600'
+                            : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-400'
+                        )}>
+                        {d}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Tipo de medida */}
             <div>

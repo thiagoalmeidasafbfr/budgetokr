@@ -130,6 +130,7 @@ export function getMedidaResultados(
     filtros:                JSON.parse(raw.filtros || '[]'),
     denominador_filtros:    JSON.parse(raw.denominador_filtros || '[]'),
     denominador_tipo_fonte: (raw.denominador_tipo_fonte || 'ambos') as 'budget' | 'razao' | 'ambos',
+    departamentos:          JSON.parse(((raw as unknown) as Record<string, string>).departamentos || '[]'),
   }
 
   // Merge extra filters (e.g. department filter from dept dashboard)
@@ -645,5 +646,6 @@ export function getMedidas(): import('./types').Medida[] {
     filtros:                JSON.parse(raw.filtros || '[]'),
     denominador_filtros:    JSON.parse(raw.denominador_filtros || '[]'),
     denominador_tipo_fonte: (raw.denominador_tipo_fonte || 'ambos') as 'budget' | 'razao' | 'ambos',
+    departamentos:          JSON.parse(((raw as unknown) as Record<string, string>).departamentos || '[]'),
   }))
 }

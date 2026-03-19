@@ -60,10 +60,11 @@ export default function AnalisePage() {
       const me = await fetch('/api/me').then(r => r.ok ? r.json() : null).catch(() => null)
       const isDept = me?.role === 'dept' && me.department
       if (isDept) { setDeptUser({ department: me.department }); setSelDepts([me.department]) }
+      const medsUrl = isDept ? `/api/medidas?departamento=${encodeURIComponent(me.department)}` : '/api/medidas'
       const [depts, dates, meds] = await Promise.all([
         fetch('/api/analise?type=distinct&col=nome_departamento', { cache: 'no-store' }).then(r => r.json()),
         fetch('/api/analise?type=distinct&col=data_lancamento',   { cache: 'no-store' }).then(r => r.json()),
-        fetch('/api/medidas', { cache: 'no-store' }).then(r => r.json()),
+        fetch(medsUrl, { cache: 'no-store' }).then(r => r.json()),
       ])
       setDepartamentos(Array.isArray(depts) ? depts : [])
       setPeriodos([...new Set((Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean))].sort() as string[])

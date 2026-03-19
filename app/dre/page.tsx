@@ -9,6 +9,8 @@ import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine,
 } from 'recharts'
+import { toQuarterLabel, groupByQuarter, sortQuarterLabels, buildTree, buildTreeFromLinhas, flattenTree } from '@/lib/dre-utils'
+import type { DRERow, TreeNode, DRELinha } from '@/lib/dre-utils'
 
 // ── Export helper ──────────────────────────────────────────────────────────────
 function exportDetalhamento(rows: DetalhamentoLinha[], title: string) {
@@ -303,40 +305,6 @@ function DetalhamentoModal({
   )
 }
 
-interface DRERow {
-  dre: string
-  agrupamento_arvore: string
-  ordem_dre: number
-  periodo: string
-  budget: number
-  razao: number
-}
-
-interface TreeNode {
-  name: string
-  isGroup: boolean
-  isSubtotal?: boolean   // linha calculada (subtotal), não clicável para drill-down
-  isSeparator?: boolean  // linha com borda superior extra
-  isBold?: boolean       // negrito forçado (independente de isGroup)
-  depth: number
-  ordem: number
-  budget: number
-  razao: number
-  variacao: number
-  variacao_pct: number
-  children: TreeNode[]
-  byPeriod: Record<string, { budget: number; razao: number }>
-  // for drill-down
-  dre?: string
-  agrupamento?: string
-}
-
-interface DRELinha {
-  id: number; ordem: number; nome: string; tipo: 'grupo' | 'subtotal'
-  sinal: number; formula_grupos: string; formula_sinais: string
-  negrito: number; separador: number
-}
-
 // ── Waterfall helpers ─────────────────────────────────────────────────────────
 
 interface WaterfallEntry {
@@ -483,7 +451,7 @@ export default function DREPage() {
   const [centrosDisp,   setCentrosDisp]   = useState<Array<{ cc: string; nome: string }>>([])
   const [expanded,      setExpanded]      = useState<Set<string>>(new Set())
   const [loading,       setLoading]       = useState(false)
-  const [viewMode,      setViewMode]      = useState<'total' | 'periodo' | 'cascata'>('total')
+  const [viewMode,      setViewMode]      = useState<'total' | 'periodo' | 'trimestre' | 'cascata'>('total')
   const [periodView,    setPeriodView]    = useState<'compact' | 'full'>('compact')
   const [ctxMenu,       setCtxMenu]       = useState<ContextMenuState | null>(null)
   const [detModal,      setDetModal]      = useState<ContextMenuState | null>(null)
@@ -736,7 +704,7 @@ export default function DREPage() {
           {/* View toggle */}
           <div className="flex items-center gap-2">
             <div className="flex bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5">
-              {([['total', 'Consolidado'], ['periodo', 'Por Período'], ['cascata', 'Cascata']] as const).map(([v, label]) => (
+              {([['total', 'Consolidado'], ['periodo', 'Por Período'], ['trimestre', 'Trimestral'], ['cascata', 'Cascata']] as const).map(([v, label]) => (
                 <button key={v} onClick={() => setViewMode(v)}
                   className={cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
                     viewMode === v ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
@@ -1010,6 +978,88 @@ export default function DREPage() {
             </Card>
           )}
 
+          {!loading && viewMode === 'trimestre' && (() => {
+            // Compute quarter columns from existing data
+            const allQuarters = sortQuarterLabels([...new Set(
+              dataPeriods.map(p => toQuarterLabel(p))
+            )])
+            return (
+              <Card>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="text-left px-4 py-2 font-medium text-gray-500 sticky left-0 bg-gray-50 z-10 min-w-[220px]">
+                          Demonstrativo Gerencial
+                        </th>
+                        {allQuarters.map(q => (
+                          <th key={q} colSpan={3} className="text-center px-1 py-2 font-medium text-gray-600 border-l-2 border-gray-300 bg-gray-50">
+                            {q}
+                          </th>
+                        ))}
+                      </tr>
+                      <tr className="border-b bg-gray-50/50">
+                        <th className="sticky left-0 bg-gray-50/50 z-10" />
+                        {allQuarters.map(q => (
+                          <React.Fragment key={q}>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-gray-300">Orçado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Realizado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Var.</th>
+                          </React.Fragment>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {flatRows.map((row, i) => {
+                        const byQ = groupByQuarter(row.byPeriod)
+                        return (
+                          <tr key={i}
+                            onContextMenu={e => openCtxMenu(e, row, undefined, 'ambos')}
+                            className={cn('border-b transition-colors cursor-context-menu',
+                              row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50')}>
+                            <td className={cn('px-4 py-2 sticky left-0 bg-white z-10',
+                              row.isSubtotal ? 'font-bold text-gray-900 bg-gray-50/80'
+                                : row.isGroup ? 'font-medium text-gray-800 bg-gray-50/80'
+                                : 'text-gray-700')}
+                              style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
+                              <div className="flex items-center gap-1">
+                                {row.isGroup && !row.isSubtotal ? (
+                                  <button onClick={() => toggleExpand(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                    {expanded.has(row.name)
+                                      ? <ChevronDown size={13} className="text-gray-400" />
+                                      : <ChevronRight size={13} className="text-gray-400" />}
+                                  </button>
+                                ) : <span className="w-4" />}
+                                <span className="truncate">{row.name}</span>
+                              </div>
+                            </td>
+                            {allQuarters.map(q => {
+                              const cell = byQ[q] ?? { budget: 0, razao: 0 }
+                              const v = cell.razao - cell.budget
+                              return (
+                                <React.Fragment key={q}>
+                                  <td className={cn('px-2 py-2 text-right text-xs border-l-2 border-gray-300', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                    {formatCurrency(cell.budget)}
+                                  </td>
+                                  <td className={cn('px-2 py-2 text-right text-xs border-l border-gray-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                    {formatCurrency(cell.razao)}
+                                  </td>
+                                  <td className={cn('px-2 py-2 text-right text-xs font-semibold border-l border-gray-200', colorForVariance(v))}>
+                                    {formatCurrency(v)}
+                                  </td>
+                                </React.Fragment>
+                              )
+                            })}
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )
+          })()}
+
           {!loading && viewMode === 'cascata' && dreLinhas.length > 0 && (
             <WaterfallChart tree={tree} dreLinhas={dreLinhas} />
           )}
@@ -1026,303 +1076,4 @@ export default function DREPage() {
     </div>
   )
 }
-
-// ── Tree building com estrutura dre_linhas ─────────────────────────────────
-
-function buildTreeFromLinhas(
-  data: DRERow[],
-  hierarchy: Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }>,
-  dreLinhas: DRELinha[]
-): TreeNode[] {
-  // 1. Agregar dados por (dre, agrupamento_arvore) igual ao buildTree normal
-  const lineAgg = new Map<string, {
-    budget: number; razao: number
-    byPeriod: Record<string, { budget: number; razao: number }>
-  }>()
-  for (const row of data) {
-    const key = `${row.dre}||${row.agrupamento_arvore}`
-    if (!lineAgg.has(key)) lineAgg.set(key, { budget: 0, razao: 0, byPeriod: {} })
-    const agg = lineAgg.get(key)!
-    agg.budget += row.budget
-    agg.razao  += row.razao
-    if (row.periodo) {
-      if (!agg.byPeriod[row.periodo]) agg.byPeriod[row.periodo] = { budget: 0, razao: 0 }
-      agg.byPeriod[row.periodo].budget += row.budget
-      agg.byPeriod[row.periodo].razao  += row.razao
-    }
-  }
-
-  // 2. Agregar por dre (grupo pai)
-  const dreAgg = new Map<string, {
-    budget: number; razao: number
-    byPeriod: Record<string, { budget: number; razao: number }>
-    children: Array<{ agrupamento: string; budget: number; razao: number; byPeriod: Record<string, { budget: number; razao: number }> }>
-  }>()
-  for (const [key, agg] of lineAgg) {
-    const [dre, agrup] = key.split('||')
-    if (!dreAgg.has(dre)) dreAgg.set(dre, { budget: 0, razao: 0, byPeriod: {}, children: [] })
-    const g = dreAgg.get(dre)!
-    g.budget += agg.budget
-    g.razao  += agg.razao
-    for (const [p, v] of Object.entries(agg.byPeriod)) {
-      if (!g.byPeriod[p]) g.byPeriod[p] = { budget: 0, razao: 0 }
-      g.byPeriod[p].budget += v.budget
-      g.byPeriod[p].razao  += v.razao
-    }
-    if (agrup) {
-      g.children.push({ agrupamento: agrup, budget: agg.budget, razao: agg.razao, byPeriod: agg.byPeriod })
-    }
-  }
-
-  // 3. Mapa de filhos por dre (para expand/collapse)
-  const hierMap = new Map<string, Set<string>>()
-  for (const h of hierarchy) {
-    if (!h.dre) continue
-    if (!hierMap.has(h.dre)) hierMap.set(h.dre, new Set())
-    if (h.agrupamento_arvore) hierMap.get(h.dre)!.add(h.agrupamento_arvore)
-  }
-
-  // 4. Percorrer dre_linhas em ordem e construir a lista flat de nós
-  const result: TreeNode[] = []
-  for (const linha of dreLinhas) {
-    if (linha.tipo === 'subtotal') {
-      // Calcular subtotal somando todos os grupos com ordem < ordem deste subtotal
-      let subBudget = 0, subRazao = 0
-      const subByPeriod: Record<string, { budget: number; razao: number }> = {}
-
-      for (const prevLinha of dreLinhas) {
-        if (prevLinha.tipo !== 'grupo' || prevLinha.ordem >= linha.ordem) continue
-        const agg = dreAgg.get(prevLinha.nome)
-        if (!agg) continue
-        const sinal = prevLinha.sinal ?? 1
-        subBudget += agg.budget * sinal
-        subRazao  += agg.razao  * sinal
-        for (const [p, v] of Object.entries(agg.byPeriod)) {
-          if (!subByPeriod[p]) subByPeriod[p] = { budget: 0, razao: 0 }
-          subByPeriod[p].budget += v.budget * sinal
-          subByPeriod[p].razao  += v.razao  * sinal
-        }
-      }
-
-      // Aplicar sinal da linha (para apresentação)
-      subBudget *= linha.sinal
-      subRazao  *= linha.sinal
-      for (const p of Object.keys(subByPeriod)) {
-        subByPeriod[p].budget *= linha.sinal
-        subByPeriod[p].razao  *= linha.sinal
-      }
-
-      const var_ = subRazao - subBudget
-      result.push({
-        name: linha.nome,
-        isGroup: true,
-        isSubtotal: true,
-        isBold: true,
-        isSeparator: linha.separador === 1,
-        depth: 0,
-        ordem: linha.ordem,
-        budget: subBudget,
-        razao: subRazao,
-        variacao: var_,
-        variacao_pct: subBudget ? (var_ / Math.abs(subBudget)) * 100 : 0,
-        children: [],
-        byPeriod: subByPeriod,
-      })
-    } else {
-      // Linha de grupo normal
-      const agg = dreAgg.get(linha.nome)
-      const budget = (agg?.budget ?? 0) * linha.sinal
-      const razao  = (agg?.razao  ?? 0) * linha.sinal
-      const byPeriod: Record<string, { budget: number; razao: number }> = {}
-      if (agg) {
-        for (const [p, v] of Object.entries(agg.byPeriod)) {
-          byPeriod[p] = { budget: v.budget * linha.sinal, razao: v.razao * linha.sinal }
-        }
-      }
-
-      // Filhos (agrupamentos) a partir da hierarquia
-      const childSet = hierMap.get(linha.nome) ?? new Set<string>()
-      const children: TreeNode[] = []
-      for (const child of childSet) {
-        const cAgg = lineAgg.get(`${linha.nome}||${child}`)
-        if (!cAgg) continue
-        const cb = cAgg.budget * linha.sinal
-        const cr = cAgg.razao  * linha.sinal
-        const cByP: Record<string, { budget: number; razao: number }> = {}
-        for (const [p, v] of Object.entries(cAgg.byPeriod)) {
-          cByP[p] = { budget: v.budget * linha.sinal, razao: v.razao * linha.sinal }
-        }
-        const cv = cr - cb
-        children.push({
-          name: child, isGroup: false, depth: 1, ordem: 999,
-          budget: cb, razao: cr, variacao: cv,
-          variacao_pct: cb ? (cv / Math.abs(cb)) * 100 : 0,
-          children: [], byPeriod: cByP, dre: linha.nome, agrupamento: child,
-        })
-      }
-
-      const var_ = razao - budget
-      result.push({
-        name: linha.nome,
-        isGroup: true,
-        isBold: linha.negrito === 1,
-        isSeparator: linha.separador === 1,
-        depth: 0,
-        ordem: linha.ordem,
-        budget,
-        razao,
-        variacao: var_,
-        variacao_pct: budget ? (var_ / Math.abs(budget)) * 100 : 0,
-        children: children.sort((a, b) => a.name.localeCompare(b.name)),
-        byPeriod,
-        dre: linha.nome,
-      })
-    }
-  }
-
-  return result
-}
-
-// ── Tree building (fallback sem dre_linhas) ───────────────────────────────────
-
-function buildTree(
-  data: DRERow[],
-  hierarchy: Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }>
-): TreeNode[] {
-  // Hierarchy: dre = parent group, agrupamento_arvore = child
-  // Map: dre → { ordem, children: Set<agrupamento_arvore> }
-  const groupMap = new Map<string, { ordem: number; children: Set<string> }>()
-  for (const h of hierarchy) {
-    const parent = h.dre || ''
-    if (!parent) continue
-    if (!groupMap.has(parent)) groupMap.set(parent, { ordem: h.ordem_dre ?? 999, children: new Set() })
-    else if ((h.ordem_dre ?? 999) < groupMap.get(parent)!.ordem) {
-      groupMap.get(parent)!.ordem = h.ordem_dre ?? 999
-    }
-    if (h.agrupamento_arvore) groupMap.get(parent)!.children.add(h.agrupamento_arvore)
-  }
-
-  // Aggregate data by (dre + agrupamento_arvore)
-  const lineAgg = new Map<string, {
-    budget: number; razao: number; ordem_dre: number
-    byPeriod: Record<string, { budget: number; razao: number }>
-  }>()
-  for (const row of data) {
-    const key = `${row.dre}||${row.agrupamento_arvore}`
-    if (!lineAgg.has(key)) lineAgg.set(key, { budget: 0, razao: 0, ordem_dre: row.ordem_dre ?? 999, byPeriod: {} })
-    const agg = lineAgg.get(key)!
-    agg.budget += row.budget
-    agg.razao += row.razao
-    if (row.periodo) {
-      if (!agg.byPeriod[row.periodo]) agg.byPeriod[row.periodo] = { budget: 0, razao: 0 }
-      agg.byPeriod[row.periodo].budget += row.budget
-      agg.byPeriod[row.periodo].razao += row.razao
-    }
-  }
-
-  const tree: TreeNode[] = []
-  const usedKeys = new Set<string>()
-
-  for (const [parent, { ordem: groupOrdem, children: childSet }] of groupMap) {
-    const children: TreeNode[] = []
-    let groupBudget = 0
-    let groupRazao = 0
-    const groupByPeriod: Record<string, { budget: number; razao: number }> = {}
-
-    for (const child of childSet) {
-      const key = `${parent}||${child}`
-      usedKeys.add(key)
-      const agg = lineAgg.get(key) ?? { budget: 0, razao: 0, ordem_dre: 999, byPeriod: {} }
-      groupBudget += agg.budget
-      groupRazao += agg.razao
-      for (const [p, vals] of Object.entries(agg.byPeriod)) {
-        if (!groupByPeriod[p]) groupByPeriod[p] = { budget: 0, razao: 0 }
-        groupByPeriod[p].budget += vals.budget
-        groupByPeriod[p].razao += vals.razao
-      }
-      const variacao = agg.razao - agg.budget
-      children.push({
-        name: child,
-        isGroup: false,
-        depth: 1,
-        ordem: agg.ordem_dre,
-        budget: agg.budget,
-        razao: agg.razao,
-        variacao,
-        variacao_pct: agg.budget ? (variacao / Math.abs(agg.budget)) * 100 : 0,
-        children: [],
-        byPeriod: agg.byPeriod,
-        dre: parent,
-        agrupamento: child,
-      })
-    }
-
-    // rows where agrupamento_arvore is empty
-    const bareKey = `${parent}||`
-    if (lineAgg.has(bareKey)) {
-      usedKeys.add(bareKey)
-      const agg = lineAgg.get(bareKey)!
-      groupBudget += agg.budget
-      groupRazao += agg.razao
-      for (const [p, vals] of Object.entries(agg.byPeriod)) {
-        if (!groupByPeriod[p]) groupByPeriod[p] = { budget: 0, razao: 0 }
-        groupByPeriod[p].budget += vals.budget
-        groupByPeriod[p].razao += vals.razao
-      }
-    }
-
-    const variacao = groupRazao - groupBudget
-    tree.push({
-      name: parent,
-      isGroup: true,
-      depth: 0,
-      ordem: groupOrdem,
-      budget: groupBudget,
-      razao: groupRazao,
-      variacao,
-      variacao_pct: groupBudget ? (variacao / Math.abs(groupBudget)) * 100 : 0,
-      children: children.sort((a, b) => (a.ordem - b.ordem) || a.name.localeCompare(b.name)),
-      byPeriod: groupByPeriod,
-      dre: parent,
-    })
-  }
-
-  // Unassigned lines
-  for (const [key, agg] of lineAgg) {
-    if (usedKeys.has(key)) continue
-    const [dre, agrup] = key.split('||')
-    const name = agrup || dre || 'Sem classificação'
-    const variacao = agg.razao - agg.budget
-    tree.push({
-      name,
-      isGroup: false,
-      depth: 0,
-      ordem: agg.ordem_dre,
-      budget: agg.budget,
-      razao: agg.razao,
-      variacao,
-      variacao_pct: agg.budget ? (variacao / Math.abs(agg.budget)) * 100 : 0,
-      children: [],
-      byPeriod: agg.byPeriod,
-      dre,
-      agrupamento: agrup,
-    })
-  }
-
-  return tree.sort((a, b) => (a.ordem - b.ordem) || a.name.localeCompare(b.name))
-}
-
-function flattenTree(tree: TreeNode[], expanded: Set<string>): TreeNode[] {
-  const result: TreeNode[] = []
-  for (const node of tree) {
-    result.push(node)
-    if (node.isGroup && expanded.has(node.name)) {
-      for (const child of node.children) {
-        result.push(child)
-      }
-    }
-  }
-  return result
-}
-
 

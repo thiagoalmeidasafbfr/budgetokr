@@ -66,6 +66,7 @@ export interface Medida {
   filtros: FilterCondition[]
   denominador_filtros: FilterCondition[]
   denominador_tipo_fonte: 'budget' | 'razao' | 'ambos'
+  departamentos: string[]   // [] = visible to all; otherwise only listed depts
   created_at: string
   updated_at: string
 }
