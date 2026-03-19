@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { KpiManual } from '@/lib/query'
 
-const COLORS = ['#6366f1','#8b5cf6','#ec4899','#ef4444','#f97316','#eab308','#22c55e','#14b8a6','#0ea5e9','#64748b']
+import { CHART_COLORS as COLORS } from '@/lib/constants'
 
 interface KpiForm {
   nome: string

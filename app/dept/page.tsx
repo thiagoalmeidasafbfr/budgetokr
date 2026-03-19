@@ -11,7 +11,7 @@ import {
 import { buildTree, buildTreeFromLinhas, flattenTree, type DRERow, type DRELinha, type TreeNode } from '@/lib/dre-utils'
 import type { KpiManual, KpiValor } from '@/lib/query'
 
-const DEFAULT_COLORS = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6']
+import { CHART_COLORS as DEFAULT_COLORS } from '@/lib/constants'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
