@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
+import { getUserFromHeaders } from '@/lib/session'
 
 const PAGE_SIZE = 100
 
@@ -10,8 +11,11 @@ export async function GET(req: NextRequest) {
     const tipo  = sp.get('tipo')          // 'budget' | 'razao' | null (ambos)
     const page  = Math.max(1, parseInt(sp.get('page') ?? '1'))
     const q     = sp.get('q') ?? ''
-    const dept  = sp.get('departamento')
     const per   = sp.get('periodo')
+
+    // Força departamento para usuários de dept
+    const user = getUserFromHeaders(req)
+    const dept = user?.role === 'dept' ? (user.department ?? null) : sp.get('departamento')
     const db    = getDb()
 
     const conditions: string[] = []

@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDRE, getDREHierarchy, getDRELinhas, getDistinctValues, getCentrosByDepartamentos } from '@/lib/query'
+import { getUserFromHeaders } from '@/lib/session'
 import type { FilterColumn } from '@/lib/types'
 
 export async function GET(req: NextRequest) {
   try {
     const sp   = new URL(req.url).searchParams
     const type = sp.get('type') ?? 'dre'
+
+    const user = getUserFromHeaders(req)
+    const forcedDept = user?.role === 'dept' ? user.department : undefined
 
     if (type === 'hierarchy') {
       return NextResponse.json(getDREHierarchy())
@@ -27,7 +31,9 @@ export async function GET(req: NextRequest) {
     }
 
     const periodos      = sp.get('periodos')?.split(',').filter(Boolean)
-    const departamentos = sp.get('departamentos')?.split(',').filter(Boolean)
+    const departamentos = forcedDept
+      ? [forcedDept]
+      : sp.get('departamentos')?.split(',').filter(Boolean)
     const centros       = sp.get('centros')?.split(',').filter(Boolean)
 
     const data = getDRE(periodos, departamentos, centros)

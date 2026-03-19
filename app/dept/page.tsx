@@ -839,7 +839,7 @@ function MedidaDisplayCard({ card }: { card: MedidaCard }) {
 interface KpiCardProps {
   kpi: KpiManual
   valores: KpiValor[]
-  onEditValores: () => void
+  onEditValores?: () => void
 }
 
 function KpiCard({ kpi, valores, onEditValores }: KpiCardProps) {
@@ -864,12 +864,14 @@ function KpiCard({ kpi, valores, onEditValores }: KpiCardProps) {
             <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: kpi.cor }} />
             <p className="text-sm font-semibold text-gray-800 truncate">{kpi.nome}</p>
           </div>
-          <button
-            onClick={onEditValores}
-            className="text-xs text-gray-400 hover:text-indigo-600 flex items-center gap-0.5 flex-shrink-0 ml-1"
-          >
-            <Edit2 size={11} />
-          </button>
+          {onEditValores && (
+            <button
+              onClick={onEditValores}
+              className="text-xs text-gray-400 hover:text-indigo-600 flex items-center gap-0.5 flex-shrink-0 ml-1"
+            >
+              <Edit2 size={11} />
+            </button>
+          )}
         </div>
 
         {latest != null ? (
@@ -975,6 +977,22 @@ export default function DeptDashboardPage() {
   const [showMedidaModal,  setShowMedidaModal]  = useState(false)
   const [editValoresKpi,   setEditValoresKpi]   = useState<KpiManual | null>(null)
   const [detModal,         setDetModal]         = useState<DetModalState | null>(null)
+  const [userRole,         setUserRole]         = useState<'master' | 'dept' | null>(null)
+  const [forcedDept,       setForcedDept]       = useState<string | null>(null)
+
+  // Carrega usuário logado
+  useEffect(() => {
+    fetch('/api/me').then(r => r.ok ? r.json() : null).then(u => {
+      if (!u) return
+      setUserRole(u.role)
+      if (u.role === 'dept' && u.department) {
+        setForcedDept(u.department)
+        setSelDept(u.department)
+      }
+    }).catch(() => {})
+  }, [])
+
+  const isMaster = userRole === 'master'
 
   // Load department and period lists
   useEffect(() => {
@@ -1072,25 +1090,41 @@ export default function DeptDashboardPage() {
     <div className="flex gap-0 min-h-screen">
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
       <div className="w-52 flex-shrink-0 border-r border-gray-100 flex flex-col bg-white">
-        <div className="p-3 border-b border-gray-100">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Departamento</p>
-        </div>
-        <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
-          {departamentos.map(d => (
-            <button
-              key={d}
-              onClick={() => { setSelDept(d); setSelPeriods([]) }}
-              className={cn(
-                'w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                selDept === d
-                  ? 'bg-indigo-50 text-indigo-700'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              )}
-            >
-              {d || '—'}
-            </button>
-          ))}
-        </div>
+        {/* Seletor de departamento: visível apenas para master */}
+        {isMaster && (
+          <>
+            <div className="p-3 border-b border-gray-100">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Departamento</p>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+              {departamentos.map(d => (
+                <button
+                  key={d}
+                  onClick={() => { setSelDept(d); setSelPeriods([]) }}
+                  className={cn(
+                    'w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                    selDept === d
+                      ? 'bg-indigo-50 text-indigo-700'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  )}
+                >
+                  {d || '—'}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Para dept users: exibe o nome do departamento fixo */}
+        {!isMaster && forcedDept && (
+          <>
+            <div className="p-3 border-b border-gray-100">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Departamento</p>
+              <p className="text-sm font-semibold text-indigo-700 px-1">{forcedDept}</p>
+            </div>
+            <div className="flex-1" />
+          </>
+        )}
 
         {selDept && (
           <>
@@ -1120,12 +1154,15 @@ export default function DeptDashboardPage() {
               )}
             </div>
 
-            <div className="p-3 border-t border-gray-100">
-              <Button variant="outline" size="sm" className="w-full text-xs"
-                onClick={() => setShowMgmtModal(true)}>
-                <Settings size={12} />Configurar KPIs
-              </Button>
-            </div>
+            {/* Configurar KPIs: apenas para master */}
+            {isMaster && (
+              <div className="p-3 border-t border-gray-100">
+                <Button variant="outline" size="sm" className="w-full text-xs"
+                  onClick={() => setShowMgmtModal(true)}>
+                  <Settings size={12} />Configurar KPIs
+                </Button>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -1189,28 +1226,32 @@ export default function DeptDashboardPage() {
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">KPIs</h2>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setShowMedidaModal(true)}>
-                    <Settings size={12} />Medidas
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setShowMgmtModal(true)}>
-                    <Plus size={13} />Novo KPI
-                  </Button>
-                </div>
+                {isMaster && (
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setShowMedidaModal(true)}>
+                      <Settings size={12} />Medidas
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setShowMgmtModal(true)}>
+                      <Plus size={13} />Novo KPI
+                    </Button>
+                  </div>
+                )}
               </div>
               {kpis.length === 0 && medidaCards.length === 0 ? (
                 <Card>
                   <CardContent className="py-10 flex flex-col items-center gap-2">
                     <Target size={28} className="text-gray-300" />
                     <p className="text-sm text-gray-400">Nenhum KPI ou medida configurado.</p>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => setShowMgmtModal(true)}>
-                        <Plus size={12} />Adicionar KPI
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => setShowMedidaModal(true)}>
-                        <Settings size={12} />Adicionar Medida
-                      </Button>
-                    </div>
+                    {isMaster && (
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setShowMgmtModal(true)}>
+                          <Plus size={12} />Adicionar KPI
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setShowMedidaModal(true)}>
+                          <Settings size={12} />Adicionar Medida
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               ) : (
@@ -1223,7 +1264,7 @@ export default function DeptDashboardPage() {
                       key={kpi.id}
                       kpi={kpi}
                       valores={kpiValores[kpi.id] ?? []}
-                      onEditValores={() => setEditValoresKpi(kpi)}
+                      onEditValores={isMaster ? () => setEditValoresKpi(kpi) : undefined}
                     />
                   ))}
                 </div>

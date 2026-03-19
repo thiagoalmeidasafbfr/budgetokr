@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAnalise, getMedidaResultados, getDistinctValues, getSummary } from '@/lib/query'
+import { getUserFromHeaders } from '@/lib/session'
 import type { FilterCondition, FilterColumn } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -9,6 +10,10 @@ export async function GET(req: NextRequest) {
     const sp       = new URL(req.url).searchParams
     const type     = sp.get('type') ?? 'analise'
     const medidaId = sp.get('medidaId')
+
+    // Lê o usuário injetado pelo middleware
+    const user = getUserFromHeaders(req)
+    const forcedDept = user?.role === 'dept' ? user.department : undefined
 
     if (type === 'summary') {
       return NextResponse.json(getSummary())
@@ -27,17 +32,25 @@ export async function GET(req: NextRequest) {
       const periodosRaw        = sp.get('periodos')
       const periodos           = periodosRaw ? periodosRaw.split(',').filter(Boolean) : []
 
+      const extraFiltros = forcedDept
+        ? [{ column: 'nome_departamento' as FilterColumn, operator: '=' as const, value: forcedDept }]
+        : []
+
       const results = getMedidaResultados(parseInt(medidaId), {
         groupByDept,
         groupByPeriod,
         groupByCentroCusto,
         periodos,
+        extraFiltros,
       })
       return NextResponse.json(results)
     }
 
     // Default: full comparison
-    const departamentos  = sp.get('departamentos')?.split(',').filter(Boolean)
+    // Se dept user, força o departamento dele; ignora o que vier na query string
+    const departamentos = forcedDept
+      ? [forcedDept]
+      : sp.get('departamentos')?.split(',').filter(Boolean)
     const periodos       = sp.get('periodos')?.split(',').filter(Boolean)
     const filtersRaw     = sp.get('filtros')
     const filtros: FilterCondition[] = filtersRaw ? JSON.parse(filtersRaw) : []

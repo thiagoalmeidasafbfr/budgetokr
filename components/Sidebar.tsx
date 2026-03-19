@@ -1,44 +1,50 @@
 'use client'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import {
   LayoutDashboard, TrendingUp, LineChart, GitCompare,
   Target, Layers, FileText, Database, Upload,
   ChevronRight, Building2, BookOpen, LayoutList, Gauge,
+  LogOut, User,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-// ─── Nav config ────────────────────────────────────────────────────────────────
+// ─── Types ──────────────────────────────────────────────────────────────────────
 
-type NavLink  = { type: 'link';    href: string; icon: React.ElementType; label: string; sublabel?: string }
-type NavGroup = { type: 'group';   icon: React.ElementType; label: string; children: { href: string; label: string; icon?: React.ElementType }[] }
-type NavSep   = { type: 'section'; label: string }
+type SessionUser = { userId: string; role: 'master' | 'dept'; department?: string }
 
-type NavItem = NavLink | NavGroup | NavSep
+type NavLink  = { type: 'link';    href: string; icon: React.ElementType; label: string; sublabel?: string; masterOnly?: boolean }
+type NavGroup = { type: 'group';   icon: React.ElementType; label: string; masterOnly?: boolean; children: { href: string; label: string; icon?: React.ElementType }[] }
+type NavSep   = { type: 'section'; label: string; masterOnly?: boolean }
+type NavItem  = NavLink | NavGroup | NavSep
+
+// ─── Nav config ─────────────────────────────────────────────────────────────────
 
 const nav: NavItem[] = [
-  // ─ Visão Geral ─────────────────────────────────────────────────────────────
-  { type: 'section', label: 'Visão Geral' },
+  { type: 'section', label: 'Visão Geral', masterOnly: true },
   {
     type: 'link', href: '/',
     icon: LayoutDashboard,
     label: 'Dashboard',
     sublabel: 'Resumo consolidado',
+    masterOnly: true,
   },
 
-  // ─ Análise Financeira e Qualitativa ────────────────────────────────────────
   { type: 'section', label: 'Análise Financeira' },
   {
     type: 'link', href: '/dre',
     icon: LineChart,
     label: 'DRE',
     sublabel: 'P&L · Resultado',
+    masterOnly: true,
   },
   {
     type: 'link', href: '/analise',
     icon: GitCompare,
     label: 'Análise',
     sublabel: 'Budget vs Realizado',
+    masterOnly: true,
   },
   {
     type: 'link', href: '/dept',
@@ -47,31 +53,31 @@ const nav: NavItem[] = [
     sublabel: 'KPIs e DRE por área',
   },
 
-  // ─ KPIs & Medidas ──────────────────────────────────────────────────────────
-  { type: 'section', label: 'KPIs & Medidas' },
+  { type: 'section', label: 'KPIs & Medidas', masterOnly: true },
   {
     type: 'link', href: '/kpis',
     icon: Gauge,
     label: 'KPIs',
     sublabel: 'Configurar indicadores',
+    masterOnly: true,
   },
   {
     type: 'link', href: '/medidas',
     icon: Target,
     label: 'Medidas Calculadas',
     sublabel: 'Indicadores financeiros',
+    masterOnly: true,
   },
 
-  // ─ Gestão de Dados ─────────────────────────────────────────────────────────
-  { type: 'section', label: 'Gestão de Dados' },
+  { type: 'section', label: 'Gestão de Dados', masterOnly: true },
   {
-    type: 'group', icon: FileText, label: 'Lançamentos',
+    type: 'group', icon: FileText, label: 'Lançamentos', masterOnly: true,
     children: [
       { href: '/lancamentos', label: 'Todos os lançamentos', icon: FileText },
     ],
   },
   {
-    type: 'group', icon: Database, label: 'Dimensões',
+    type: 'group', icon: Database, label: 'Dimensões', masterOnly: true,
     children: [
       { href: '/dimensoes/centros-custo',    label: 'Centros de Custo',   icon: Building2  },
       { href: '/dimensoes/contas-contabeis', label: 'Contas Contábeis',   icon: BookOpen   },
@@ -83,13 +89,28 @@ const nav: NavItem[] = [
     icon: Upload,
     label: 'Importar Dados',
     sublabel: 'Excel · CSV',
+    masterOnly: true,
   },
 ]
 
-// ─── Component ─────────────────────────────────────────────────────────────────
+// ─── Component ──────────────────────────────────────────────────────────────────
 
 export function Sidebar() {
   const pathname = usePathname()
+  const router   = useRouter()
+  const [user, setUser] = useState<SessionUser | null>(null)
+
+  useEffect(() => {
+    fetch('/api/me').then(r => r.ok ? r.json() : null).then(setUser).catch(() => {})
+  }, [])
+
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    router.push('/login')
+    router.refresh()
+  }
+
+  const isMaster = user?.role === 'master'
 
   const isActive = (href: string) =>
     href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/')
@@ -112,7 +133,10 @@ export function Sidebar() {
       {/* Nav */}
       <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
         {nav.map((item, i) => {
-          // ── Section label ────────────────────────────────────────────────
+          // Esconde itens masterOnly para usuários de dept
+          if (item.masterOnly && !isMaster) return null
+
+          // ── Section label ──────────────────────────────────────────────────
           if (item.type === 'section') {
             return (
               <div key={i} className={cn('px-3 pt-3 pb-1', i === 0 ? 'pt-1' : '')}>
@@ -123,7 +147,7 @@ export function Sidebar() {
             )
           }
 
-          // ── Group (collapsible children) ─────────────────────────────────
+          // ── Group (collapsible children) ───────────────────────────────────
           if (item.type === 'group') {
             const Icon = item.icon
             const anyActive = item.children.some(c => isActive(c.href))
@@ -159,7 +183,7 @@ export function Sidebar() {
             )
           }
 
-          // ── Single link ──────────────────────────────────────────────────
+          // ── Single link ────────────────────────────────────────────────────
           const active = isActive(item.href)
           const Icon = item.icon
           return (
@@ -192,8 +216,28 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Footer */}
-      <div className="px-4 py-3 border-t border-gray-100">
+      {/* Footer: usuário + logout */}
+      <div className="px-3 py-3 border-t border-gray-100 space-y-2">
+        {user && (
+          <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gray-50">
+            <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+              <User size={12} className="text-indigo-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-gray-700 truncate">{user.userId}</p>
+              <p className="text-[10px] text-gray-400 truncate">
+                {user.role === 'master' ? 'Administrador' : (user.department || 'Departamento')}
+              </p>
+            </div>
+            <button
+              onClick={handleLogout}
+              title="Sair"
+              className="p-1 rounded hover:bg-gray-200 transition-colors flex-shrink-0"
+            >
+              <LogOut size={12} className="text-gray-400" />
+            </button>
+          </div>
+        )}
         <p className="text-[10px] text-gray-300 text-center">v2.0.0 · Star Schema</p>
       </div>
     </aside>

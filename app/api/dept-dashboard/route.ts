@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAnalise, getDRE, getMedidas, getDRELinhas, getDeptMedidas, getMedidaResultados } from '@/lib/query'
+import { getUserFromHeaders } from '@/lib/session'
 import type { Medida } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -7,9 +8,14 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
   try {
     const sp = new URL(req.url).searchParams
-    const departamento = sp.get('departamento')
     const periodosRaw = sp.get('periodos')
     const periodos = periodosRaw ? periodosRaw.split(',').filter(Boolean) : undefined
+
+    const user = getUserFromHeaders(req)
+    const forcedDept = user?.role === 'dept' ? user.department : undefined
+
+    // dept users só podem ver o próprio departamento
+    const departamento = forcedDept || sp.get('departamento')
 
     if (!departamento) {
       return NextResponse.json({ error: 'departamento required' }, { status: 400 })
