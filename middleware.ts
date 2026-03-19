@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSessionFromRequest, COOKIE_NAME } from '@/lib/session'
 
 // Rotas que não precisam de autenticação
-const PUBLIC_PATHS = ['/login', '/api/auth/login']
+const PUBLIC_PATHS = ['/login', '/logout', '/api/auth/login', '/api/auth/logout']
 
 // Rotas que usuários de dept podem acessar
 const DEPT_ALLOWED_PATHS = ['/dept', '/api/dept-dashboard', '/api/dept-medidas', '/api/analise', '/api/dre', '/api/kpis', '/api/kpis/valores', '/api/lancamentos', '/api/medidas', '/api/me', '/api/auth/logout', '/api/dimensoes']

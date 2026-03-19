@@ -232,9 +232,10 @@ export function Sidebar() {
             <button
               onClick={handleLogout}
               title="Sair"
-              className="p-1 rounded hover:bg-gray-200 transition-colors flex-shrink-0"
+              className="flex items-center gap-1 px-2 py-1 rounded-md bg-gray-200 hover:bg-red-100 hover:text-red-600 text-gray-500 transition-colors flex-shrink-0 text-[10px] font-medium"
             >
-              <LogOut size={12} className="text-gray-400" />
+              <LogOut size={11} />
+              Sair
             </button>
           </div>
         )}
