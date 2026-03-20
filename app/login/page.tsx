@@ -48,8 +48,8 @@ export default function LoginPage() {
             <TrendingUp size={18} className="text-white" />
           </div>
           <div>
-            <p className="font-bold text-gray-900 text-lg leading-tight">BudgetOKR</p>
-            <p className="text-xs text-gray-400 leading-tight">Budget vs Razão</p>
+            <p className="font-bold text-gray-900 text-lg leading-tight">Glorioso Finance</p>
+            <p className="text-xs text-gray-400 leading-tight">Botafogo F.R.</p>
           </div>
         </div>
 

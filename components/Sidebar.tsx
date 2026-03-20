@@ -159,8 +159,8 @@ export function Sidebar() {
             <TrendingUp size={15} className="text-white" />
           </div>
           <div>
-            <p className="font-bold text-gray-900 text-sm leading-tight">BudgetOKR</p>
-            <p className="text-[11px] text-gray-400 leading-tight">Budget vs Razão</p>
+            <p className="font-bold text-gray-900 text-sm leading-tight">Glorioso Finance</p>
+            <p className="text-[11px] text-gray-400 leading-tight">Botafogo F.R.</p>
           </div>
         </div>
       </div>
