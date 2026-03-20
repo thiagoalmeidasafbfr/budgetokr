@@ -12,6 +12,7 @@ import { buildTree, buildTreeFromLinhas, flattenTree, type DRERow, type DRELinha
 import type { KpiManual, KpiValor } from '@/lib/query'
 
 import { CHART_COLORS as DEFAULT_COLORS } from '@/lib/constants'
+import { YearFilter } from '@/components/YearFilter'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1125,6 +1126,7 @@ export default function DeptDashboardPage() {
   const [allPeriodos,      setAllPeriodos]      = useState<string[]>([])
   const [selDept,          setSelDept]          = useState<string>('')
   const [selPeriods,       setSelPeriods]       = useState<string[]>([])
+  const [selYear,          setSelYear]          = useState<string | null>(null)
   const [dashData,         setDashData]         = useState<DashboardData | null>(null)
   const [loading,          setLoading]          = useState(false)
   const [kpis,             setKpis]             = useState<KpiManual[]>([])
@@ -1356,7 +1358,7 @@ export default function DeptDashboardPage() {
         ) : (
           <>
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-3">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">{selDept}</h1>
                 <p className="text-gray-500 text-sm mt-0.5">
@@ -1365,9 +1367,19 @@ export default function DeptDashboardPage() {
                     : 'Todos os períodos'}
                 </p>
               </div>
-              {loading && (
-                <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-              )}
+              <div className="flex items-center gap-3">
+                <YearFilter
+                  periodos={allPeriodos}
+                  selYear={selYear}
+                  onChange={y => {
+                    setSelYear(y)
+                    setSelPeriods(y ? allPeriodos.filter(p => p.startsWith(y)) : [])
+                  }}
+                />
+                {loading && (
+                  <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                )}
+              </div>
             </div>
 
             {/* Section 1 — Summary Cards */}

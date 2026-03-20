@@ -1,6 +1,7 @@
 'use client'
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { ChevronRight, ChevronDown, Filter, X, Download, RefreshCw, ExternalLink } from 'lucide-react'
+import { YearFilter } from '@/components/YearFilter'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -28,6 +29,7 @@ export default function DREPage() {
   const [selDepts,      setSelDepts]      = useState<string[]>([])
   const [selPeriods,    setSelPeriods]    = useState<string[]>([])
   const [selCentros,    setSelCentros]    = useState<string[]>([])
+  const [selYear,       setSelYear]       = useState<string | null>(null)
   const [centrosDisp,   setCentrosDisp]   = useState<Array<{ cc: string; nome: string }>>([])
   const [expanded,      setExpanded]      = useState<Set<string>>(new Set())
   const [loading,       setLoading]       = useState(false)
@@ -112,6 +114,14 @@ export default function DREPage() {
   }, [])
 
   const applyFilters = () => loadData(selDepts, selPeriods, selCentros)
+
+  // When year changes, update period selection and auto-apply
+  const handleYearChange = (year: string | null) => {
+    setSelYear(year)
+    const newPeriods = year ? periodos.filter(p => p.startsWith(year)) : []
+    setSelPeriods(newPeriods)
+    loadData(selDepts, newPeriods, selCentros)
+  }
 
   const toggleExpand = (name: string) => {
     setExpanded(prev => {
@@ -200,12 +210,15 @@ export default function DREPage() {
       {/* Modal de detalhamento */}
       {detModal && <DetalhamentoModal ctx={detModal} onClose={() => setDetModal(null)} />}
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">DRE — Demonstrativo de Resultados</h1>
           <p className="text-gray-500 text-sm mt-0.5">P&L por linha contábil · Budget vs Razão · Clique direito para detalhamento</p>
         </div>
-        <Button variant="outline" size="sm" onClick={exportCSV}><Download size={13} /> CSV</Button>
+        <div className="flex items-center gap-3 flex-wrap">
+          <YearFilter periodos={periodos} selYear={selYear} onChange={handleYearChange} />
+          <Button variant="outline" size="sm" onClick={exportCSV}><Download size={13} /> CSV</Button>
+        </div>
       </div>
 
       <div className="flex gap-4">

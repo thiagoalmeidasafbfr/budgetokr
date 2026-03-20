@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
 import dynamic from 'next/dynamic'
 import type { Medida } from '@/lib/types'
+import { YearFilter } from '@/components/YearFilter'
 
 const AnaliseCharts = dynamic(() => import('@/components/AnaliseCharts'), {
   ssr: false,
@@ -49,6 +50,7 @@ export default function AnalisePage() {
   const [periodos,      setPeriodos]      = useState<string[]>([])
   const [selDepts,      setSelDepts]      = useState<string[]>([])
   const [selPeriods,    setSelPeriods]    = useState<string[]>([])
+  const [selYear,       setSelYear]       = useState<string | null>(null)
   // medida view state
   const [selMedida,        setSelMedida]        = useState<number | null>(null)
   const [medidaGroupBy,    setMedidaGroupBy]    = useState<'departamento' | 'periodo' | 'centro_custo'>('departamento')
@@ -77,6 +79,16 @@ export default function AnalisePage() {
     }
     init()
   }, [])
+
+  // When year changes, update period selection to that year's months (or clear if "all")
+  useEffect(() => {
+    if (selYear) {
+      setSelPeriods(periodos.filter(p => p.startsWith(selYear)))
+    } else {
+      setSelPeriods([])
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selYear])
 
   // Auto-apply filters whenever selection or groupBy changes
   useEffect(() => {
@@ -230,12 +242,15 @@ export default function AnalisePage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Análise Budget vs Razão</h1>
           <p className="text-gray-500 text-sm mt-0.5">{data.length.toLocaleString()} registros</p>
         </div>
-        <Button variant="outline" size="sm" onClick={exportCSV}><Download size={13} /> CSV</Button>
+        <div className="flex items-center gap-3 flex-wrap">
+          <YearFilter periodos={periodos} selYear={selYear} onChange={y => { setSelYear(y) }} />
+          <Button variant="outline" size="sm" onClick={exportCSV}><Download size={13} /> CSV</Button>
+        </div>
       </div>
 
       <div className="flex gap-4">
