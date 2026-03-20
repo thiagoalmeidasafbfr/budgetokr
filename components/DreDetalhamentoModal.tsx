@@ -1,6 +1,6 @@
 'use client'
-import React, { useState, useEffect, useRef } from 'react'
-import { X, Download, ArrowUpDown, Columns3 } from 'lucide-react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { X, Download, ArrowUpDown, Columns3, Filter } from 'lucide-react'
 import { formatCurrency, formatPeriodo, cn } from '@/lib/utils'
 import type { TreeNode } from '@/lib/dre-utils'
 
@@ -75,24 +75,30 @@ function exportDetalhamento(rows: DetalhamentoLinha[], title: string) {
 }
 
 export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuState; onClose: () => void }) {
-  const [rows,       setRows]       = useState<DetalhamentoLinha[]>([])
-  const [truncated,  setTruncated]  = useState(false)
-  const [loading,    setLoading]    = useState(true)
-  const [textFilter, setTextFilter] = useState('')
-  const [sortCol,    setSortCol]    = useState<DetColKey>('data')
-  const [sortDir,    setSortDir]    = useState<'asc' | 'desc'>('asc')
+  const [rows,        setRows]        = useState<DetalhamentoLinha[]>([])
+  const [truncated,   setTruncated]   = useState(false)
+  const [loading,     setLoading]     = useState(true)
+  const [textFilter,  setTextFilter]  = useState('')
+  const [filterCentros, setFilterCentros] = useState<string[]>([])
+  const [filterTipo,  setFilterTipo]  = useState<'all' | 'budget' | 'razao'>('all')
+  const [filterPeriodo, setFilterPeriodo] = useState('')
+  const [sortCol,     setSortCol]     = useState<DetColKey>('data')
+  const [sortDir,     setSortDir]     = useState<'asc' | 'desc'>('asc')
   const [visibleCols, setVisibleCols] = useState<Set<DetColKey>>(new Set(DET_COLS.map(c => c.key)))
-  const [showCols,   setShowCols]   = useState(false)
-  const colsRef = useRef<HTMLDivElement>(null)
+  const [showCols,    setShowCols]    = useState(false)
+  const [showCCFilter, setShowCCFilter] = useState(false)
+  const [ccSearch,    setCCSearch]    = useState('')
+  const colsRef   = useRef<HTMLDivElement>(null)
+  const ccRef     = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!showCols) return
     const handler = (e: MouseEvent) => {
       if (colsRef.current && !colsRef.current.contains(e.target as Node)) setShowCols(false)
+      if (ccRef.current  && !ccRef.current.contains(e.target  as Node)) setShowCCFilter(false)
     }
     window.addEventListener('mousedown', handler)
     return () => window.removeEventListener('mousedown', handler)
-  }, [showCols])
+  }, [])
 
   useEffect(() => {
     const p = new URLSearchParams()
@@ -109,6 +115,21 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
       .then(data => { setRows(data.rows ?? data); setTruncated(data.truncated ?? false); setLoading(false) })
   }, [ctx])
 
+  // Derived filter options from loaded data
+  const centroOptions = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const r of rows) map.set(r.centro_custo, r.nome_centro_custo)
+    return [...map.entries()]
+      .map(([cc, nome]) => ({ cc, label: nome ? `${cc} — ${nome}` : cc }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [rows])
+
+  const periodoOptions = useMemo(() => {
+    const s = new Set<string>()
+    for (const r of rows) { const p = r.data_lancamento?.substring(0, 7); if (p) s.add(p) }
+    return [...s].sort()
+  }, [rows])
+
   const title = [
     ctx.node.dre,
     ctx.node.agrupamento !== ctx.node.dre ? ctx.node.agrupamento : null,
@@ -119,9 +140,14 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
 
   const displayed = rows
     .filter(r => {
-      if (!textFilter) return true
-      const q = textFilter.toLowerCase()
-      return DET_COLS.some(c => String(colValue(r, c.key)).toLowerCase().includes(q))
+      if (filterTipo !== 'all' && r.tipo !== filterTipo) return false
+      if (filterPeriodo && r.data_lancamento?.substring(0, 7) !== filterPeriodo) return false
+      if (filterCentros.length > 0 && !filterCentros.includes(r.centro_custo)) return false
+      if (textFilter) {
+        const q = textFilter.toLowerCase()
+        if (!DET_COLS.some(c => String(colValue(r, c.key)).toLowerCase().includes(q))) return false
+      }
+      return true
     })
     .sort((a, b) => {
       const va = colValue(a, sortCol)
@@ -137,13 +163,23 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
     else { setSortCol(key); setSortDir('asc') }
   }
 
-  const visibleDefs = DET_COLS.filter(c => visibleCols.has(c.key))
+  const toggleCentro = (cc: string) =>
+    setFilterCentros(prev => prev.includes(cc) ? prev.filter(x => x !== cc) : [...prev, cc])
+
   const activeFiltersCount = (ctx.departamentos?.length ?? 0) + (ctx.periodos?.length ?? 0) + (ctx.centros?.length ?? 0)
+  const localFiltersActive = filterCentros.length > 0 || filterTipo !== 'all' || !!filterPeriodo
+  const visibleDefs = DET_COLS.filter(c => visibleCols.has(c.key))
+
+  const filteredCCOptions = ccSearch
+    ? centroOptions.filter(o => o.label.toLowerCase().includes(ccSearch.toLowerCase()))
+    : centroOptions
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-6 px-4 overflow-auto"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] max-h-[94vh] flex flex-col">
+
+        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <div>
             <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">DRE — Lançamentos</p>
@@ -160,7 +196,7 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
           </div>
           <div className="flex items-center gap-2">
             {!loading && rows.length > 0 && (
-              <button onClick={() => exportDetalhamento(rows, title)}
+              <button onClick={() => exportDetalhamento(displayed, title)}
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-indigo-50 hover:text-indigo-700 text-gray-600 transition-colors font-medium">
                 <Download size={13} /> Exportar CSV
               </button>
@@ -172,35 +208,133 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
         </div>
 
         {!loading && (
-          <div className="flex items-center gap-2 px-5 py-2 border-b bg-gray-50">
-            <input type="text" value={textFilter} onChange={e => setTextFilter(e.target.value)}
-              placeholder="Buscar em todos os campos…"
-              className="flex-1 text-xs border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white" />
-            <div className="relative" ref={colsRef}>
-              <button onClick={() => setShowCols(v => !v)}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-400 hover:text-indigo-700 text-gray-600 transition-colors">
-                <Columns3 size={13} /> Colunas
-              </button>
-              {showCols && (
-                <div className="absolute right-0 top-full mt-1 z-10 bg-white border border-gray-200 rounded-xl shadow-xl p-3 min-w-[180px] space-y-1">
-                  {DET_COLS.map(c => (
-                    <label key={c.key} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
-                      <input type="checkbox" checked={visibleCols.has(c.key)}
-                        onChange={e => setVisibleCols(prev => {
-                          const next = new Set(prev)
-                          e.target.checked ? next.add(c.key) : next.delete(c.key)
-                          return next
-                        })} className="w-3 h-3 accent-indigo-600" />
-                      <span className="text-xs text-gray-700">{c.label}</span>
-                    </label>
-                  ))}
-                </div>
+          <div className="border-b bg-gray-50 px-5 py-2 space-y-2">
+            {/* Row 1: search + cols + count */}
+            <div className="flex items-center gap-2">
+              <input type="text" value={textFilter} onChange={e => setTextFilter(e.target.value)}
+                placeholder="Buscar em todos os campos…"
+                className="flex-1 text-xs border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white" />
+
+              <div className="relative" ref={colsRef}>
+                <button onClick={() => setShowCols(v => !v)}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-400 hover:text-indigo-700 text-gray-600 transition-colors">
+                  <Columns3 size={13} /> Colunas
+                </button>
+                {showCols && (
+                  <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-xl shadow-xl p-3 min-w-[180px] space-y-1">
+                    {DET_COLS.map(c => (
+                      <label key={c.key} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                        <input type="checkbox" checked={visibleCols.has(c.key)}
+                          onChange={e => setVisibleCols(prev => {
+                            const next = new Set(prev)
+                            e.target.checked ? next.add(c.key) : next.delete(c.key)
+                            return next
+                          })} className="w-3 h-3 accent-indigo-600" />
+                        <span className="text-xs text-gray-700">{c.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <span className="text-xs text-gray-400 whitespace-nowrap">{displayed.length} de {rows.length} lançamentos</span>
+              {truncated && (
+                <span className="text-xs text-amber-600 font-medium whitespace-nowrap">⚠ Limite de 50 000 atingido</span>
               )}
             </div>
-            <span className="text-xs text-gray-400 whitespace-nowrap">{displayed.length} de {rows.length} lançamentos</span>
-            {truncated && (
-              <span className="text-xs text-amber-600 font-medium whitespace-nowrap">⚠ Limite de 50 000 registros atingido — exporte o CSV para ver todos</span>
-            )}
+
+            {/* Row 2: column filters */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-gray-400 flex items-center gap-1"><Filter size={11} /> Filtrar:</span>
+
+              {/* Centro de Custo multi-select */}
+              <div className="relative" ref={ccRef}>
+                <button
+                  onClick={() => setShowCCFilter(v => !v)}
+                  className={cn(
+                    'flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border transition-colors',
+                    filterCentros.length > 0
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium'
+                      : 'border-gray-200 bg-white text-gray-600 hover:border-indigo-400 hover:text-indigo-700'
+                  )}>
+                  Centro de Custo
+                  {filterCentros.length > 0 && (
+                    <span className="bg-indigo-600 text-white rounded-full px-1.5 py-0 text-[10px] font-bold">{filterCentros.length}</span>
+                  )}
+                </button>
+                {showCCFilter && (
+                  <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-xl shadow-xl p-2 w-72">
+                    <input
+                      type="text"
+                      value={ccSearch}
+                      onChange={e => setCCSearch(e.target.value)}
+                      placeholder="Buscar centro…"
+                      className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      autoFocus
+                    />
+                    {filterCentros.length > 0 && (
+                      <button
+                        onClick={() => setFilterCentros([])}
+                        className="w-full text-left text-xs text-indigo-600 hover:text-indigo-800 px-1 py-0.5 mb-1">
+                        Limpar seleção ({filterCentros.length})
+                      </button>
+                    )}
+                    <div className="max-h-52 overflow-y-auto space-y-0.5">
+                      {filteredCCOptions.map(o => (
+                        <label key={o.cc} className="flex items-center gap-2 cursor-pointer hover:bg-indigo-50 rounded px-1.5 py-1">
+                          <input type="checkbox" checked={filterCentros.includes(o.cc)}
+                            onChange={() => toggleCentro(o.cc)}
+                            className="w-3 h-3 accent-indigo-600 flex-shrink-0" />
+                          <span className="text-xs text-gray-700 leading-tight">{o.label}</span>
+                        </label>
+                      ))}
+                      {filteredCCOptions.length === 0 && (
+                        <p className="text-xs text-gray-400 px-1 py-2 text-center">Nenhum resultado</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Tipo */}
+              <div className="flex bg-white border border-gray-200 rounded-lg overflow-hidden text-xs">
+                {(['all', 'budget', 'razao'] as const).map(v => (
+                  <button key={v}
+                    onClick={() => setFilterTipo(v)}
+                    className={cn(
+                      'px-2.5 py-1 transition-colors',
+                      filterTipo === v ? 'bg-indigo-600 text-white font-medium' : 'text-gray-600 hover:bg-gray-50'
+                    )}>
+                    {v === 'all' ? 'Todos' : v === 'budget' ? 'Budget' : 'Real'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Período */}
+              {periodoOptions.length > 1 && (
+                <select
+                  value={filterPeriodo}
+                  onChange={e => setFilterPeriodo(e.target.value)}
+                  className={cn(
+                    'text-xs border rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-colors',
+                    filterPeriodo ? 'border-indigo-500 text-indigo-700' : 'border-gray-200 text-gray-600'
+                  )}>
+                  <option value="">Todos os períodos</option>
+                  {periodoOptions.map(p => (
+                    <option key={p} value={p}>{formatPeriodo(p)}</option>
+                  ))}
+                </select>
+              )}
+
+              {/* Clear all local filters */}
+              {localFiltersActive && (
+                <button
+                  onClick={() => { setFilterCentros([]); setFilterTipo('all'); setFilterPeriodo('') }}
+                  className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 px-1.5 py-1 rounded hover:bg-red-50 transition-colors">
+                  <X size={11} /> Limpar filtros
+                </button>
+              )}
+            </div>
           </div>
         )}
 
