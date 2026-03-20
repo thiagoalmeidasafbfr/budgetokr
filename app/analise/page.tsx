@@ -261,6 +261,33 @@ export default function AnalisePage() {
                   </div>
                 </div>
               )}
+              {/* Seletor de Ano */}
+              {(() => {
+                const anos = [...new Set(periodos.map(p => p.split('-')[0]))].sort()
+                if (anos.length <= 1) return null
+                return (
+                  <div>
+                    <p className="text-xs font-medium text-gray-600 mb-1">Ano</p>
+                    <div className="flex flex-wrap gap-1">
+                      {anos.map(ano => {
+                        const anoP = periodos.filter(p => p.startsWith(ano + '-'))
+                        const allSel = anoP.length > 0 && anoP.every(p => selPeriods.includes(p))
+                        return (
+                          <button key={ano} onClick={() => {
+                            if (allSel) setSelPeriods(prev => prev.filter(p => !p.startsWith(ano + '-')))
+                            else setSelPeriods(prev => [...new Set([...prev, ...anoP])])
+                          }}
+                            className={cn('px-2.5 py-1 rounded-md text-xs font-medium transition-colors border',
+                              allSel ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300')}>
+                            {ano}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
+
               <div>
                 <p className="text-xs font-medium text-gray-600 mb-1">Períodos</p>
                 <div className="space-y-0.5 max-h-32 overflow-y-auto">
