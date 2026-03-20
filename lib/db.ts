@@ -12,7 +12,7 @@ if (!fs.existsSync(DATA_DIR)) {
 // Use globalThis to persist DB across HMR in dev mode
 const globalForDb = globalThis as unknown as { __budgetokr_db?: Database.Database; __budgetokr_schema_v?: number }
 
-const SCHEMA_VERSION = 11;
+const SCHEMA_VERSION = 12;
 
 export function getDb(): Database.Database {
   // Re-run migrations if schema version changed (e.g. after code deploy)
@@ -118,8 +118,25 @@ function initSchema(db: Database.Database) {
         `)
       } catch { /* ok */ }
     }
-    // v10 → v11: tabela capex (CAPEX budget + razão com nome_projeto)
+    // v10 → v11: log de acessos (login_logs)
     if (version < 11) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS login_logs (
+          id         INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id    TEXT NOT NULL,
+          role       TEXT,
+          department TEXT,
+          success    INTEGER NOT NULL DEFAULT 0,
+          ip         TEXT,
+          user_agent TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_login_logs_user ON login_logs(user_id);
+        CREATE INDEX IF NOT EXISTS idx_login_logs_date ON login_logs(created_at);
+      `)
+    }
+    // v11 → v12: tabela capex (CAPEX budget + razão com nome_projeto)
+    if (version < 12) {
       // Tabela criada abaixo via CREATE TABLE IF NOT EXISTS
     }
 
