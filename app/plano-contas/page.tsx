@@ -1,5 +1,6 @@
 'use client'
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { ChevronRight, ChevronDown, Filter, X, Download, Upload, RefreshCw, ChevronsUpDown, Pencil } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -29,6 +30,7 @@ interface PlanoData {
 }
 
 export default function PlanoContasPage() {
+  const router = useRouter()
   const [data, setData]             = useState<PlanoData | null>(null)
   const [loading, setLoading]       = useState(true)
   const [expanded, setExpanded]     = useState<Set<string>>(new Set())
@@ -55,6 +57,12 @@ export default function PlanoContasPage() {
     }
     setLoading(false)
   }, [])
+
+  useEffect(() => {
+    fetch('/api/me').then(r => r.ok ? r.json() : null).then(u => {
+      if (!u || u.role !== 'master') router.replace('/dept')
+    })
+  }, [router])
 
   useEffect(() => { loadData([], []) }, [loadData])
 
