@@ -76,6 +76,7 @@ function exportDetalhamento(rows: DetalhamentoLinha[], title: string) {
 
 export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuState; onClose: () => void }) {
   const [rows,       setRows]       = useState<DetalhamentoLinha[]>([])
+  const [truncated,  setTruncated]  = useState(false)
   const [loading,    setLoading]    = useState(true)
   const [textFilter, setTextFilter] = useState('')
   const [sortCol,    setSortCol]    = useState<DetColKey>('data')
@@ -105,7 +106,7 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
     if (ctx.centros?.length)       p.set('centros',       ctx.centros.join(','))
     fetch(`/api/dre/detalhamento?${p}`)
       .then(r => r.json())
-      .then(data => { setRows(data); setLoading(false) })
+      .then(data => { setRows(data.rows ?? data); setTruncated(data.truncated ?? false); setLoading(false) })
   }, [ctx])
 
   const title = [
@@ -197,6 +198,9 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
               )}
             </div>
             <span className="text-xs text-gray-400 whitespace-nowrap">{displayed.length} de {rows.length} lançamentos</span>
+            {truncated && (
+              <span className="text-xs text-amber-600 font-medium whitespace-nowrap">⚠ Limite de 50 000 registros atingido — exporte o CSV para ver todos</span>
+            )}
           </div>
         )}
 

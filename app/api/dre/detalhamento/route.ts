@@ -80,6 +80,7 @@ export async function GET(req: NextRequest) {
 
   const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
 
+  const LIMIT = 50000
   const rows = db.prepare(`
     SELECT
       l.id,
@@ -100,8 +101,9 @@ export async function GET(req: NextRequest) {
     LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil
     ${whereClause}
     ORDER BY l.data_lancamento, l.numero_conta_contabil
-    LIMIT 5000
+    LIMIT ${LIMIT}
   `).all(...params)
 
-  return NextResponse.json(rows)
+  const truncated = rows.length === LIMIT
+  return NextResponse.json({ rows, truncated })
 }
