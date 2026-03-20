@@ -537,12 +537,8 @@ export default function DREPage() {
   }
 
   const expandAll = () => {
-    const all = new Set<string>()
-    hierarchy.forEach(h => {
-      if (h.dre) all.add(h.dre)
-      if (h.agrupamento_arvore) all.add(h.agrupamento_arvore)
-    })
-    setExpanded(all)
+    const groups = new Set(hierarchy.map(h => h.dre).filter(Boolean))
+    setExpanded(groups)
   }
   const collapseAll = () => setExpanded(new Set())
 
@@ -670,33 +666,6 @@ export default function DREPage() {
                 </div>
               )}
 
-              {/* Seletor de Ano */}
-              {(() => {
-                const anos = [...new Set(periodos.map(p => p.split('-')[0]))].sort()
-                if (anos.length <= 1) return null
-                return (
-                  <div>
-                    <p className="text-xs font-medium text-gray-600 mb-1">Ano</p>
-                    <div className="flex flex-wrap gap-1">
-                      {anos.map(ano => {
-                        const anoP = periodos.filter(p => p.startsWith(ano + '-'))
-                        const allSel = anoP.length > 0 && anoP.every(p => selPeriods.includes(p))
-                        return (
-                          <button key={ano} onClick={() => {
-                            if (allSel) setSelPeriods(prev => prev.filter(p => !p.startsWith(ano + '-')))
-                            else setSelPeriods(prev => [...new Set([...prev, ...anoP])])
-                          }}
-                            className={cn('px-2.5 py-1 rounded-md text-xs font-medium transition-colors border',
-                              allSel ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300')}>
-                            {ano}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })()}
-
               <div>
                 <p className="text-xs font-medium text-gray-600 mb-1">Períodos</p>
                 <div className="space-y-0.5 max-h-32 overflow-y-auto">
@@ -788,7 +757,7 @@ export default function DREPage() {
                         <td className={cn('px-5 py-2.5', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-700')}
                           style={{ paddingLeft: `${20 + row.depth * 24}px` }}>
                           <div className="flex items-center gap-1.5">
-                            {row.children.length > 0 && !row.isSubtotal ? (
+                            {row.isGroup && !row.isSubtotal ? (
                               <button onClick={() => toggleExpand(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
                                 {expanded.has(row.name)
                                   ? <ChevronDown size={14} className="text-gray-400" />
@@ -879,7 +848,7 @@ export default function DREPage() {
                                 : 'text-gray-700')}
                               style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
                               <div className="flex items-center gap-1">
-                                {row.children.length > 0 && !row.isSubtotal ? (
+                                {row.isGroup && !row.isSubtotal ? (
                                   <button onClick={() => toggleExpand(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
                                     {expanded.has(row.name)
                                       ? <ChevronDown size={13} className="text-gray-400" />
@@ -1057,7 +1026,7 @@ export default function DREPage() {
                                 : 'text-gray-700')}
                               style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
                               <div className="flex items-center gap-1">
-                                {row.children.length > 0 && !row.isSubtotal ? (
+                                {row.isGroup && !row.isSubtotal ? (
                                   <button onClick={() => toggleExpand(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
                                     {expanded.has(row.name)
                                       ? <ChevronDown size={13} className="text-gray-400" />
