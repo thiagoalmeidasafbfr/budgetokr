@@ -80,10 +80,13 @@ export default function AnalisePage() {
     init()
   }, [])
 
-  // When year or available periods change, update period selection
+  // When year or available periods change, default to YTD (≤ current month)
   useEffect(() => {
     if (selYear && periodos.length > 0) {
-      setSelPeriods(periodos.filter(p => p.startsWith(selYear)))
+      const now = new Date()
+      const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+      const ytd = periodos.filter(p => p.startsWith(selYear) && p <= curMonth)
+      setSelPeriods(ytd.length > 0 ? ytd : periodos.filter(p => p.startsWith(selYear)))
     } else if (!selYear) {
       setSelPeriods([])
     }
