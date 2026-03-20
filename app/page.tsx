@@ -96,6 +96,32 @@ export default function Dashboard() {
     ? analise.filter(r => r.periodo.startsWith(selYear))
     : analise
 
+  // YTD: Only periods that have actual Razão data (non-zero) — for a fair comparison
+  const periodsWithRazao = new Set(filteredAnalise.filter(r => r.razao !== 0).map(r => r.periodo))
+  const hasYtdData = periodsWithRazao.size > 0
+
+  // YTD totals: budget for same periods as razão
+  const ytdData        = filteredAnalise.filter(r => periodsWithRazao.has(r.periodo))
+  const totalBudgetYtd = ytdData.reduce((s, r) => s + r.budget, 0)
+  const totalRazaoYtd  = ytdData.reduce((s, r) => s + r.razao,  0)
+
+  // Full period totals (for summary when no year selected)
+  const totalBudgetFull = filteredAnalise.reduce((s, r) => s + r.budget, 0)
+  const totalRazaoFull  = filteredAnalise.reduce((s, r) => s + r.razao,  0)
+
+  // When year selected: use YTD budget to compare fairly with YTD razão
+  const displayBudget = selYear && hasYtdData ? totalBudgetYtd : (selYear ? totalBudgetFull : (summary?.total_budget ?? 0))
+  const displayRazao  = selYear && hasYtdData ? totalRazaoYtd  : (selYear ? totalRazaoFull  : (summary?.total_razao  ?? 0))
+
+  const variacao    = displayRazao - displayBudget
+  const variacaoPct = displayBudget ? (variacao / Math.abs(displayBudget)) * 100 : 0
+
+  // YTD period label (e.g. "Jan–Fev/26")
+  const ytdPeriods  = [...periodsWithRazao].sort()
+  const ytdLabelSub = ytdPeriods.length > 0
+    ? `YTD · ${formatPeriodo(ytdPeriods[0])}${ytdPeriods.length > 1 ? `–${formatPeriodo(ytdPeriods[ytdPeriods.length - 1])}` : ''}`
+    : (selYear ?? '')
+
   // Aggregate by department using YTD data when a year is selected (fair comparison)
   const deptSource = selYear && hasYtdData ? ytdData : filteredAnalise
   const byDept = deptSource.reduce<Record<string, { budget: number; razao: number; codigo: string }>>((acc, r) => {
@@ -135,32 +161,6 @@ export default function Dashboard() {
     .map(([dept, vals]) => ({ dept, variacao: vals.razao - vals.budget }))
     .sort((a, b) => b.variacao - a.variacao)
     .slice(0, 10)
-
-  // YTD: Only periods that have actual Razão data (non-zero) — for a fair comparison
-  const periodsWithRazao = new Set(filteredAnalise.filter(r => r.razao !== 0).map(r => r.periodo))
-  const hasYtdData = periodsWithRazao.size > 0
-
-  // YTD totals: budget for same periods as razão
-  const ytdData       = filteredAnalise.filter(r => periodsWithRazao.has(r.periodo))
-  const totalBudgetYtd = ytdData.reduce((s, r) => s + r.budget, 0)
-  const totalRazaoYtd  = ytdData.reduce((s, r) => s + r.razao,  0)
-
-  // Full period totals (for summary when no year selected)
-  const totalBudgetFull = filteredAnalise.reduce((s, r) => s + r.budget, 0)
-  const totalRazaoFull  = filteredAnalise.reduce((s, r) => s + r.razao,  0)
-
-  // When year selected: use YTD budget to compare fairly with YTD razão
-  const displayBudget = selYear && hasYtdData ? totalBudgetYtd : (selYear ? totalBudgetFull : (summary?.total_budget ?? 0))
-  const displayRazao  = selYear && hasYtdData ? totalRazaoYtd  : (selYear ? totalRazaoFull  : (summary?.total_razao  ?? 0))
-
-  const variacao    = displayRazao - displayBudget
-  const variacaoPct = displayBudget ? (variacao / Math.abs(displayBudget)) * 100 : 0
-
-  // YTD period label (e.g. "Jan–Fev/26")
-  const ytdPeriods   = [...periodsWithRazao].sort()
-  const ytdLabelSub  = ytdPeriods.length > 0
-    ? `YTD · ${formatPeriodo(ytdPeriods[0])}${ytdPeriods.length > 1 ? `–${formatPeriodo(ytdPeriods[ytdPeriods.length - 1])}` : ''}`
-    : (selYear ?? '')
 
   return (
     <div className="space-y-5">
