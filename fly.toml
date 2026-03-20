@@ -1,0 +1,27 @@
+# fly.toml — Fly.io deployment config
+# Deploy: fly launch → fly deploy
+# Docs:   https://fly.io/docs/reference/configuration/
+
+app = 'budgetokr'
+primary_region = 'gru'  # São Paulo
+
+[build]
+
+[env]
+  NODE_ENV = 'production'
+  PORT = '3000'
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '512mb'
+
+[mounts]
+  source = 'budgetokr_data'
+  destination = '/app/data'
