@@ -53,10 +53,19 @@ interface MedidaCard {
   }>
 }
 
+interface CapexProjeto {
+  nome_projeto: string
+  budget: number
+  razao: number
+  variacao: number
+  variacao_pct: number
+}
+
 interface DashboardData {
   byPeriodo: AnaliseRow[]
   dreGrupos: DreGrupo[]
   medidaCards: MedidaCard[]
+  capexProjetos: CapexProjeto[]
 }
 
 // ─── DRE Detalhamento Modal ────────────────────────────────────────────────────
@@ -1555,7 +1564,71 @@ export default function DeptDashboardPage() {
               </Card>
             )}
 
-            {/* Section 4 — Budget vs Realizado por Período */}
+            {/* Section 4 — CAPEX por Projeto */}
+            {(dashData?.capexProjetos?.length ?? 0) > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold text-gray-700">CAPEX — Investimentos por Projeto</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-gray-50">
+                          <th className="text-left px-5 py-3 font-medium text-gray-500">Projeto</th>
+                          <th className="text-right px-5 py-3 font-medium text-gray-500">Budget</th>
+                          <th className="text-right px-5 py-3 font-medium text-gray-500">Realizado</th>
+                          <th className="text-right px-5 py-3 font-medium text-gray-500">Variação</th>
+                          <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dashData!.capexProjetos.map((row, i) => (
+                          <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                            <td className="px-5 py-3 font-medium text-gray-900">{row.nome_projeto || '—'}</td>
+                            <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.budget)}</td>
+                            <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.razao)}</td>
+                            <td className={cn('px-5 py-3 text-right font-semibold', colorForVariance(row.variacao))}>
+                              {formatCurrency(row.variacao)}
+                            </td>
+                            <td className="px-5 py-3 text-right">
+                              <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(row.variacao))}>
+                                {formatPct(row.variacao_pct)}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
+                          <td className="px-5 py-3">Total CAPEX</td>
+                          <td className="px-5 py-3 text-right">{formatCurrency(dashData!.capexProjetos.reduce((s, r) => s + r.budget, 0))}</td>
+                          <td className="px-5 py-3 text-right">{formatCurrency(dashData!.capexProjetos.reduce((s, r) => s + r.razao, 0))}</td>
+                          {(() => {
+                            const capexTotal = dashData!.capexProjetos.reduce((s, r) => s + r.variacao, 0)
+                            const capexBudgetTotal = dashData!.capexProjetos.reduce((s, r) => s + r.budget, 0)
+                            return (
+                              <>
+                                <td className={cn('px-5 py-3 text-right', colorForVariance(capexTotal))}>
+                                  {formatCurrency(capexTotal)}
+                                </td>
+                                <td className="px-5 py-3 text-right">
+                                  <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(capexTotal))}>
+                                    {formatPct(capexBudgetTotal ? (capexTotal / Math.abs(capexBudgetTotal)) * 100 : 0)}
+                                  </span>
+                                </td>
+                              </>
+                            )
+                          })()}
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Section 5 — Budget vs Realizado por Período */}
             {chartRows.length > 0 && (
               <Card>
                 <CardHeader className="pb-2">

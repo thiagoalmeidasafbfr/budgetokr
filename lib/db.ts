@@ -12,7 +12,7 @@ if (!fs.existsSync(DATA_DIR)) {
 // Use globalThis to persist DB across HMR in dev mode
 const globalForDb = globalThis as unknown as { __budgetokr_db?: Database.Database; __budgetokr_schema_v?: number }
 
-const SCHEMA_VERSION = 10;
+const SCHEMA_VERSION = 11;
 
 export function getDb(): Database.Database {
   // Re-run migrations if schema version changed (e.g. after code deploy)
@@ -118,6 +118,11 @@ function initSchema(db: Database.Database) {
         `)
       } catch { /* ok */ }
     }
+    // v10 → v11: tabela capex (CAPEX budget + razão com nome_projeto)
+    if (version < 11) {
+      // Tabela criada abaixo via CREATE TABLE IF NOT EXISTS
+    }
+
     if (!row) {
       db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(SCHEMA_VERSION);
     } else {
@@ -215,6 +220,30 @@ function initSchema(db: Database.Database) {
       UNIQUE(kpi_id, periodo),
       FOREIGN KEY (kpi_id) REFERENCES kpis_manuais(id) ON DELETE CASCADE
     );
+
+    -- ─── Fato: CAPEX (Budget + Razão com nome_projeto) ─────────────────────────
+    CREATE TABLE IF NOT EXISTS capex (
+      id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+      tipo                      TEXT    NOT NULL CHECK (tipo IN ('budget','razao')),
+      data_lancamento           TEXT,
+      nome_projeto              TEXT,
+      nome_conta_contabil       TEXT,
+      numero_conta_contabil     TEXT,
+      centro_custo              TEXT,
+      nome_conta_contrapartida  TEXT,
+      fonte                     TEXT,
+      observacao                TEXT,
+      debito_credito            REAL    NOT NULL DEFAULT 0,
+      created_at                DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at                DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_capex_tipo        ON capex(tipo);
+    CREATE INDEX IF NOT EXISTS idx_capex_cc           ON capex(centro_custo);
+    CREATE INDEX IF NOT EXISTS idx_capex_conta        ON capex(numero_conta_contabil);
+    CREATE INDEX IF NOT EXISTS idx_capex_data         ON capex(data_lancamento);
+    CREATE INDEX IF NOT EXISTS idx_capex_projeto      ON capex(nome_projeto);
+    CREATE INDEX IF NOT EXISTS idx_capex_tipo_cc      ON capex(tipo, centro_custo);
 
     -- ─── Medidas (como "measures" do Power BI) ───────────────────────────────
     CREATE TABLE IF NOT EXISTS medidas (
