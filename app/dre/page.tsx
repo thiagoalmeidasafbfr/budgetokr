@@ -1,446 +1,27 @@
 'use client'
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { ChevronRight, ChevronDown, Filter, X, Download, RefreshCw, ExternalLink, ArrowUpDown, Columns3 } from 'lucide-react'
+import { ChevronRight, ChevronDown, Filter, X, Download, RefreshCw, ExternalLink } from 'lucide-react'
+import { YearFilter } from '@/components/YearFilter'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
-import {
-  BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine,
-} from 'recharts'
 import { toQuarterLabel, groupByQuarter, sortQuarterLabels, buildTree, buildTreeFromLinhas, flattenTree } from '@/lib/dre-utils'
-import type { DRERow, TreeNode, DRELinha } from '@/lib/dre-utils'
+import type { DRERow, DREAccountRow, TreeNode, DRELinha } from '@/lib/dre-utils'
+import dynamic from 'next/dynamic'
+import type { ContextMenuState } from '@/components/DreDetalhamentoModal'
 
-// ── Export helper ──────────────────────────────────────────────────────────────
-function exportDetalhamento(rows: DetalhamentoLinha[], title: string) {
-  const header = ['Data', 'Tipo', 'Centro de Custo', 'DRE', 'Agrupamento', 'Conta Contábil', 'Valor', 'Conta Contrapartida', 'Observação']
-  const csvRows = rows.map(r => [
-    r.data_lancamento,
-    r.tipo,
-    `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}`,
-    r.dre,
-    r.agrupamento_arvore,
-    `${r.numero_conta_contabil} — ${r.nome_conta_contabil}`,
-    r.debito_credito,
-    r.nome_conta_contrapartida,
-    r.observacao,
-  ])
-  const csv = [header, ...csvRows].map(row => row.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')).join('\n')
-  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
-  const url  = URL.createObjectURL(blob)
-  const a    = document.createElement('a')
-  a.href = url; a.download = `dre-lancamentos-${Date.now()}.csv`; a.click()
-}
+const DetalhamentoModal = dynamic(() => import('@/components/DreDetalhamentoModal'), { ssr: false })
+const WaterfallChart = dynamic(() => import('@/components/DreWaterfallChart'), {
+  ssr: false,
+  loading: () => <Card><CardContent className="p-5"><div className="h-[420px] bg-gray-50 rounded-lg animate-pulse" /></CardContent></Card>,
+})
 
-// ── Context menu + Drill-down modal ──────────────────────────────────────────
-
-interface ContextMenuState {
-  x: number
-  y: number
-  node: TreeNode
-  periodo?: string        // se direito-clicou numa célula de período específico
-  tipo: 'budget' | 'razao' | 'ambos'
-  departamentos?: string[] // filtros ativos da DRE principal
-  periodos?: string[]      // filtros ativos da DRE principal
-  centros?: string[]       // subfiltro de centros de custo
-}
-
-interface DetalhamentoLinha {
-  id: number
-  tipo: string
-  data_lancamento: string
-  numero_conta_contabil: string
-  nome_conta_contabil: string
-  centro_custo: string
-  nome_centro_custo: string
-  agrupamento_arvore: string
-  dre: string
-  nome_conta_contrapartida: string
-  debito_credito: number
-  observacao: string
-  fonte: string
-}
-
-// Column definitions for the detalhamento table
-type DetColKey = 'data' | 'tipo' | 'centro' | 'dre' | 'agrupamento' | 'conta' | 'valor' | 'contrapartida' | 'obs'
-const DET_COLS: { key: DetColKey; label: string; align?: 'right' }[] = [
-  { key: 'data',          label: 'Data Lançamento' },
-  { key: 'tipo',          label: 'Tipo' },
-  { key: 'centro',        label: 'Centro de Custo' },
-  { key: 'dre',           label: 'DRE Gerencial' },
-  { key: 'agrupamento',   label: 'Agrupamento' },
-  { key: 'conta',         label: 'Conta Contábil' },
-  { key: 'valor',         label: 'Valor', align: 'right' },
-  { key: 'contrapartida', label: 'Conta Contrapartida' },
-  { key: 'obs',           label: 'Observação' },
-]
-
-function colValue(r: DetalhamentoLinha, key: DetColKey): string | number {
-  switch (key) {
-    case 'data':          return r.data_lancamento
-    case 'tipo':          return r.tipo
-    case 'centro':        return `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}`
-    case 'dre':           return r.dre
-    case 'agrupamento':   return r.agrupamento_arvore
-    case 'conta':         return `${r.numero_conta_contabil} — ${r.nome_conta_contabil}`
-    case 'valor':         return r.debito_credito
-    case 'contrapartida': return r.nome_conta_contrapartida
-    case 'obs':           return r.observacao ?? ''
-  }
-}
-
-function DetalhamentoModal({
-  ctx,
-  onClose,
-}: {
-  ctx: ContextMenuState
-  onClose: () => void
-}) {
-  const [rows,       setRows]       = useState<DetalhamentoLinha[]>([])
-  const [loading,    setLoading]    = useState(true)
-  const [textFilter, setTextFilter] = useState('')
-  const [sortCol,    setSortCol]    = useState<DetColKey>('data')
-  const [sortDir,    setSortDir]    = useState<'asc' | 'desc'>('asc')
-  const [visibleCols, setVisibleCols] = useState<Set<DetColKey>>(new Set(DET_COLS.map(c => c.key)))
-  const [showCols,   setShowCols]   = useState(false)
-  const colsRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!showCols) return
-    const handler = (e: MouseEvent) => {
-      if (colsRef.current && !colsRef.current.contains(e.target as Node)) setShowCols(false)
-    }
-    window.addEventListener('mousedown', handler)
-    return () => window.removeEventListener('mousedown', handler)
-  }, [showCols])
-
-  useEffect(() => {
-    const p = new URLSearchParams()
-    if (ctx.node.dre)         p.set('dre',           ctx.node.dre)
-    if (ctx.node.agrupamento) p.set('agrupamento',   ctx.node.agrupamento)
-    if (ctx.periodo)          p.set('periodo',        ctx.periodo)
-    if (ctx.tipo !== 'ambos') p.set('tipo',           ctx.tipo)
-    // Pass active main-page filters
-    if (ctx.departamentos?.length) p.set('departamentos', ctx.departamentos.join(','))
-    if (ctx.periodos?.length && !ctx.periodo) p.set('periodos', ctx.periodos.join(','))
-    if (ctx.centros?.length)       p.set('centros',       ctx.centros.join(','))
-    fetch(`/api/dre/detalhamento?${p}`)
-      .then(r => r.json())
-      .then(data => { setRows(data); setLoading(false) })
-  }, [ctx])
-
-  const title = [
-    ctx.node.dre,
-    ctx.node.agrupamento !== ctx.node.dre ? ctx.node.agrupamento : null,
-    ctx.periodo ? `· ${formatPeriodo(ctx.periodo)}` : null,
-    ctx.tipo !== 'ambos' ? `· ${ctx.tipo === 'budget' ? 'Budget' : 'Realizado'}` : null,
-  ].filter(Boolean).join(' › ')
-
-  // Apply text filter then sort
-  const displayed = rows
-    .filter(r => {
-      if (!textFilter) return true
-      const q = textFilter.toLowerCase()
-      return DET_COLS.some(c => String(colValue(r, c.key)).toLowerCase().includes(q))
-    })
-    .sort((a, b) => {
-      const va = colValue(a, sortCol)
-      const vb = colValue(b, sortCol)
-      const cmp = typeof va === 'number' && typeof vb === 'number'
-        ? va - vb
-        : String(va).localeCompare(String(vb))
-      return sortDir === 'asc' ? cmp : -cmp
-    })
-
-  const total = displayed.reduce((s, r) => s + r.debito_credito, 0)
-
-  const toggleSort = (key: DetColKey) => {
-    if (sortCol === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortCol(key); setSortDir('asc') }
-  }
-
-  const visibleDefs = DET_COLS.filter(c => visibleCols.has(c.key))
-
-  // Count active filters coming from the main page
-  const activeFiltersCount = (ctx.departamentos?.length ?? 0) + (ctx.periodos?.length ?? 0) + (ctx.centros?.length ?? 0)
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-6 px-4 overflow-auto"
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] max-h-[94vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b">
-          <div>
-            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">DRE — Lançamentos</p>
-            <h2 className="text-base font-bold text-gray-900 mt-0.5">{title}</h2>
-            {activeFiltersCount > 0 && (
-              <p className="text-xs text-indigo-600 mt-0.5">
-                {[
-                  ctx.departamentos?.length ? `${ctx.departamentos.length} dept.` : null,
-                  ctx.periodos?.length && !ctx.periodo ? `${ctx.periodos.length} período(s)` : null,
-                  ctx.centros?.length ? `${ctx.centros.length} CC(s)` : null,
-                ].filter(Boolean).join(' · ')} filtrado(s) da DRE
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {!loading && rows.length > 0 && (
-              <button onClick={() => exportDetalhamento(rows, title)}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-indigo-50 hover:text-indigo-700 text-gray-600 transition-colors font-medium">
-                <Download size={13} /> Exportar CSV
-              </button>
-            )}
-            <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600">
-              <X size={16} />
-            </button>
-          </div>
-        </div>
-
-        {/* Toolbar */}
-        {!loading && (
-          <div className="flex items-center gap-2 px-5 py-2 border-b bg-gray-50">
-            <input
-              type="text"
-              value={textFilter}
-              onChange={e => setTextFilter(e.target.value)}
-              placeholder="Buscar em todos os campos…"
-              className="flex-1 text-xs border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
-            />
-            {/* Column visibility */}
-            <div className="relative" ref={colsRef}>
-              <button
-                onClick={() => setShowCols(v => !v)}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-400 hover:text-indigo-700 text-gray-600 transition-colors">
-                <Columns3 size={13} /> Colunas
-              </button>
-              {showCols && (
-                <div className="absolute right-0 top-full mt-1 z-10 bg-white border border-gray-200 rounded-xl shadow-xl p-3 min-w-[180px] space-y-1">
-                  {DET_COLS.map(c => (
-                    <label key={c.key} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
-                      <input type="checkbox"
-                        checked={visibleCols.has(c.key)}
-                        onChange={e => setVisibleCols(prev => {
-                          const next = new Set(prev)
-                          e.target.checked ? next.add(c.key) : next.delete(c.key)
-                          return next
-                        })}
-                        className="w-3 h-3 accent-indigo-600"
-                      />
-                      <span className="text-xs text-gray-700">{c.label}</span>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-            <span className="text-xs text-gray-400 whitespace-nowrap">
-              {displayed.length} de {rows.length} lançamentos
-            </span>
-          </div>
-        )}
-
-        {/* Body */}
-        {loading ? (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : (
-          <div className="flex-1 overflow-auto">
-            <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-gray-700 text-white">
-                <tr>
-                  {visibleDefs.map(c => (
-                    <th key={c.key}
-                      onClick={() => toggleSort(c.key)}
-                      className={cn(
-                        'px-3 py-2 font-medium whitespace-nowrap cursor-pointer select-none hover:bg-gray-600 transition-colors',
-                        c.align === 'right' ? 'text-right' : 'text-left'
-                      )}>
-                      <span className="inline-flex items-center gap-1">
-                        {c.label}
-                        <ArrowUpDown size={10} className={cn('opacity-40', sortCol === c.key && 'opacity-100 text-indigo-300')} />
-                        {sortCol === c.key && <span className="text-indigo-300 text-[9px]">{sortDir === 'asc' ? '▲' : '▼'}</span>}
-                      </span>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {displayed.map((r, i) => (
-                  <tr key={r.id} className={cn('border-b border-gray-100', i % 2 === 0 ? 'bg-white' : 'bg-gray-50/60')}>
-                    {visibleCols.has('data')          && <td className="px-3 py-1.5 whitespace-nowrap font-mono">{r.data_lancamento}</td>}
-                    {visibleCols.has('tipo')          && <td className="px-3 py-1.5">
-                      <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium',
-                        r.tipo === 'budget' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700')}>
-                        {r.tipo === 'budget' ? 'Budget' : 'Real'}
-                      </span>
-                    </td>}
-                    {visibleCols.has('centro')        && <td className="px-3 py-1.5 whitespace-nowrap">{r.centro_custo}{r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}</td>}
-                    {visibleCols.has('dre')           && <td className="px-3 py-1.5 whitespace-nowrap">{r.dre}</td>}
-                    {visibleCols.has('agrupamento')   && <td className="px-3 py-1.5 whitespace-nowrap">{r.agrupamento_arvore}</td>}
-                    {visibleCols.has('conta')         && <td className="px-3 py-1.5 whitespace-nowrap">{r.numero_conta_contabil} — {r.nome_conta_contabil}</td>}
-                    {visibleCols.has('valor')         && <td className={cn('px-3 py-1.5 text-right whitespace-nowrap font-semibold', r.debito_credito < 0 ? 'text-red-600' : 'text-gray-800')}>
-                      {formatCurrency(r.debito_credito)}
-                    </td>}
-                    {visibleCols.has('contrapartida') && <td className="px-3 py-1.5 whitespace-nowrap text-gray-500">{r.nome_conta_contrapartida}</td>}
-                    {visibleCols.has('obs')           && <td className="px-3 py-1.5 max-w-xs truncate text-gray-500">{r.observacao}</td>}
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="sticky bottom-0 bg-gray-800 text-white font-bold">
-                <tr>
-                  <td colSpan={visibleDefs.filter(c => c.key !== 'valor').length} className="px-3 py-2 text-right">
-                    Total ({displayed.length} lançamentos)
-                  </td>
-                  <td className={cn('px-3 py-2 text-right', total < 0 ? 'text-red-300' : 'text-emerald-300')}>
-                    {visibleCols.has('valor') ? formatCurrency(total) : '—'}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ── Waterfall helpers ─────────────────────────────────────────────────────────
-
-interface WaterfallEntry {
-  name: string
-  shortName: string
-  offset: number
-  bar: number
-  isPositive: boolean
-  isSubtotal: boolean
-  rawValue: number
-}
-
-function buildWaterfallData(tree: TreeNode[], dreLinhas: DRELinha[], tipo: 'budget' | 'razao'): WaterfallEntry[] {
-  const result: WaterfallEntry[] = []
-  let running = 0
-  for (const linha of dreLinhas) {
-    const node = tree.find(n => n.name === linha.nome)
-    if (!node) continue
-    const value = tipo === 'budget' ? node.budget : node.razao
-    if (linha.tipo === 'grupo') {
-      const isPositive = value >= 0
-      result.push({
-        name: linha.nome,
-        shortName: linha.nome.length > 18 ? linha.nome.substring(0, 16) + '…' : linha.nome,
-        offset: isPositive ? running : running + value,
-        bar: Math.abs(value),
-        isPositive,
-        isSubtotal: false,
-        rawValue: value,
-      })
-      running += value
-    } else {
-      const isPositive = value >= 0
-      result.push({
-        name: linha.nome,
-        shortName: linha.nome.length > 18 ? linha.nome.substring(0, 16) + '…' : linha.nome,
-        offset: isPositive ? 0 : value,
-        bar: Math.abs(value),
-        isPositive,
-        isSubtotal: true,
-        rawValue: value,
-      })
-    }
-  }
-  return result
-}
-
-function WaterfallTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: WaterfallEntry }> }) {
-  if (!active || !payload?.length) return null
-  const d = payload[0].payload
-  return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-xs">
-      <p className="font-semibold text-gray-800 mb-1">{d.name}</p>
-      <p className={d.isPositive ? 'text-emerald-600' : 'text-red-500'}>{formatCurrency(d.rawValue)}</p>
-    </div>
-  )
-}
-
-function WaterfallChart({ tree, dreLinhas }: { tree: TreeNode[]; dreLinhas: DRELinha[] }) {
-  const budgetData  = buildWaterfallData(tree, dreLinhas, 'budget')
-  const razaoData   = buildWaterfallData(tree, dreLinhas, 'razao')
-
-  const renderChart = (data: WaterfallEntry[], title: string, color: string) => (
-    <div className="flex-1 min-w-0">
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">{title}</p>
-      <ResponsiveContainer width="100%" height={380}>
-        <BarChart data={data} margin={{ top: 10, right: 12, left: 10, bottom: 80 }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-          <XAxis
-            dataKey="shortName"
-            tick={{ fontSize: 10, fill: '#6b7280' }}
-            angle={-40}
-            textAnchor="end"
-            interval={0}
-          />
-          <YAxis
-            tickFormatter={(v: number) => {
-              if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(0)}M`
-              if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(0)}k`
-              return String(v)
-            }}
-            tick={{ fontSize: 10, fill: '#6b7280' }}
-            width={56}
-          />
-          <Tooltip content={<WaterfallTooltip />} />
-          <ReferenceLine y={0} stroke="#9ca3af" strokeWidth={1} />
-          {/* invisible offset to float the bars */}
-          <Bar dataKey="offset" stackId="wf" fill="transparent" isAnimationActive={false} />
-          {/* visible bar */}
-          <Bar dataKey="bar" stackId="wf" isAnimationActive={false} radius={[3, 3, 0, 0]}>
-            {data.map((entry, i) => (
-              <Cell
-                key={i}
-                fill={
-                  entry.isSubtotal
-                    ? color
-                    : entry.isPositive
-                      ? '#22c55e'
-                      : '#ef4444'
-                }
-                opacity={entry.isSubtotal ? 1 : 0.85}
-              />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  )
-
-  return (
-    <Card>
-      <CardContent className="p-5">
-        <div className="flex gap-6">
-          {renderChart(budgetData,  'Orçado (Budget)',   '#6366f1')}
-          {renderChart(razaoData,   'Realizado',         '#0ea5e9')}
-        </div>
-        <div className="flex items-center gap-4 mt-3 justify-center flex-wrap">
-          {[
-            { color: '#22c55e', label: 'Positivo (receita / ganho)' },
-            { color: '#ef4444', label: 'Negativo (custo / dedução)' },
-            { color: '#6366f1', label: 'Subtotal Budget' },
-            { color: '#0ea5e9', label: 'Subtotal Realizado' },
-          ].map(l => (
-            <div key={l.label} className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-sm inline-block" style={{ background: l.color }} />
-              <span className="text-xs text-gray-500">{l.label}</span>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
+// DetalhamentoModal and WaterfallChart are dynamically imported above
 
 export default function DREPage() {
   const [rawData,       setRawData]       = useState<DRERow[]>([])
+  const [accountData,   setAccountData]   = useState<DREAccountRow[]>([])
   const [hierarchy,     setHierarchy]     = useState<Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }>>([])
   const [dreLinhas,     setDreLinhas]     = useState<DRELinha[]>([])
   const [departamentos, setDepartamentos] = useState<string[]>([])
@@ -448,6 +29,7 @@ export default function DREPage() {
   const [selDepts,      setSelDepts]      = useState<string[]>([])
   const [selPeriods,    setSelPeriods]    = useState<string[]>([])
   const [selCentros,    setSelCentros]    = useState<string[]>([])
+  const [selYear,       setSelYear]       = useState<string | null>(null)
   const [centrosDisp,   setCentrosDisp]   = useState<Array<{ cc: string; nome: string }>>([])
   const [expanded,      setExpanded]      = useState<Set<string>>(new Set())
   const [loading,       setLoading]       = useState(false)
@@ -520,12 +102,26 @@ export default function DREPage() {
     if (depts.length)   params.set('departamentos', depts.join(','))
     if (prds.length)    params.set('periodos', prds.join(','))
     if (centros.length) params.set('centros', centros.join(','))
-    const res = await fetch(`/api/dre?${params}`)
+    const acctParams = new URLSearchParams(params)
+    acctParams.set('type', 'accounts')
+    const [res, acctRes] = await Promise.all([
+      fetch(`/api/dre?${params}`),
+      fetch(`/api/dre?${acctParams}`),
+    ])
     if (res.ok) setRawData(await res.json())
+    if (acctRes.ok) setAccountData(await acctRes.json())
     setLoading(false)
   }, [])
 
   const applyFilters = () => loadData(selDepts, selPeriods, selCentros)
+
+  // When year changes, update period selection and auto-apply
+  const handleYearChange = (year: string | null) => {
+    setSelYear(year)
+    const newPeriods = year ? periodos.filter(p => p.startsWith(year)) : []
+    setSelPeriods(newPeriods)
+    loadData(selDepts, newPeriods, selCentros)
+  }
 
   const toggleExpand = (name: string) => {
     setExpanded(prev => {
@@ -537,7 +133,11 @@ export default function DREPage() {
   }
 
   const expandAll = () => {
-    const groups = new Set(hierarchy.map(h => h.dre).filter(Boolean))
+    const groups = new Set<string>()
+    // Add DRE group names (level 1)
+    for (const h of hierarchy) if (h.dre) groups.add(h.dre)
+    // Add agrupamento names (level 2) for 3rd level expansion
+    for (const h of hierarchy) if (h.agrupamento_arvore) groups.add(h.agrupamento_arvore)
     setExpanded(groups)
   }
   const collapseAll = () => setExpanded(new Set())
@@ -545,8 +145,8 @@ export default function DREPage() {
   // Build tree from raw data
   // Se há estrutura dre_linhas cadastrada, usa ela para definir ordem, subtotais e sinais
   const tree = dreLinhas.length > 0
-    ? buildTreeFromLinhas(rawData, hierarchy, dreLinhas)
-    : buildTree(rawData, hierarchy)
+    ? buildTreeFromLinhas(rawData, hierarchy, dreLinhas, accountData)
+    : buildTree(rawData, hierarchy, accountData)
 
   // Get all periods from data
   const dataPeriods = [...new Set(rawData.map(r => r.periodo).filter(Boolean))].sort()
@@ -610,12 +210,15 @@ export default function DREPage() {
       {/* Modal de detalhamento */}
       {detModal && <DetalhamentoModal ctx={detModal} onClose={() => setDetModal(null)} />}
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">DRE — Demonstrativo de Resultados</h1>
           <p className="text-gray-500 text-sm mt-0.5">P&L por linha contábil · Budget vs Razão · Clique direito para detalhamento</p>
         </div>
-        <Button variant="outline" size="sm" onClick={exportCSV}><Download size={13} /> CSV</Button>
+        <div className="flex items-center gap-3 flex-wrap">
+          <YearFilter periodos={periodos} selYear={selYear} onChange={handleYearChange} />
+          <Button variant="outline" size="sm" onClick={exportCSV}><Download size={13} /> CSV</Button>
+        </div>
       </div>
 
       <div className="flex gap-4">
@@ -754,12 +357,16 @@ export default function DREPage() {
                             ? 'bg-gray-50/80 hover:bg-gray-100/80'
                             : 'border-gray-50 hover:bg-gray-50',
                         )}>
-                        <td className={cn('px-5 py-2.5', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-700')}
+                        <td className={cn('px-5 py-2.5',
+                          row.isSubtotal ? 'font-bold text-gray-900'
+                            : row.isGroup ? 'font-medium text-gray-800'
+                            : row.isAccount ? 'text-gray-500 text-xs'
+                            : 'text-gray-700')}
                           style={{ paddingLeft: `${20 + row.depth * 24}px` }}>
                           <div className="flex items-center gap-1.5">
                             {row.isGroup && !row.isSubtotal ? (
-                              <button onClick={() => toggleExpand(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
-                                {expanded.has(row.name)
+                              <button onClick={() => toggleExpand(row.agrupamento || row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                {expanded.has(row.agrupamento || row.name)
                                   ? <ChevronDown size={14} className="text-gray-400" />
                                   : <ChevronRight size={14} className="text-gray-400" />}
                               </button>
@@ -819,7 +426,7 @@ export default function DREPage() {
                           Demonstrativo
                         </th>
                         {dataPeriods.map(p => (
-                          <th key={p} className="text-center px-1.5 py-2 font-medium text-gray-400 text-xs border-l border-gray-100 min-w-[68px]">
+                          <th key={p} className="text-center px-1.5 py-2 font-medium text-gray-400 text-xs border-l-2 border-black min-w-[68px]">
                             {formatPeriodo(p).replace(' ', '\u00a0')}
                           </th>
                         ))}
@@ -849,8 +456,8 @@ export default function DREPage() {
                               style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
                               <div className="flex items-center gap-1">
                                 {row.isGroup && !row.isSubtotal ? (
-                                  <button onClick={() => toggleExpand(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
-                                    {expanded.has(row.name)
+                                  <button onClick={() => toggleExpand(row.agrupamento || row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                    {expanded.has(row.agrupamento || row.name)
                                       ? <ChevronDown size={13} className="text-gray-400" />
                                       : <ChevronRight size={13} className="text-gray-400" />}
                                   </button>
@@ -866,7 +473,7 @@ export default function DREPage() {
                               return (
                                 <td key={p}
                                   onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'ambos') }}
-                                  className="px-1 py-2 text-center border-l border-gray-100 group/cell">
+                                  className="px-1 py-2 text-center border-l-2 border-black group/cell">
                                   {hasData ? (
                                     <span title={`Orç: ${formatCurrency(cell.budget)}\nReal: ${formatCurrency(cell.razao)}\nVar: ${formatCurrency(v)}`}
                                       className={cn(
@@ -913,7 +520,7 @@ export default function DREPage() {
                           Demonstrativo Gerencial
                         </th>
                         {dataPeriods.map(p => (
-                          <th key={p} colSpan={3} className="text-center px-1 py-2 font-medium text-gray-600 border-l-2 border-gray-300 bg-gray-50">
+                          <th key={p} colSpan={3} className="text-center px-1 py-2 font-medium text-gray-600 border-l-2 border-black bg-gray-50">
                             {formatPeriodo(p)}
                           </th>
                         ))}
@@ -922,7 +529,7 @@ export default function DREPage() {
                         <th className="sticky left-0 bg-gray-50/50 z-10" />
                         {dataPeriods.map(p => (
                           <React.Fragment key={p}>
-                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-gray-300">Orçado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-black">Orçado</th>
                             <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Realizado</th>
                             <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Var.</th>
                           </React.Fragment>
@@ -944,8 +551,8 @@ export default function DREPage() {
                             style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
                             <div className="flex items-center gap-1">
                               {row.isGroup && !row.isSubtotal ? (
-                                <button onClick={() => toggleExpand(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
-                                  {expanded.has(row.name)
+                                <button onClick={() => toggleExpand(row.agrupamento || row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                  {expanded.has(row.agrupamento || row.name)
                                     ? <ChevronDown size={13} className="text-gray-400" />
                                     : <ChevronRight size={13} className="text-gray-400" />}
                                 </button>
@@ -959,7 +566,7 @@ export default function DREPage() {
                             return (
                               <React.Fragment key={p}>
                                 <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'budget') }}
-                                  className={cn('px-2 py-2 text-right text-xs border-l-2 border-gray-300', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                  className={cn('px-2 py-2 text-right text-xs border-l-2 border-black', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
                                   {formatCurrency(cell.budget)}
                                 </td>
                                 <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'razao') }}
@@ -996,7 +603,7 @@ export default function DREPage() {
                           Demonstrativo Gerencial
                         </th>
                         {allQuarters.map(q => (
-                          <th key={q} colSpan={3} className="text-center px-1 py-2 font-medium text-gray-600 border-l-2 border-gray-300 bg-gray-50">
+                          <th key={q} colSpan={3} className="text-center px-1 py-2 font-medium text-gray-600 border-l-2 border-black bg-gray-50">
                             {q}
                           </th>
                         ))}
@@ -1005,7 +612,7 @@ export default function DREPage() {
                         <th className="sticky left-0 bg-gray-50/50 z-10" />
                         {allQuarters.map(q => (
                           <React.Fragment key={q}>
-                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-gray-300">Orçado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-black">Orçado</th>
                             <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Realizado</th>
                             <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Var.</th>
                           </React.Fragment>
@@ -1027,8 +634,8 @@ export default function DREPage() {
                               style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
                               <div className="flex items-center gap-1">
                                 {row.isGroup && !row.isSubtotal ? (
-                                  <button onClick={() => toggleExpand(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
-                                    {expanded.has(row.name)
+                                  <button onClick={() => toggleExpand(row.agrupamento || row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                    {expanded.has(row.agrupamento || row.name)
                                       ? <ChevronDown size={13} className="text-gray-400" />
                                       : <ChevronRight size={13} className="text-gray-400" />}
                                   </button>
@@ -1041,7 +648,7 @@ export default function DREPage() {
                               const v = cell.razao - cell.budget
                               return (
                                 <React.Fragment key={q}>
-                                  <td className={cn('px-2 py-2 text-right text-xs border-l-2 border-gray-300', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                  <td className={cn('px-2 py-2 text-right text-xs border-l-2 border-black', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
                                     {formatCurrency(cell.budget)}
                                   </td>
                                   <td className={cn('px-2 py-2 text-right text-xs border-l border-gray-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
@@ -1156,7 +763,7 @@ export default function DREPage() {
                             <th colSpan={2} className="text-center px-2 py-2 font-medium text-emerald-600 border-l-2 border-emerald-200 bg-emerald-50/50">
                               {formatOption(compB)}
                             </th>
-                            <th colSpan={2} className="text-center px-2 py-2 font-medium text-gray-600 border-l-2 border-gray-300 bg-gray-100/50">
+                            <th colSpan={2} className="text-center px-2 py-2 font-medium text-gray-600 border-l-2 border-black bg-gray-100/50">
                               Variação (A vs B)
                             </th>
                           </tr>
@@ -1166,7 +773,7 @@ export default function DREPage() {
                             <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Realizado</th>
                             <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-emerald-200">Orçado</th>
                             <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Realizado</th>
-                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-gray-300">Δ Realizado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-black">Δ Realizado</th>
                             <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">% Var.</th>
                           </tr>
                         </thead>
@@ -1188,8 +795,8 @@ export default function DREPage() {
                                   style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
                                   <div className="flex items-center gap-1">
                                     {row.isGroup && !row.isSubtotal ? (
-                                      <button onClick={() => toggleExpand(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
-                                        {expanded.has(row.name)
+                                      <button onClick={() => toggleExpand(row.agrupamento || row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                        {expanded.has(row.agrupamento || row.name)
                                           ? <ChevronDown size={13} className="text-gray-400" />
                                           : <ChevronRight size={13} className="text-gray-400" />}
                                       </button>
@@ -1212,7 +819,7 @@ export default function DREPage() {
                                   {formatCurrency(vB.razao)}
                                 </td>
                                 {/* Delta */}
-                                <td className={cn('px-2 py-2 text-right text-xs font-semibold border-l-2 border-gray-300', colorForVariance(deltaRazao))}>
+                                <td className={cn('px-2 py-2 text-right text-xs font-semibold border-l-2 border-black', colorForVariance(deltaRazao))}>
                                   {formatCurrency(deltaRazao)}
                                 </td>
                                 <td className="px-2 py-2 text-right border-l border-gray-200">

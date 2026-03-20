@@ -9,18 +9,24 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-let db: Database.Database | null = null;
+// Use globalThis to persist DB across HMR in dev mode
+const globalForDb = globalThis as unknown as { __budgetokr_db?: Database.Database; __budgetokr_schema_v?: number }
 
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 10;
 
 export function getDb(): Database.Database {
-  if (!db) {
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-    initSchema(db);
+  // Re-run migrations if schema version changed (e.g. after code deploy)
+  if (globalForDb.__budgetokr_db && globalForDb.__budgetokr_schema_v === SCHEMA_VERSION) {
+    return globalForDb.__budgetokr_db;
   }
-  return db;
+  if (!globalForDb.__budgetokr_db) {
+    globalForDb.__budgetokr_db = new Database(DB_PATH);
+    globalForDb.__budgetokr_db.pragma('journal_mode = WAL');
+    globalForDb.__budgetokr_db.pragma('foreign_keys = ON');
+  }
+  initSchema(globalForDb.__budgetokr_db);
+  globalForDb.__budgetokr_schema_v = SCHEMA_VERSION;
+  return globalForDb.__budgetokr_db;
 }
 
 function initSchema(db: Database.Database) {
@@ -94,6 +100,23 @@ function initSchema(db: Database.Database) {
     // v7 → v8: departamentos field on medidas for dept assignment
     if (version < 8) {
       try { db.exec(`ALTER TABLE medidas ADD COLUMN departamentos TEXT DEFAULT '[]'`) } catch { /* ok */ }
+    }
+    // v8 → v9: AND/OR operator for filter conditions
+    if (version < 9) {
+      try { db.exec(`ALTER TABLE medidas ADD COLUMN filtros_operador TEXT DEFAULT 'AND'`) } catch { /* ok */ }
+      try { db.exec(`ALTER TABLE medidas ADD COLUMN denominador_filtros_operador TEXT DEFAULT 'AND'`) } catch { /* ok */ }
+    }
+    // v9 → v10: nivel hierárquico do plano de contas
+    if (version < 10) {
+      try { db.exec(`ALTER TABLE contas_contabeis ADD COLUMN nivel INTEGER DEFAULT 0`) } catch { /* ok */ }
+      // Popula o nível baseado na quantidade de segmentos separados por "."
+      try {
+        db.exec(`
+          UPDATE contas_contabeis
+          SET nivel = LENGTH(numero_conta_contabil) - LENGTH(REPLACE(numero_conta_contabil, '.', '')) + 1
+          WHERE nivel = 0 OR nivel IS NULL
+        `)
+      } catch { /* ok */ }
     }
     if (!row) {
       db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(SCHEMA_VERSION);
@@ -203,8 +226,11 @@ function initSchema(db: Database.Database) {
       tipo_fonte              TEXT    DEFAULT 'ambos',   -- 'budget' | 'razao' | 'ambos'
       tipo_medida             TEXT    DEFAULT 'simples', -- 'simples' | 'ratio'
       filtros                 TEXT    NOT NULL DEFAULT '[]',
+      filtros_operador        TEXT    DEFAULT 'AND',     -- 'AND' | 'OR'
       denominador_filtros     TEXT    DEFAULT '[]',      -- só para tipo_medida='ratio'
+      denominador_filtros_operador TEXT DEFAULT 'AND',   -- 'AND' | 'OR'
       denominador_tipo_fonte  TEXT    DEFAULT 'ambos',
+      departamentos           TEXT    DEFAULT '[]',
       created_at              DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at              DATETIME DEFAULT CURRENT_TIMESTAMP
     );

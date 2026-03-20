@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Plus, Trash2, Search, ChevronLeft, ChevronRight, RefreshCw, AlertCircle } from 'lucide-react'
+import { YearFilter } from '@/components/YearFilter'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -40,23 +41,37 @@ export default function LancamentosPage() {
   const [editVal,     setEditVal]     = useState('')
   const [saving,      setSaving]      = useState<number | null>(null)
   const [error,       setError]       = useState('')
+  const [allPeriodos, setAllPeriodos] = useState<string[]>([])
+  const [selYear,     setSelYear]     = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const load = useCallback(async (p = page, search = q, t = tipo) => {
+  const load = useCallback(async (p = page, search = q, t = tipo, year = selYear) => {
     setLoading(true)
     const params = new URLSearchParams({ tipo: t, page: String(p) })
     if (search) params.set('q', search)
+    if (year)   params.set('ano', year)
     const res = await fetch(`/api/lancamentos?${params}`)
     const d   = await res.json()
     if (res.ok) setData(d)
     else setError(d.error)
     setLoading(false)
-  }, [page, q, tipo])
+  }, [page, q, tipo, selYear])
 
-  useEffect(() => { load(1, q, tipo) }, [tipo])
+  useEffect(() => { load(1, q, tipo, selYear) }, [tipo, selYear])
   useEffect(() => { inputRef.current?.focus() }, [editing])
 
-  const handleSearch = (v: string) => { setQ(v); setPage(1); load(1, v, tipo) }
+  // Load available periods on mount
+  useEffect(() => {
+    fetch('/api/analise?type=distinct&col=data_lancamento', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(dates => {
+        const periodos = [...new Set((Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean))].sort() as string[]
+        setAllPeriodos(periodos)
+      })
+      .catch(() => {})
+  }, [])
+
+  const handleSearch = (v: string) => { setQ(v); setPage(1); load(1, v, tipo, selYear) }
 
   const startEdit = (id: number, field: string, val: unknown) => {
     if (field === 'departamento') return // readonly
@@ -109,14 +124,17 @@ export default function LancamentosPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Lançamentos</h1>
           <p className="text-gray-500 text-sm mt-0.5">
             {data?.total.toLocaleString() ?? '—'} registros · Edite clicando em qualquer célula
           </p>
         </div>
-        <Button onClick={addRow} size="sm"><Plus size={14} /> Nova Linha</Button>
+        <div className="flex items-center gap-3 flex-wrap">
+          <YearFilter periodos={allPeriodos} selYear={selYear} onChange={y => { setSelYear(y); setPage(1) }} />
+          <Button onClick={addRow} size="sm"><Plus size={14} /> Nova Linha</Button>
+        </div>
       </div>
 
       {/* Controls */}

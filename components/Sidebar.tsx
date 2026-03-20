@@ -6,7 +6,7 @@ import {
   LayoutDashboard, TrendingUp, LineChart, GitCompare,
   Target, Layers, FileText, Database, Upload,
   ChevronRight, Building2, BookOpen, LayoutList, Gauge,
-  LogOut, User,
+  LogOut, User, ListTree,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -49,6 +49,12 @@ const nav: NavItem[] = [
     icon: Layers,
     label: 'Por Departamento',
     sublabel: 'KPIs e DRE por área',
+  },
+  {
+    type: 'link', href: '/plano-contas',
+    icon: ListTree,
+    label: 'Plano de Contas',
+    sublabel: 'Hierarquia por nível',
   },
 
   { type: 'section', label: 'KPIs & Medidas', masterOnly: true },
@@ -97,10 +103,27 @@ export function Sidebar() {
   const pathname = usePathname()
   const router   = useRouter()
   const [user, setUser] = useState<SessionUser | null>(null)
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    fetch('/api/me').then(r => r.ok ? r.json() : null).then(setUser).catch(() => setUser(null))
-  }, [pathname])
+    fetch('/api/me')
+      .then(r => {
+        if (r.status === 401) {
+          // Not logged in — redirect to login (unless already there)
+          if (pathname !== '/login' && pathname !== '/logout') {
+            router.push('/login')
+          }
+          setLoaded(true)
+          return null
+        }
+        return r.ok ? r.json() : null
+      })
+      .then(u => { if (u) setUser(u); setLoaded(true) })
+      .catch(() => setLoaded(true))
+  }, [pathname, router])
+
+  // Hide sidebar on login page
+  if (pathname === '/login') return null
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' })
@@ -114,9 +137,9 @@ export function Sidebar() {
     href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/')
 
   return (
-    <aside className="w-60 flex-shrink-0 bg-white border-r border-gray-100 flex flex-col min-h-screen">
+    <aside className="w-60 flex-shrink-0 bg-white border-r border-gray-100 flex flex-col h-screen sticky top-0">
       {/* Logo */}
-      <div className="px-4 py-4 border-b border-gray-100">
+      <div className="px-4 py-4 border-b border-gray-100 flex-shrink-0">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-sm">
             <TrendingUp size={15} className="text-white" />
@@ -129,8 +152,13 @@ export function Sidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
-        {user && nav.map((item, i) => {
+      <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto min-h-0">
+        {!loaded && (
+          <div className="space-y-2 px-3 py-2">
+            {[1,2,3,4].map(i => <div key={i} className="h-8 bg-gray-100 rounded-lg animate-pulse" />)}
+          </div>
+        )}
+        {loaded && user && nav.map((item, i) => {
           // Esconde itens masterOnly para usuários de dept
           if (item.masterOnly && !isMaster) return null
 
@@ -214,10 +242,10 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Footer: usuário + logout */}
-      <div className="px-3 py-3 border-t border-gray-100 space-y-2">
-        {user && (
-          <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gray-50">
+      {/* Footer: usuário + logout — fixado no fundo */}
+      {user && (
+        <div className="flex-shrink-0 px-3 py-2 border-t border-gray-100 bg-white">
+          <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
               <User size={12} className="text-indigo-600" />
             </div>
@@ -230,15 +258,13 @@ export function Sidebar() {
             <button
               onClick={handleLogout}
               title="Sair"
-              className="flex items-center gap-1 px-2 py-1 rounded-md bg-gray-200 hover:bg-red-100 hover:text-red-600 text-gray-500 transition-colors flex-shrink-0 text-[10px] font-medium"
+              className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-red-50 hover:text-red-600 text-gray-400 transition-colors flex-shrink-0 text-[10px] font-medium"
             >
               <LogOut size={11} />
-              Sair
             </button>
           </div>
-        )}
-        <p className="text-[10px] text-gray-300 text-center">v2.0.0 · Star Schema</p>
-      </div>
+        </div>
+      )}
     </aside>
   )
 }

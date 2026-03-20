@@ -61,6 +61,9 @@ export async function GET(req: NextRequest) {
     const medidaCards = deptMedidas.map(dm => {
       const medida = medidaById[dm.medida_id]
       if (!medida) return null
+      // Skip medidas not assigned to this department
+      const mDepts: string[] = Array.isArray(medida.departamentos) ? medida.departamentos : []
+      if (mDepts.length > 0 && !mDepts.includes(departamento)) return null
       const isRatio = medida.tipo_medida === 'ratio'
       const resultados = getMedidaResultados(dm.medida_id, {
         groupByDept: false,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getDRE, getDREHierarchy, getDRELinhas, getDistinctValues, getCentrosByDepartamentos } from '@/lib/query'
+import { getDRE, getDREByAccount, getDREHierarchy, getDRELinhas, getDistinctValues, getCentrosByDepartamentos } from '@/lib/query'
 import { getUserFromHeaders } from '@/lib/session'
 import type { FilterColumn } from '@/lib/types'
 
@@ -35,6 +35,11 @@ export async function GET(req: NextRequest) {
       ? [forcedDept]
       : sp.get('departamentos')?.split(',').filter(Boolean)
     const centros       = sp.get('centros')?.split(',').filter(Boolean)
+
+    if (type === 'accounts') {
+      const data = getDREByAccount(periodos, departamentos, centros)
+      return NextResponse.json(data)
+    }
 
     const data = getDRE(periodos, departamentos, centros)
     return NextResponse.json(data)

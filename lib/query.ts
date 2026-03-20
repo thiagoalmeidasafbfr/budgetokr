@@ -1,5 +1,5 @@
 import { getDb } from './db'
-import type { FilterCondition, FilterColumn, MedidaResultado, Medida } from './types'
+import type { FilterCondition, FilterColumn, FilterLogic, MedidaResultado, Medida } from './types'
 
 // Mapeia coluna filtro → tabela correta no star schema
 const COL_SOURCE: Record<FilterColumn, string> = {
@@ -22,47 +22,68 @@ const STAR_SCHEMA_JOIN = `
   LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil
 `
 
-export function buildFilterSQL(filters: FilterCondition[]): { where: string; params: unknown[] } {
+export function buildFilterSQL(filters: FilterCondition[], defaultLogic: FilterLogic = 'AND'): { where: string; params: unknown[] } {
   if (!filters?.length) return { where: '', params: [] }
 
-  const parts: string[] = []
   const params: unknown[] = []
+  const sqlParts: string[] = []
 
   for (const f of filters) {
     const col = COL_SOURCE[f.column] ?? `l.${f.column}`
+    let part = ''
     switch (f.operator) {
       case '=':
-        parts.push(`LOWER(${col}) = LOWER(?)`)
+        part = `LOWER(${col}) = LOWER(?)`
         params.push(f.value)
         break
       case '!=':
-        parts.push(`LOWER(${col}) != LOWER(?)`)
+        part = `LOWER(${col}) != LOWER(?)`
         params.push(f.value)
         break
       case 'contains':
-        parts.push(`LOWER(${col}) LIKE LOWER(?)`)
+        part = `LOWER(${col}) LIKE LOWER(?)`
         params.push(`%${f.value}%`)
         break
       case 'not_contains':
-        parts.push(`LOWER(${col}) NOT LIKE LOWER(?)`)
+        part = `LOWER(${col}) NOT LIKE LOWER(?)`
         params.push(`%${f.value}%`)
         break
       case 'starts_with':
-        parts.push(`LOWER(${col}) LIKE LOWER(?)`)
+        part = `LOWER(${col}) LIKE LOWER(?)`
         params.push(`${f.value}%`)
         break
       case 'in': {
         const vals = f.value.split(',').map(v => v.trim()).filter(Boolean)
         if (vals.length) {
-          parts.push(`LOWER(${col}) IN (${vals.map(() => 'LOWER(?)').join(',')})`)
+          part = `LOWER(${col}) IN (${vals.map(() => 'LOWER(?)').join(',')})`
           params.push(...vals)
         }
         break
       }
     }
+    if (part) sqlParts.push(part)
   }
 
-  return { where: parts.join(' AND '), params }
+  if (sqlParts.length === 0) return { where: '', params: [] }
+  if (sqlParts.length === 1) return { where: sqlParts[0], params }
+
+  // Build expression using per-filter logic connectors
+  // First filter has no connector; subsequent filters use their logic field (or defaultLogic)
+  let result = sqlParts[0]
+  for (let i = 1; i < sqlParts.length; i++) {
+    const connector = filters[i].logic || defaultLogic
+    result += ` ${connector} ${sqlParts[i]}`
+  }
+
+  // If there's a mix of AND and OR, we need proper SQL precedence.
+  // AND has higher precedence than OR in SQL, which is correct behavior:
+  //   A OR B AND C  =>  A OR (B AND C)
+  // But users might expect left-to-right evaluation.
+  // Wrap in parens to be safe when there's any OR.
+  const hasOr = filters.some((f, i) => i > 0 && (f.logic || defaultLogic) === 'OR')
+  if (hasOr) result = `(${result})`
+
+  return { where: result, params }
 }
 
 // ─── Star schema query ────────────────────────────────────────────────────────
@@ -72,10 +93,11 @@ const stripAlias = (expr: string) => expr.replace(/\s+as\s+\w+\s*$/i, '').trim()
 function runStarQuery(
   tipo: 'budget' | 'razao',
   filters: FilterCondition[],
-  groupBy: string[]
+  groupBy: string[],
+  logic: FilterLogic = 'AND'
 ): Array<Record<string, unknown>> {
   const db = getDb()
-  const { where, params } = buildFilterSQL(filters)
+  const { where, params } = buildFilterSQL(filters, logic)
   const allConditions = [`l.tipo = '${tipo}'`, where].filter(Boolean).join(' AND ')
   const selectCols  = groupBy.join(', ')
   const groupExprs  = groupBy.map(stripAlias).join(', ')
@@ -122,25 +144,22 @@ export function getMedidaResultados(
   } | undefined
   if (!raw) return []
 
+  const rawAny = raw as unknown as Record<string, string>
   const baseMedida: Medida = {
     ...raw,
-    unidade:                raw.unidade ?? '',
-    tipo_fonte:             raw.tipo_fonte as 'budget' | 'razao' | 'ambos',
-    tipo_medida:            (raw.tipo_medida || 'simples') as 'simples' | 'ratio',
-    filtros:                JSON.parse(raw.filtros || '[]'),
-    denominador_filtros:    JSON.parse(raw.denominador_filtros || '[]'),
-    denominador_tipo_fonte: (raw.denominador_tipo_fonte || 'ambos') as 'budget' | 'razao' | 'ambos',
-    departamentos:          JSON.parse(((raw as unknown) as Record<string, string>).departamentos || '[]'),
+    unidade:                        raw.unidade ?? '',
+    tipo_fonte:                     raw.tipo_fonte as 'budget' | 'razao' | 'ambos',
+    tipo_medida:                    (raw.tipo_medida || 'simples') as 'simples' | 'ratio',
+    filtros:                        JSON.parse(raw.filtros || '[]'),
+    filtros_operador:               (rawAny.filtros_operador || 'AND') as 'AND' | 'OR',
+    denominador_filtros:            JSON.parse(raw.denominador_filtros || '[]'),
+    denominador_filtros_operador:   (rawAny.denominador_filtros_operador || 'AND') as 'AND' | 'OR',
+    denominador_tipo_fonte:         (raw.denominador_tipo_fonte || 'ambos') as 'budget' | 'razao' | 'ambos',
+    departamentos:                  JSON.parse(rawAny.departamentos || '[]'),
   }
 
-  // Merge extra filters (e.g. department filter from dept dashboard)
-  const medida: Medida = extraFiltros.length > 0 ? {
-    ...baseMedida,
-    filtros:             [...baseMedida.filtros, ...extraFiltros],
-    denominador_filtros: baseMedida.denominador_filtros.length > 0
-      ? [...baseMedida.denominador_filtros, ...extraFiltros]
-      : baseMedida.denominador_filtros,
-  } : baseMedida
+  // Extra filters (e.g. department filter from dept dashboard) are always ANDed
+  const medida = baseMedida
 
   const groupBy: string[] = []
   if (groupByDept)        groupBy.push('cc.departamento', 'cc.nome_departamento')
@@ -150,7 +169,7 @@ export function getMedidaResultados(
   const periodoClause = periodos.length ? buildPeriodoWhere(periodos) : null
 
   if (medida.tipo_medida === 'ratio') {
-    return computeRatioMedida(medida, groupBy, periodoClause)
+    return computeRatioMedida(medida, groupBy, periodoClause, extraFiltros)
   }
 
   // ── Medida simples ────────────────────────────────────────────────────────
@@ -163,7 +182,7 @@ export function getMedidaResultados(
   }> = {}
 
   for (const tipo of tiposToRun) {
-    const rows = runStarQueryWithPeriodo(tipo, medida.filtros, groupBy, periodoClause)
+    const rows = runStarQueryWithPeriodo(tipo, medida.filtros, groupBy, periodoClause, medida.filtros_operador, extraFiltros)
     for (const r of rows) {
       const dept     = (r['departamento']     ?? '') as string
       const nomeDept = (r['nome_departamento'] ?? '') as string
@@ -199,7 +218,8 @@ export function getMedidaResultados(
 function computeRatioMedida(
   medida: Medida,
   groupBy: string[],
-  periodoClause: { where: string; params: unknown[] } | null
+  periodoClause: { where: string; params: unknown[] } | null,
+  extraAndFilters: FilterCondition[] = []
 ): MedidaResultado[] {
   type RawBucket = { num_budget: number; num_razao: number; den_budget: number; den_razao: number; nome_dept: string; nome_cc: string }
   const byKey: Record<string, RawBucket> = {}
@@ -207,11 +227,12 @@ function computeRatioMedida(
   const runAndAccumulate = (
     filtros: FilterCondition[],
     tipo_fonte: 'budget' | 'razao' | 'ambos',
-    isNumerator: boolean
+    isNumerator: boolean,
+    logic: FilterLogic = 'AND'
   ) => {
     const tipos: Array<'budget'|'razao'> = tipo_fonte === 'ambos' ? ['budget','razao'] : [tipo_fonte]
     for (const tipo of tipos) {
-      const rows = runStarQueryWithPeriodo(tipo, filtros, groupBy, periodoClause)
+      const rows = runStarQueryWithPeriodo(tipo, filtros, groupBy, periodoClause, logic, extraAndFilters)
       for (const r of rows) {
         const dept     = (r['departamento']      ?? '') as string
         const nomeDept = (r['nome_departamento'] ?? '') as string
@@ -232,8 +253,8 @@ function computeRatioMedida(
     }
   }
 
-  runAndAccumulate(medida.filtros,             medida.tipo_fonte,             true)
-  runAndAccumulate(medida.denominador_filtros, medida.denominador_tipo_fonte, false)
+  runAndAccumulate(medida.filtros,             medida.tipo_fonte,             true,  medida.filtros_operador)
+  runAndAccumulate(medida.denominador_filtros, medida.denominador_tipo_fonte, false, medida.denominador_filtros_operador)
 
   return Object.entries(byKey).map(([key, v]) => {
     const [departamento, centro_custo, periodo] = key.split('||')
@@ -275,13 +296,16 @@ function runStarQueryWithPeriodo(
   tipo: 'budget' | 'razao',
   filters: FilterCondition[],
   groupBy: string[],
-  periodoClause: { where: string; params: unknown[] } | null
+  periodoClause: { where: string; params: unknown[] } | null,
+  logic: FilterLogic = 'AND',
+  extraAndFilters: FilterCondition[] = []
 ): Array<Record<string, unknown>> {
   const db = getDb()
-  const { where, params } = buildFilterSQL(filters)
+  const { where, params } = buildFilterSQL(filters, logic)
+  const { where: extraWhere, params: extraParams } = buildFilterSQL(extraAndFilters, 'AND')
   const periodoPart = periodoClause?.where ?? ''
-  const allConditions = [`l.tipo = '${tipo}'`, where, periodoPart].filter(Boolean).join(' AND ')
-  const allParams    = [...(params as unknown[]), ...(periodoClause?.params ?? [])]
+  const allConditions = [`l.tipo = '${tipo}'`, where, extraWhere, periodoPart].filter(Boolean).join(' AND ')
+  const allParams    = [...(params as unknown[]), ...(extraParams as unknown[]), ...(periodoClause?.params ?? [])]
   const selectCols  = groupBy.join(', ')
   const groupExprs  = groupBy.map(stripAlias).join(', ')
   const groupClause = groupBy.length ? `GROUP BY ${groupExprs}` : ''
@@ -464,6 +488,58 @@ export function getDRE(
   return db.prepare(sql).all(...params) as DRERow[]
 }
 
+export interface DREAccountRow {
+  dre: string
+  agrupamento_arvore: string
+  numero_conta_contabil: string
+  nome_conta_contabil: string
+  periodo: string
+  budget: number
+  razao: number
+}
+
+export function getDREByAccount(
+  periodos?: string[],
+  departamentos?: string[],
+  centros?: string[]
+): DREAccountRow[] {
+  const db = getDb()
+  const conditions: string[] = []
+  const params: unknown[] = []
+
+  if (periodos?.length) {
+    conditions.push(`strftime('%Y-%m', l.data_lancamento) IN (${periodos.map(() => '?').join(',')})`)
+    params.push(...periodos)
+  }
+  if (departamentos?.length) {
+    conditions.push(`cc.nome_departamento IN (${departamentos.map(() => '?').join(',')})`)
+    params.push(...departamentos)
+  }
+  if (centros?.length) {
+    conditions.push(`l.centro_custo IN (${centros.map(() => '?').join(',')})`)
+    params.push(...centros)
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+
+  const sql = `
+    SELECT
+      COALESCE(ca.dre, 'Sem classificação') as dre,
+      COALESCE(ca.agrupamento_arvore, '') as agrupamento_arvore,
+      l.numero_conta_contabil,
+      COALESCE(ca.nome_conta_contabil, l.nome_conta_contabil, '') as nome_conta_contabil,
+      strftime('%Y-%m', l.data_lancamento) as periodo,
+      SUM(CASE WHEN l.tipo = 'budget' THEN l.debito_credito ELSE 0 END) as budget,
+      SUM(CASE WHEN l.tipo = 'razao'  THEN l.debito_credito ELSE 0 END) as razao
+    ${STAR_SCHEMA_JOIN}
+    ${whereClause}
+    GROUP BY ca.dre, ca.agrupamento_arvore, l.numero_conta_contabil, periodo
+    ORDER BY ca.dre, ca.agrupamento_arvore, l.numero_conta_contabil, periodo
+  `
+
+  return db.prepare(sql).all(...params) as DREAccountRow[]
+}
+
 export function getDREHierarchy(): Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }> {
   const db = getDb()
   return db.prepare(`
@@ -632,20 +708,22 @@ export function deleteDeptMedida(departamento: string, medidaId: number): void {
 
 export function getMedidas(): import('./types').Medida[] {
   const db = getDb()
-  const rows = db.prepare('SELECT * FROM medidas ORDER BY nome').all() as Array<{
-    id: number; nome: string; descricao: string; unidade: string; cor: string
-    tipo_fonte: string; tipo_medida: string; filtros: string
-    denominador_filtros: string; denominador_tipo_fonte: string
-    created_at: string; updated_at: string
-  }>
+  const rows = db.prepare('SELECT * FROM medidas ORDER BY nome').all() as Array<Record<string, unknown>>
   return rows.map(raw => ({
-    ...raw,
-    unidade:                raw.unidade ?? '',
-    tipo_fonte:             raw.tipo_fonte as 'budget' | 'razao' | 'ambos',
-    tipo_medida:            (raw.tipo_medida || 'simples') as 'simples' | 'ratio',
-    filtros:                JSON.parse(raw.filtros || '[]'),
-    denominador_filtros:    JSON.parse(raw.denominador_filtros || '[]'),
-    denominador_tipo_fonte: (raw.denominador_tipo_fonte || 'ambos') as 'budget' | 'razao' | 'ambos',
-    departamentos:          JSON.parse(((raw as unknown) as Record<string, string>).departamentos || '[]'),
+    id:                             raw.id as number,
+    nome:                           raw.nome as string,
+    descricao:                      (raw.descricao ?? '') as string,
+    unidade:                        (raw.unidade ?? '') as string,
+    cor:                            (raw.cor ?? '#6366f1') as string,
+    tipo_fonte:                     (raw.tipo_fonte ?? 'ambos') as 'budget' | 'razao' | 'ambos',
+    tipo_medida:                    ((raw.tipo_medida as string) || 'simples') as 'simples' | 'ratio',
+    filtros:                        JSON.parse((raw.filtros as string) || '[]'),
+    filtros_operador:               ((raw.filtros_operador as string) || 'AND') as 'AND' | 'OR',
+    denominador_filtros:            JSON.parse((raw.denominador_filtros as string) || '[]'),
+    denominador_filtros_operador:   ((raw.denominador_filtros_operador as string) || 'AND') as 'AND' | 'OR',
+    denominador_tipo_fonte:         ((raw.denominador_tipo_fonte as string) || 'ambos') as 'budget' | 'razao' | 'ambos',
+    departamentos:                  JSON.parse((raw.departamentos as string) || '[]'),
+    created_at:                     raw.created_at as string,
+    updated_at:                     raw.updated_at as string,
   }))
 }

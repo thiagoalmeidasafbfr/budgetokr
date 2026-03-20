@@ -11,7 +11,8 @@ import {
 import { buildTree, buildTreeFromLinhas, flattenTree, type DRERow, type DRELinha, type TreeNode } from '@/lib/dre-utils'
 import type { KpiManual, KpiValor } from '@/lib/query'
 
-const DEFAULT_COLORS = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6']
+import { CHART_COLORS as DEFAULT_COLORS } from '@/lib/constants'
+import { YearFilter } from '@/components/YearFilter'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1125,6 +1126,7 @@ export default function DeptDashboardPage() {
   const [allPeriodos,      setAllPeriodos]      = useState<string[]>([])
   const [selDept,          setSelDept]          = useState<string>('')
   const [selPeriods,       setSelPeriods]       = useState<string[]>([])
+  const [selYear,          setSelYear]          = useState<string | null>(null)
   const [dashData,         setDashData]         = useState<DashboardData | null>(null)
   const [loading,          setLoading]          = useState(false)
   const [kpis,             setKpis]             = useState<KpiManual[]>([])
@@ -1145,16 +1147,16 @@ export default function DeptDashboardPage() {
   // Carrega usuário logado
   useEffect(() => {
     fetch('/api/me').then(r => r.ok ? r.json() : null).then(u => {
-      if (!u) return
+      if (!u) { setUserRole('master'); return }  // fallback: show full UI
       setUserRole(u.role)
       if (u.role === 'dept' && u.department) {
         setForcedDept(u.department)
         setSelDept(u.department)
       }
-    }).catch(() => {})
+    }).catch(() => setUserRole('master'))  // fallback: show full UI
   }, [])
 
-  const isMaster = userRole === 'master'
+  const isMaster = userRole !== 'dept'
 
   // Load department and period lists
   useEffect(() => {
@@ -1272,58 +1274,19 @@ export default function DeptDashboardPage() {
     <div className="flex gap-0 min-h-screen">
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
       <div className="w-52 flex-shrink-0 border-r border-gray-100 flex flex-col bg-white">
-        {/* Períodos — sempre visível no topo quando há departamento selecionado */}
-        {selDept && (
-          <div className="px-3 py-2 border-b border-gray-100">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Períodos</p>
-            <div className="space-y-0.5 max-h-48 overflow-y-auto">
-              {allPeriodos.map(p => (
-                <label key={p} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
-                  <input
-                    type="checkbox"
-                    checked={selPeriods.includes(p)}
-                    onChange={e => setSelPeriods(prev =>
-                      e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}
-                    className="w-3 h-3 accent-indigo-600"
-                  />
-                  <span className="text-xs text-gray-600">{formatPeriodo(p)}</span>
-                </label>
-              ))}
-            </div>
-            {selPeriods.length > 0 && (
-              <button
-                onClick={() => setSelPeriods([])}
-                className="mt-1 text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"
-              >
-                <X size={9} />Limpar
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Configurar KPIs: apenas para master */}
-        {selDept && isMaster && (
-          <div className="p-3 border-b border-gray-100">
-            <Button variant="outline" size="sm" className="w-full text-xs"
-              onClick={() => setShowMgmtModal(true)}>
-              <Settings size={12} />Configurar KPIs
-            </Button>
-          </div>
-        )}
-
         {/* Seletor de departamento: visível apenas para master */}
         {isMaster && (
           <>
             <div className="p-3 border-b border-gray-100">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Departamento</p>
             </div>
-            <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+            <div className="overflow-y-auto p-2 space-y-0.5" style={{ maxHeight: '40vh' }}>
               {departamentos.map(d => (
                 <button
                   key={d}
                   onClick={() => { setSelDept(d); setSelPeriods([]) }}
                   className={cn(
-                    'w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                    'w-full text-left px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
                     selDept === d
                       ? 'bg-indigo-50 text-indigo-700'
                       : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
@@ -1343,6 +1306,45 @@ export default function DeptDashboardPage() {
             <p className="text-sm font-semibold text-indigo-700 px-1">{forcedDept}</p>
           </div>
         )}
+
+        {/* Períodos — sempre visível */}
+        <div className="px-3 py-2 border-t border-gray-100">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Períodos</p>
+          <div className="space-y-0.5 max-h-48 overflow-y-auto">
+            {allPeriodos.map(p => (
+              <label key={p} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                <input
+                  type="checkbox"
+                  checked={selPeriods.includes(p)}
+                  onChange={e => setSelPeriods(prev =>
+                    e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}
+                  className="w-3 h-3 accent-indigo-600"
+                />
+                <span className="text-xs text-gray-600">{formatPeriodo(p)}</span>
+              </label>
+            ))}
+          </div>
+          {selPeriods.length > 0 && (
+            <button
+              onClick={() => setSelPeriods([])}
+              className="mt-1 text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"
+            >
+              <X size={9} />Limpar
+            </button>
+          )}
+        </div>
+
+        {/* Configurar KPIs: apenas para master */}
+        {selDept && isMaster && (
+          <div className="p-3 border-t border-gray-100">
+            <Button variant="outline" size="sm" className="w-full text-xs"
+              onClick={() => setShowMgmtModal(true)}>
+              <Settings size={12} />Configurar KPIs
+            </Button>
+          </div>
+        )}
+
+        <div className="flex-1" />
       </div>
 
       {/* ── Main content ─────────────────────────────────────────────────── */}
@@ -1356,7 +1358,7 @@ export default function DeptDashboardPage() {
         ) : (
           <>
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-3">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">{selDept}</h1>
                 <p className="text-gray-500 text-sm mt-0.5">
@@ -1365,9 +1367,19 @@ export default function DeptDashboardPage() {
                     : 'Todos os períodos'}
                 </p>
               </div>
-              {loading && (
-                <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-              )}
+              <div className="flex items-center gap-3">
+                <YearFilter
+                  periodos={allPeriodos}
+                  selYear={selYear}
+                  onChange={y => {
+                    setSelYear(y)
+                    setSelPeriods(y ? allPeriodos.filter(p => p.startsWith(y)) : [])
+                  }}
+                />
+                {loading && (
+                  <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                )}
+              </div>
             </div>
 
             {/* Section 1 — Summary Cards */}

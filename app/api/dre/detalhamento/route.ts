@@ -9,6 +9,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const dre             = searchParams.get('dre')             ?? ''
   const agrupamento     = searchParams.get('agrupamento')     ?? ''
+  const conta           = searchParams.get('conta')           ?? ''
   const periodo         = searchParams.get('periodo')         ?? ''
   const tipo            = searchParams.get('tipo')            ?? 'ambos'
   const departamento    = searchParams.get('departamento')    ?? ''
@@ -33,6 +34,11 @@ export async function GET(req: NextRequest) {
   if (agrupamento) {
     conditions.push(`ca.agrupamento_arvore = ?`)
     params.push(agrupamento)
+  }
+
+  if (conta) {
+    conditions.push(`l.numero_conta_contabil = ?`)
+    params.push(conta)
   }
 
   // Período único (vem do clique numa célula de período específico)

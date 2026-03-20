@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
     const page  = Math.max(1, parseInt(sp.get('page') ?? '1'))
     const q     = sp.get('q') ?? ''
     const per   = sp.get('periodo')
+    const ano   = sp.get('ano')
 
     // Força departamento para usuários de dept
     const user = getUserFromHeaders(req)
@@ -24,6 +25,7 @@ export async function GET(req: NextRequest) {
     if (tipo) { conditions.push(`l.tipo = ?`); params.push(tipo) }
     if (dept) { conditions.push(`cc.departamento = ?`); params.push(dept) }
     if (per)  { conditions.push(`strftime('%Y-%m', l.data_lancamento) = ?`); params.push(per) }
+    if (ano)  { conditions.push(`strftime('%Y', l.data_lancamento) = ?`); params.push(ano) }
     if (q)    {
       conditions.push(`(
         LOWER(l.numero_conta_contabil) LIKE LOWER(?) OR

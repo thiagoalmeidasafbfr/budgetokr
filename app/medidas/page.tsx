@@ -1,13 +1,13 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Edit2, Target, Filter, X, Check, Info, Divide } from 'lucide-react'
+import { Plus, Trash2, Edit2, Target, X, Check, Info, Divide, AlertCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { Medida, FilterCondition, FilterColumn, FilterOperator } from '@/lib/types'
 
-const COLORS = ['#6366f1','#8b5cf6','#ec4899','#ef4444','#f97316','#eab308','#22c55e','#14b8a6','#0ea5e9','#64748b']
+import { CHART_COLORS as COLORS } from '@/lib/constants'
 
 const OPERATORS: Array<{ value: FilterOperator; label: string }> = [
   { value: '=',           label: 'igual a'          },
@@ -58,8 +58,9 @@ export default function MedidasPage() {
   const [editing,      setEditing]      = useState<number | null>(null)
   const [form,         setForm]         = useState<MedidaForm>(emptyForm())
   const [distinctVals, setDistinctVals] = useState<Record<string, string[]>>({})
-  const [suggestions,  setSuggestions]  = useState<string | null>(null) // "num-i" or "den-i"
+  const [suggestions,  setSuggestions]  = useState<string | null>(null)
   const [loading,      setLoading]      = useState(false)
+  const [error,        setError]        = useState<string | null>(null)
   const [allDepts,     setAllDepts]     = useState<string[]>([])
 
   useEffect(() => { loadMedidas() }, [])
@@ -68,7 +69,10 @@ export default function MedidasPage() {
   }, [])
 
   const loadMedidas = () =>
-    fetch('/api/medidas').then(r => r.json()).then(d => setMedidas(Array.isArray(d) ? d : []))
+    fetch('/api/medidas').then(r => r.json()).then(d => {
+      if (d?.error) { setError(d.error); return }
+      setMedidas(Array.isArray(d) ? d : [])
+    }).catch(e => setError(String(e)))
 
   const loadDistinct = async (col: FilterColumn) => {
     if (distinctVals[col]) return
@@ -80,12 +84,27 @@ export default function MedidasPage() {
   const save = async () => {
     if (!form.nome.trim()) return
     setLoading(true)
-    const method = editing === -1 ? 'POST' : 'PUT'
-    const body   = editing === -1 ? form : { id: editing, ...form }
-    await fetch('/api/medidas', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    setError(null)
+    try {
+      const method = editing === -1 ? 'POST' : 'PUT'
+      const body   = editing === -1 ? form : { id: editing, ...form }
+      const res = await fetch('/api/medidas', {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!res.ok || data?.error) {
+        setError(data?.error || `Erro HTTP ${res.status}`)
+        setLoading(false)
+        return
+      }
+      setEditing(null)
+      loadMedidas()
+    } catch (e) {
+      setError(String(e))
+    }
     setLoading(false)
-    setEditing(null)
-    loadMedidas()
   }
 
   const remove = async (id: number) => {
@@ -95,13 +114,22 @@ export default function MedidasPage() {
   }
 
   const addFilter = (section: 'num' | 'den') =>
-    setForm(f => ({
-      ...f,
-      [section === 'num' ? 'filtros' : 'denominador_filtros']: [
-        ...(section === 'num' ? f.filtros : f.denominador_filtros),
-        { column: 'agrupamento_arvore' as FilterColumn, operator: '=' as FilterOperator, value: '' },
-      ],
-    }))
+    setForm(f => {
+      const key = section === 'num' ? 'filtros' : 'denominador_filtros'
+      const existing = f[key]
+      return {
+        ...f,
+        [key]: [
+          ...existing,
+          {
+            column: 'agrupamento_arvore' as FilterColumn,
+            operator: '=' as FilterOperator,
+            value: '',
+            logic: 'AND' as const,
+          },
+        ],
+      }
+    })
 
   const updateFilter = (section: 'num' | 'den', i: number, patch: Partial<FilterCondition>) =>
     setForm(f => {
@@ -129,12 +157,13 @@ export default function MedidasPage() {
       cor: m.cor,
       tipo_medida: m.tipo_medida ?? 'simples',
       tipo_fonte: m.tipo_fonte,
-      filtros: m.filtros,
-      denominador_filtros: m.denominador_filtros ?? [],
+      filtros: (m.filtros || []).map((f, i) => ({ ...f, logic: f.logic || (i === 0 ? 'AND' : (m.filtros_operador || 'AND')) })),
+      denominador_filtros: (m.denominador_filtros || []).map((f, i) => ({ ...f, logic: f.logic || (i === 0 ? 'AND' : (m.denominador_filtros_operador || 'AND')) })),
       denominador_tipo_fonte: m.denominador_tipo_fonte ?? 'ambos',
       departamentos: m.departamentos ?? [],
     })
     setEditing(m.id)
+    setError(null)
   }
 
   return (
@@ -144,8 +173,19 @@ export default function MedidasPage() {
           <h1 className="text-2xl font-bold text-gray-900">Medidas</h1>
           <p className="text-gray-500 text-sm mt-0.5">Defina KPIs como SG&A, COGS, Headcount usando filtros no star schema</p>
         </div>
-        {editing === null && <Button onClick={() => { setForm(emptyForm()); setEditing(-1) }}><Plus size={15} /> Nova Medida</Button>}
+        {editing === null && <Button onClick={() => { setForm(emptyForm()); setEditing(-1); setError(null) }}><Plus size={15} /> Nova Medida</Button>}
       </div>
+
+      {error && (
+        <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+          <AlertCircle size={15} className="mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-medium">Erro</p>
+            <p className="text-red-600 text-xs mt-0.5">{error}</p>
+          </div>
+          <button onClick={() => setError(null)} className="ml-auto text-red-400 hover:text-red-600"><X size={14} /></button>
+        </div>
+      )}
 
       <div className="flex items-start gap-2 bg-indigo-50 border border-indigo-100 text-indigo-700 px-4 py-3 rounded-lg text-sm">
         <Info size={15} className="mt-0.5 flex-shrink-0" />
@@ -153,7 +193,8 @@ export default function MedidasPage() {
           <p className="font-medium">Como funciona</p>
           <p className="text-indigo-600 text-xs mt-0.5">
             <strong>Simples:</strong> soma de <code className="bg-indigo-100 px-1 rounded">debito_credito</code> filtrada. Ex: SG&A = agrupamento = &quot;Operating Expenses&quot;.<br />
-            <strong>Ratio:</strong> Numerador ÷ Denominador. Ex: SG&A Marketing / Receita Marketing = % do custo sobre receita.
+            <strong>Ratio:</strong> Numerador &divide; Denominador. Ex: SG&A Marketing / Receita Marketing = % do custo sobre receita.<br />
+            <strong>E / OU:</strong> Cada critério pode ser conectado ao anterior com &quot;E&quot; (ambos devem ser verdadeiros) ou &quot;OU&quot; (qualquer um basta). Clique no conector para alternar.
           </p>
         </div>
       </div>
@@ -163,7 +204,7 @@ export default function MedidasPage() {
         <Card className="ring-1 ring-indigo-100">
           <CardHeader>
             <CardTitle>{editing === -1 ? 'Nova Medida' : 'Editar Medida'}</CardTitle>
-            <CardDescription>Filtros aplicam AND entre si. Dimensões resolvidas via JOIN automático.</CardDescription>
+            <CardDescription>Defina filtros e conecte-os com E ou OU clicando no conector entre cada linha.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             {/* Name + color */}
@@ -245,23 +286,14 @@ export default function MedidasPage() {
                   </button>
                 ))}
               </div>
-              {form.tipo_medida === 'ratio' && (
-                <p className="text-xs text-gray-400 mt-1.5">
-                  Define duas métricas (Numerador e Denominador). O resultado é o percentual Numerador ÷ Denominador × 100.
-                </p>
-              )}
             </div>
 
             {/* Simples: fonte + filtros */}
             {form.tipo_medida === 'simples' && (
               <>
-                <FonteSelector
-                  value={form.tipo_fonte}
-                  onChange={v => setForm(f => ({ ...f, tipo_fonte: v }))}
-                />
+                <FonteSelector value={form.tipo_fonte} onChange={v => setForm(f => ({ ...f, tipo_fonte: v }))} />
                 <FilterSection
                   title="Filtros"
-                  subtitle="todos aplicados com AND"
                   filtros={form.filtros}
                   groupedCols={groupedCols}
                   suggestions={suggestions}
@@ -273,7 +305,6 @@ export default function MedidasPage() {
                   onFocus={(key) => { setSuggestions(key); loadDistinct(key.split('-')[1] as FilterColumn) }}
                   onBlur={() => setTimeout(() => setSuggestions(null), 150)}
                 />
-                <FormulaPreview label={form.nome} tipo={form.tipo_fonte} filtros={form.filtros} />
               </>
             )}
 
@@ -285,10 +316,7 @@ export default function MedidasPage() {
                     <span className="w-5 h-5 bg-indigo-600 text-white rounded-full flex items-center justify-center text-xs">A</span>
                     Numerador
                   </p>
-                  <FonteSelector
-                    value={form.tipo_fonte}
-                    onChange={v => setForm(f => ({ ...f, tipo_fonte: v }))}
-                  />
+                  <FonteSelector value={form.tipo_fonte} onChange={v => setForm(f => ({ ...f, tipo_fonte: v }))} />
                   <FilterSection
                     title="Filtros do Numerador"
                     filtros={form.filtros}
@@ -317,10 +345,7 @@ export default function MedidasPage() {
                     <span className="w-5 h-5 bg-amber-500 text-white rounded-full flex items-center justify-center text-xs">B</span>
                     Denominador
                   </p>
-                  <FonteSelector
-                    value={form.denominador_tipo_fonte}
-                    onChange={v => setForm(f => ({ ...f, denominador_tipo_fonte: v }))}
-                  />
+                  <FonteSelector value={form.denominador_tipo_fonte} onChange={v => setForm(f => ({ ...f, denominador_tipo_fonte: v }))} />
                   <FilterSection
                     title="Filtros do Denominador"
                     filtros={form.denominador_filtros}
@@ -335,19 +360,11 @@ export default function MedidasPage() {
                     onBlur={() => setTimeout(() => setSuggestions(null), 150)}
                   />
                 </div>
-
-                <RatioFormulaPreview
-                  label={form.nome}
-                  tipoNum={form.tipo_fonte}
-                  filtrosNum={form.filtros}
-                  tipoDen={form.denominador_tipo_fonte}
-                  filtrosDen={form.denominador_filtros}
-                />
               </div>
             )}
 
             <div className="flex gap-3 pt-2">
-              <Button variant="outline" onClick={() => setEditing(null)}>Cancelar</Button>
+              <Button variant="outline" onClick={() => { setEditing(null); setError(null) }}>Cancelar</Button>
               <Button onClick={save} disabled={loading} className="flex-1">
                 {loading ? 'Salvando…' : <><Check size={15} /> Salvar Medida</>}
               </Button>
@@ -387,23 +404,39 @@ export default function MedidasPage() {
                 </div>
                 {m.descricao && <p className="text-xs text-gray-500 mt-0.5">{m.descricao}</p>}
                 {m.filtros.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1.5">
+                  <div className="flex flex-wrap gap-1 mt-1.5 items-center">
                     {m.filtros.map((f, i) => {
                       const col = FILTER_COLUMNS.find(c => c.value === f.column)?.label ?? f.column
+                      const connector = i > 0 ? (f.logic || 'AND') : null
                       return (
-                        <span key={i} className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full font-mono">
-                          {col} {f.operator} &quot;{f.value}&quot;
+                        <span key={i} className="contents">
+                          {connector && (
+                            <span className={cn('text-[10px] font-bold px-1', connector === 'OR' ? 'text-amber-500' : 'text-blue-500')}>
+                              {connector === 'OR' ? 'OU' : 'E'}
+                            </span>
+                          )}
+                          <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full font-mono">
+                            {col} {f.operator} &quot;{f.value}&quot;
+                          </span>
                         </span>
                       )
                     })}
                     {m.tipo_medida === 'ratio' && m.denominador_filtros?.length > 0 && (
                       <>
-                        <span className="text-gray-400 text-xs">÷</span>
+                        <span className="text-gray-400 text-xs">&divide;</span>
                         {m.denominador_filtros.map((f, i) => {
                           const col = FILTER_COLUMNS.find(c => c.value === f.column)?.label ?? f.column
+                          const connector = i > 0 ? (f.logic || 'AND') : null
                           return (
-                            <span key={i} className="bg-amber-50 text-amber-700 text-xs px-2 py-0.5 rounded-full font-mono">
-                              {col} {f.operator} &quot;{f.value}&quot;
+                            <span key={i} className="contents">
+                              {connector && (
+                                <span className={cn('text-[10px] font-bold px-1', connector === 'OR' ? 'text-amber-500' : 'text-blue-500')}>
+                                  {connector === 'OR' ? 'OU' : 'E'}
+                                </span>
+                              )}
+                              <span className="bg-amber-50 text-amber-700 text-xs px-2 py-0.5 rounded-full font-mono">
+                                {col} {f.operator} &quot;{f.value}&quot;
+                              </span>
                             </span>
                           )
                         })}
@@ -444,10 +477,10 @@ function FonteSelector({ value, onChange }: { value: 'budget'|'razao'|'ambos'; o
 }
 
 function FilterSection({
-  title, subtitle, filtros, groupedCols, suggestions, distinctVals, prefix,
+  title, filtros, groupedCols, suggestions, distinctVals, prefix,
   onAdd, onUpdate, onRemove, onFocus, onBlur,
 }: {
-  title: string; subtitle?: string
+  title: string
   filtros: FilterCondition[]
   groupedCols: Record<string, Array<{ value: FilterColumn; label: string; group: string }>>
   suggestions: string | null
@@ -462,9 +495,7 @@ function FilterSection({
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <label className="text-sm font-medium text-gray-700">
-          {title}{subtitle && <span className="text-gray-400 font-normal ml-1">({subtitle})</span>}
-        </label>
+        <label className="text-sm font-medium text-gray-700">{title}</label>
         <Button size="sm" variant="outline" onClick={onAdd}><Plus size={13} /> Adicionar</Button>
       </div>
 
@@ -475,90 +506,70 @@ function FilterSection({
         </div>
       )}
 
-      <div className="space-y-2">
-        {filtros.map((f, i) => (
-          <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg p-3">
-            <span className={cn('text-xs font-medium px-2 py-0.5 rounded flex-shrink-0',
-              i === 0 ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-200 text-gray-500')}>
-              {i === 0 ? 'ONDE' : 'E'}
-            </span>
-            <select value={f.column}
-              onChange={e => { onUpdate(i, { column: e.target.value as FilterColumn, value: '' }); onFocus(`${prefix}-${e.target.value}`) }}
-              className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
-              {Object.entries(groupedCols).map(([group, cols]) => (
-                <optgroup key={group} label={group}>
-                  {cols.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                </optgroup>
-              ))}
-            </select>
-            <select value={f.operator} onChange={e => onUpdate(i, { operator: e.target.value as FilterOperator })}
-              className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
-              {OPERATORS.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
-            </select>
-            <div className="relative flex-1">
-              <input value={f.value}
-                onChange={e => onUpdate(i, { value: e.target.value })}
-                onFocus={() => onFocus(`${prefix}-${f.column}`)}
-                onBlur={onBlur}
-                placeholder={f.operator === 'in' ? 'val1, val2, val3' : 'Valor…'}
-                className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-              {suggestions === `${prefix}-${f.column}` && (distinctVals[f.column]?.length ?? 0) > 0 && (
-                <div className="absolute top-full left-0 right-0 z-20 mt-0.5 bg-white border border-gray-100 rounded-lg shadow-lg max-h-44 overflow-y-auto">
-                  {(distinctVals[f.column] ?? [])
-                    .filter(v => !f.value || v.toLowerCase().includes(f.value.toLowerCase()))
-                    .slice(0, 25)
-                    .map(v => (
-                      <button key={v} onMouseDown={() => onUpdate(i, { value: v })}
-                        className="w-full text-left px-3 py-1.5 text-sm hover:bg-indigo-50 text-gray-700 truncate">
-                        {v}
-                      </button>
-                    ))}
-                </div>
+      <div className="space-y-1">
+        {filtros.map((f, i) => {
+          const logic = f.logic || 'AND'
+          return (
+            <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg p-3">
+              {i === 0 ? (
+                <span className="text-xs font-medium px-2 py-0.5 rounded bg-indigo-100 text-indigo-600 flex-shrink-0">
+                  ONDE
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onUpdate(i, { logic: logic === 'AND' ? 'OR' : 'AND' })}
+                  title="Clique para alternar E/OU"
+                  className={cn(
+                    'text-xs font-bold px-2 py-0.5 rounded flex-shrink-0 cursor-pointer transition-colors border',
+                    logic === 'OR'
+                      ? 'bg-amber-100 text-amber-600 border-amber-300 hover:bg-amber-200'
+                      : 'bg-blue-100 text-blue-600 border-blue-300 hover:bg-blue-200'
+                  )}>
+                  {logic === 'OR' ? 'OU' : 'E'}
+                </button>
               )}
+              <select value={f.column}
+                onChange={e => { onUpdate(i, { column: e.target.value as FilterColumn, value: '' }); onFocus(`${prefix}-${e.target.value}`) }}
+                className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                {Object.entries(groupedCols).map(([group, cols]) => (
+                  <optgroup key={group} label={group}>
+                    {cols.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+              <select value={f.operator} onChange={e => onUpdate(i, { operator: e.target.value as FilterOperator })}
+                className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                {OPERATORS.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
+              </select>
+              <div className="relative flex-1">
+                <input value={f.value}
+                  onChange={e => onUpdate(i, { value: e.target.value })}
+                  onFocus={() => onFocus(`${prefix}-${f.column}`)}
+                  onBlur={onBlur}
+                  placeholder={f.operator === 'in' ? 'val1, val2, val3' : 'Valor…'}
+                  className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                {suggestions === `${prefix}-${f.column}` && (distinctVals[f.column]?.length ?? 0) > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-20 mt-0.5 bg-white border border-gray-100 rounded-lg shadow-lg max-h-44 overflow-y-auto">
+                    {(distinctVals[f.column] ?? [])
+                      .filter(v => !f.value || v.toLowerCase().includes(f.value.toLowerCase()))
+                      .slice(0, 25)
+                      .map(v => (
+                        <button key={v} onMouseDown={() => onUpdate(i, { value: v })}
+                          className="w-full text-left px-3 py-1.5 text-sm hover:bg-indigo-50 text-gray-700 truncate">
+                          {v}
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+              <button onClick={() => onRemove(i)} className="text-gray-300 hover:text-red-400 transition-colors flex-shrink-0">
+                <X size={14} />
+              </button>
             </div>
-            <button onClick={() => onRemove(i)} className="text-gray-300 hover:text-red-400 transition-colors flex-shrink-0">
-              <X size={14} />
-            </button>
-          </div>
-        ))}
+          )
+        })}
       </div>
-    </div>
-  )
-}
-
-function FormulaPreview({ label, tipo, filtros }: { label: string; tipo: string; filtros: FilterCondition[] }) {
-  if (filtros.length === 0) return null
-  return (
-    <div className="bg-gray-900 rounded-lg px-4 py-3 text-xs font-mono text-green-400 overflow-x-auto">
-      <span className="text-gray-400">-- {label || 'medida'}</span><br />
-      <span className="text-blue-400">SELECT</span> SUM(l.debito_credito) <span className="text-blue-400">FROM</span> lancamentos l<br />
-      <span className="text-blue-400"> LEFT JOIN</span> contas_contabeis ca <span className="text-blue-400">ON</span> l.numero_conta_contabil = ca.numero_conta_contabil<br />
-      <span className="text-blue-400"> LEFT JOIN</span> centros_custo cc <span className="text-blue-400">ON</span> l.centro_custo = cc.centro_custo<br />
-      <span className="text-blue-400">WHERE</span> l.tipo = <span className="text-yellow-400">&apos;{tipo !== 'ambos' ? tipo : 'budget|razao'}&apos;</span>
-      {filtros.map((f, i) => (
-        <span key={i}><br />&nbsp;&nbsp;<span className="text-blue-400">AND</span> <span className="text-white">{f.column}</span> = <span className="text-yellow-400">&apos;{f.value}&apos;</span></span>
-      ))}
-    </div>
-  )
-}
-
-function RatioFormulaPreview({ label, tipoNum, filtrosNum, tipoDen, filtrosDen }: {
-  label: string; tipoNum: string; filtrosNum: FilterCondition[]; tipoDen: string; filtrosDen: FilterCondition[]
-}) {
-  return (
-    <div className="bg-gray-900 rounded-lg px-4 py-3 text-xs font-mono text-green-400 overflow-x-auto">
-      <span className="text-gray-400">-- {label || 'ratio'} = Numerador / Denominador × 100</span><br />
-      <span className="text-indigo-400">( SUM numerador WHERE tipo=&apos;{tipoNum !== 'ambos' ? tipoNum : 'budget|razao'}&apos;</span>
-      {filtrosNum.map((f, i) => (
-        <span key={i}> AND <span className="text-white">{f.column}</span>=<span className="text-yellow-400">&apos;{f.value}&apos;</span></span>
-      ))}
-      <span className="text-indigo-400"> )</span><br />
-      <span className="text-gray-400">÷</span><br />
-      <span className="text-amber-400">( SUM denominador WHERE tipo=&apos;{tipoDen !== 'ambos' ? tipoDen : 'budget|razao'}&apos;</span>
-      {filtrosDen.map((f, i) => (
-        <span key={i}> AND <span className="text-white">{f.column}</span>=<span className="text-yellow-400">&apos;{f.value}&apos;</span></span>
-      ))}
-      <span className="text-amber-400"> ) × 100</span>
     </div>
   )
 }
