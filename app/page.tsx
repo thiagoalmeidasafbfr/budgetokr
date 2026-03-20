@@ -36,7 +36,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [empty,   setEmpty]   = useState(false)
   const [allPeriodos, setAllPeriodos] = useState<string[]>([])
-  const [selYear,     setSelYear]     = useState<string | null>(null)
+  const [selYear,     setSelYear]     = useState<string | null>('2026')
 
   useEffect(() => {
     Promise.all([
@@ -96,8 +96,9 @@ export default function Dashboard() {
     ? analise.filter(r => r.periodo.startsWith(selYear))
     : analise
 
-  // Aggregate by department — usa nome_departamento como chave de exibição
-  const byDept = filteredAnalise.reduce<Record<string, { budget: number; razao: number; codigo: string }>>((acc, r) => {
+  // Aggregate by department using YTD data when a year is selected (fair comparison)
+  const deptSource = selYear && hasYtdData ? ytdData : filteredAnalise
+  const byDept = deptSource.reduce<Record<string, { budget: number; razao: number; codigo: string }>>((acc, r) => {
     // chave de exibição: nome do departamento (fallback para código)
     const label = (r.nome_departamento && r.nome_departamento.trim())
       ? r.nome_departamento.trim()
@@ -135,12 +136,31 @@ export default function Dashboard() {
     .sort((a, b) => b.variacao - a.variacao)
     .slice(0, 10)
 
-  const totalBudget = filteredAnalise.reduce((s, r) => s + r.budget, 0)
-  const totalRazao  = filteredAnalise.reduce((s, r) => s + r.razao,  0)
-  const variacao    = selYear ? totalRazao - totalBudget : (summary?.total_razao ?? 0) - (summary?.total_budget ?? 0)
-  const variacaoPct = (selYear ? totalBudget : summary?.total_budget)
-    ? (variacao / Math.abs(selYear ? totalBudget : (summary?.total_budget ?? 0))) * 100
-    : 0
+  // YTD: Only periods that have actual Razão data (non-zero) — for a fair comparison
+  const periodsWithRazao = new Set(filteredAnalise.filter(r => r.razao !== 0).map(r => r.periodo))
+  const hasYtdData = periodsWithRazao.size > 0
+
+  // YTD totals: budget for same periods as razão
+  const ytdData       = filteredAnalise.filter(r => periodsWithRazao.has(r.periodo))
+  const totalBudgetYtd = ytdData.reduce((s, r) => s + r.budget, 0)
+  const totalRazaoYtd  = ytdData.reduce((s, r) => s + r.razao,  0)
+
+  // Full period totals (for summary when no year selected)
+  const totalBudgetFull = filteredAnalise.reduce((s, r) => s + r.budget, 0)
+  const totalRazaoFull  = filteredAnalise.reduce((s, r) => s + r.razao,  0)
+
+  // When year selected: use YTD budget to compare fairly with YTD razão
+  const displayBudget = selYear && hasYtdData ? totalBudgetYtd : (selYear ? totalBudgetFull : (summary?.total_budget ?? 0))
+  const displayRazao  = selYear && hasYtdData ? totalRazaoYtd  : (selYear ? totalRazaoFull  : (summary?.total_razao  ?? 0))
+
+  const variacao    = displayRazao - displayBudget
+  const variacaoPct = displayBudget ? (variacao / Math.abs(displayBudget)) * 100 : 0
+
+  // YTD period label (e.g. "Jan–Fev/26")
+  const ytdPeriods   = [...periodsWithRazao].sort()
+  const ytdLabelSub  = ytdPeriods.length > 0
+    ? `YTD · ${formatPeriodo(ytdPeriods[0])}${ytdPeriods.length > 1 ? `–${formatPeriodo(ytdPeriods[ytdPeriods.length - 1])}` : ''}`
+    : (selYear ?? '')
 
   return (
     <div className="space-y-5">
@@ -160,9 +180,17 @@ export default function Dashboard() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <SCard title="Budget Total"   value={formatCurrency(selYear ? totalBudget : (summary?.total_budget ?? 0))} sub={selYear ? selYear : `${summary?.linhas_budget.toLocaleString()} linhas`}   icon={<BarChart3 size={16} className="text-indigo-500" />}  bg="bg-indigo-50" />
-        <SCard title="Razão Total"    value={formatCurrency(selYear ? totalRazao  : (summary?.total_razao  ?? 0))} sub={selYear ? selYear : `${summary?.linhas_razao.toLocaleString()} linhas`}    icon={<TrendingUp size={16} className="text-emerald-500" />} bg="bg-emerald-50" />
-        <SCard title="Variação"       value={formatCurrency(variacao)}                    sub={formatPct(variacaoPct)}
+        <SCard
+          title={selYear && hasYtdData ? 'Budget YTD' : 'Budget Total'}
+          value={formatCurrency(displayBudget)}
+          sub={selYear && hasYtdData ? ytdLabelSub : `${summary?.linhas_budget.toLocaleString()} linhas`}
+          icon={<BarChart3 size={16} className="text-indigo-500" />} bg="bg-indigo-50" />
+        <SCard
+          title={selYear && hasYtdData ? 'Razão YTD' : 'Razão Total'}
+          value={formatCurrency(displayRazao)}
+          sub={selYear && hasYtdData ? ytdLabelSub : `${summary?.linhas_razao.toLocaleString()} linhas`}
+          icon={<TrendingUp size={16} className="text-emerald-500" />} bg="bg-emerald-50" />
+        <SCard title="Variação YTD"  value={formatCurrency(variacao)} sub={formatPct(variacaoPct)}
           icon={variacao >= 0 ? <TrendingUp size={16} className="text-emerald-500" /> : <TrendingDown size={16} className="text-red-400" />}
           bg={variacao >= 0 ? 'bg-emerald-50' : 'bg-red-50'} highlight />
         <SCard title="Dimensões"

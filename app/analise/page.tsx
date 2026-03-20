@@ -50,7 +50,7 @@ export default function AnalisePage() {
   const [periodos,      setPeriodos]      = useState<string[]>([])
   const [selDepts,      setSelDepts]      = useState<string[]>([])
   const [selPeriods,    setSelPeriods]    = useState<string[]>([])
-  const [selYear,       setSelYear]       = useState<string | null>(null)
+  const [selYear,       setSelYear]       = useState<string | null>('2026')
   // medida view state
   const [selMedida,        setSelMedida]        = useState<number | null>(null)
   const [medidaGroupBy,    setMedidaGroupBy]    = useState<'departamento' | 'periodo' | 'centro_custo'>('departamento')
@@ -80,15 +80,15 @@ export default function AnalisePage() {
     init()
   }, [])
 
-  // When year changes, update period selection to that year's months (or clear if "all")
+  // When year or available periods change, update period selection
   useEffect(() => {
-    if (selYear) {
+    if (selYear && periodos.length > 0) {
       setSelPeriods(periodos.filter(p => p.startsWith(selYear)))
-    } else {
+    } else if (!selYear) {
       setSelPeriods([])
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selYear])
+  }, [selYear, periodos])
 
   // Auto-apply filters whenever selection or groupBy changes
   useEffect(() => {

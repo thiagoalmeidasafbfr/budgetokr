@@ -29,7 +29,7 @@ export default function DREPage() {
   const [selDepts,      setSelDepts]      = useState<string[]>([])
   const [selPeriods,    setSelPeriods]    = useState<string[]>([])
   const [selCentros,    setSelCentros]    = useState<string[]>([])
-  const [selYear,       setSelYear]       = useState<string | null>(null)
+  const [selYear,       setSelYear]       = useState<string | null>('2026')
   const [centrosDisp,   setCentrosDisp]   = useState<Array<{ cc: string; nome: string }>>([])
   const [expanded,      setExpanded]      = useState<Set<string>>(new Set())
   const [loading,       setLoading]       = useState(false)
@@ -88,10 +88,19 @@ export default function DREPage() {
       setHierarchy(Array.isArray(hier) ? hier : [])
       setDreLinhas(Array.isArray(linhas) ? linhas : [])
       setDepartamentos(Array.isArray(depts) ? depts : [])
-      setPeriodos([...new Set(
+      const allPeriods = ([...new Set(
         (Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean)
       )].sort() as string[])
-      loadData(isDept ? [me.department] : [], [], [])
+      setPeriodos(allPeriods)
+      // Apply default year 2026 filter
+      const defaultDepts = isDept ? [me.department] : []
+      const defaultPeriods = allPeriods.filter(p => p.startsWith('2026'))
+      if (defaultPeriods.length > 0) {
+        setSelPeriods(defaultPeriods)
+        loadData(defaultDepts, defaultPeriods, [])
+      } else {
+        loadData(defaultDepts, [], [])
+      }
     }
     init()
   }, [])

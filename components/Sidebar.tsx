@@ -6,7 +6,7 @@ import {
   LayoutDashboard, TrendingUp, LineChart, GitCompare,
   Target, Layers, FileText, Database, Upload,
   ChevronRight, Building2, BookOpen, LayoutList, Gauge,
-  LogOut, User, ListTree,
+  LogOut, User, ListTree, Shield,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -93,6 +93,13 @@ const nav: NavItem[] = [
     icon: Upload,
     label: 'Importar Dados',
     sublabel: 'Excel · CSV',
+    masterOnly: true,
+  },
+  {
+    type: 'link', href: '/admin/login-logs',
+    icon: Shield,
+    label: 'Log de Acessos',
+    sublabel: 'Histórico de logins',
     masterOnly: true,
   },
 ]

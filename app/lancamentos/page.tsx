@@ -42,7 +42,7 @@ export default function LancamentosPage() {
   const [saving,      setSaving]      = useState<number | null>(null)
   const [error,       setError]       = useState('')
   const [allPeriodos, setAllPeriodos] = useState<string[]>([])
-  const [selYear,     setSelYear]     = useState<string | null>(null)
+  const [selYear,     setSelYear]     = useState<string | null>('2026')
   const inputRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async (p = page, search = q, t = tipo, year = selYear) => {
