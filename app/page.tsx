@@ -96,12 +96,13 @@ export default function Dashboard() {
     ? analise.filter(r => r.periodo.startsWith(selYear))
     : analise
 
-  // YTD: Only periods that have actual Razão data (non-zero) — for a fair comparison
-  const periodsWithRazao = new Set(filteredAnalise.filter(r => r.razao !== 0).map(r => r.periodo))
-  const hasYtdData = periodsWithRazao.size > 0
+  // YTD: all periods in the selected year up to and including the current month
+  const now = new Date()
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const ytdPeriodSet = new Set(filteredAnalise.map(r => r.periodo).filter(p => p <= currentMonth))
+  const hasYtdData = ytdPeriodSet.size > 0
 
-  // YTD totals: budget for same periods as razão
-  const ytdData        = filteredAnalise.filter(r => periodsWithRazao.has(r.periodo))
+  const ytdData        = filteredAnalise.filter(r => ytdPeriodSet.has(r.periodo))
   const totalBudgetYtd = ytdData.reduce((s, r) => s + r.budget, 0)
   const totalRazaoYtd  = ytdData.reduce((s, r) => s + r.razao,  0)
 
@@ -116,8 +117,8 @@ export default function Dashboard() {
   const variacao    = displayRazao - displayBudget
   const variacaoPct = displayBudget ? (variacao / Math.abs(displayBudget)) * 100 : 0
 
-  // YTD period label (e.g. "Jan–Fev/26")
-  const ytdPeriods  = [...periodsWithRazao].sort()
+  // YTD period label (e.g. "Jan–Mar/26")
+  const ytdPeriods  = [...ytdPeriodSet].sort()
   const ytdLabelSub = ytdPeriods.length > 0
     ? `YTD · ${formatPeriodo(ytdPeriods[0])}${ytdPeriods.length > 1 ? `–${formatPeriodo(ytdPeriods[ytdPeriods.length - 1])}` : ''}`
     : (selYear ?? '')
