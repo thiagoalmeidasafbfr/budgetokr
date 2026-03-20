@@ -30,6 +30,7 @@ export default function DREPage() {
   const [selPeriods,    setSelPeriods]    = useState<string[]>([])
   const [selCentros,    setSelCentros]    = useState<string[]>([])
   const [selYear,       setSelYear]       = useState<string | null>('2026')
+  const [razaoPeriods,  setRazaoPeriods]  = useState<string[]>([])
   const [centrosDisp,   setCentrosDisp]   = useState<Array<{ cc: string; nome: string }>>([])
   const [expanded,      setExpanded]      = useState<Set<string>>(new Set())
   const [loading,       setLoading]       = useState(false)
@@ -79,22 +80,26 @@ export default function DREPage() {
       const isDept = me?.role === 'dept' && me.department
       if (isDept) { setDeptUser({ department: me.department }); setSelDepts([me.department]) }
 
-      const [hier, linhas, depts, dates] = await Promise.all([
+      const [hier, linhas, depts, dates, razaoPds] = await Promise.all([
         fetch('/api/dre?type=hierarchy').then(r => r.json()),
         fetch('/api/dre?type=linhas').then(r => r.json()),
         fetch('/api/dre?type=distinct&col=nome_departamento').then(r => r.json()),
         fetch('/api/dre?type=distinct&col=data_lancamento').then(r => r.json()),
+        fetch('/api/analise?type=razao-periods').then(r => r.json()),
       ])
       setHierarchy(Array.isArray(hier) ? hier : [])
       setDreLinhas(Array.isArray(linhas) ? linhas : [])
       setDepartamentos(Array.isArray(depts) ? depts : [])
+      const rp = Array.isArray(razaoPds) ? razaoPds as string[] : []
+      setRazaoPeriods(rp)
       const allPeriods = ([...new Set(
         (Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean)
       )].sort() as string[])
       setPeriodos(allPeriods)
-      // Apply default year 2026 filter
+      // Default to YTD periods (where razão data exists) for 2026; fallback to all 2026
       const defaultDepts = isDept ? [me.department] : []
-      const defaultPeriods = allPeriods.filter(p => p.startsWith('2026'))
+      const ytd2026 = allPeriods.filter(p => p.startsWith('2026') && rp.includes(p))
+      const defaultPeriods = ytd2026.length > 0 ? ytd2026 : allPeriods.filter(p => p.startsWith('2026'))
       if (defaultPeriods.length > 0) {
         setSelPeriods(defaultPeriods)
         loadData(defaultDepts, defaultPeriods, [])
@@ -124,10 +129,16 @@ export default function DREPage() {
 
   const applyFilters = () => loadData(selDepts, selPeriods, selCentros)
 
-  // When year changes, update period selection and auto-apply
+  // When year changes, default to YTD periods (razão exists) and auto-apply
   const handleYearChange = (year: string | null) => {
     setSelYear(year)
-    const newPeriods = year ? periodos.filter(p => p.startsWith(year)) : []
+    if (!year) {
+      setSelPeriods([])
+      loadData(selDepts, [], selCentros)
+      return
+    }
+    const ytd = periodos.filter(p => p.startsWith(year) && razaoPeriods.includes(p))
+    const newPeriods = ytd.length > 0 ? ytd : periodos.filter(p => p.startsWith(year))
     setSelPeriods(newPeriods)
     loadData(selDepts, newPeriods, selCentros)
   }

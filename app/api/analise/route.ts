@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAnalise, getMedidaResultados, getDistinctValues, getSummary } from '@/lib/query'
+import { getAnalise, getMedidaResultados, getDistinctValues, getSummary, getRazaoPeriods } from '@/lib/query'
 import { getUserFromHeaders } from '@/lib/session'
 import type { FilterCondition, FilterColumn } from '@/lib/types'
 
@@ -17,6 +17,10 @@ export async function GET(req: NextRequest) {
 
     if (type === 'summary') {
       return NextResponse.json(getSummary())
+    }
+
+    if (type === 'razao-periods') {
+      return NextResponse.json(getRazaoPeriods())
     }
 
     if (type === 'distinct') {
