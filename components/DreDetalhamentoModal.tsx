@@ -1,12 +1,13 @@
 'use client'
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import React, {
+  useState, useEffect, useRef, useMemo, useCallback, useDeferredValue
+} from 'react'
 import { X, Download, ArrowUpDown, Columns3, Filter } from 'lucide-react'
 import { formatCurrency, formatPeriodo, cn } from '@/lib/utils'
 import type { TreeNode } from '@/lib/dre-utils'
 
 export interface ContextMenuState {
-  x: number
-  y: number
+  x: number; y: number
   node: TreeNode
   periodo?: string
   tipo: 'budget' | 'razao' | 'ambos'
@@ -16,19 +17,12 @@ export interface ContextMenuState {
 }
 
 interface DetalhamentoLinha {
-  id: number
-  tipo: string
-  data_lancamento: string
-  numero_conta_contabil: string
-  nome_conta_contabil: string
-  centro_custo: string
-  nome_centro_custo: string
-  agrupamento_arvore: string
-  dre: string
-  nome_conta_contrapartida: string
-  debito_credito: number
-  observacao: string
-  fonte: string
+  id: number; tipo: string; data_lancamento: string
+  numero_conta_contabil: string; nome_conta_contabil: string
+  centro_custo: string; nome_centro_custo: string
+  agrupamento_arvore: string; dre: string
+  nome_conta_contrapartida: string; debito_credito: number
+  observacao: string; fonte: string
 }
 
 type DetColKey = 'data' | 'tipo' | 'centro' | 'dre' | 'agrupamento' | 'conta' | 'valor' | 'contrapartida' | 'obs'
@@ -74,23 +68,34 @@ function exportDetalhamento(rows: DetalhamentoLinha[], title: string) {
   a.href = url; a.download = `dre-lancamentos-${Date.now()}.csv`; a.click()
 }
 
-export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuState; onClose: () => void }) {
-  const [rows,        setRows]        = useState<DetalhamentoLinha[]>([])
-  const [truncated,   setTruncated]   = useState(false)
-  const [loading,     setLoading]     = useState(true)
-  const [textFilter,  setTextFilter]  = useState('')
-  const [filterCentros, setFilterCentros] = useState<string[]>([])
-  const [filterTipo,  setFilterTipo]  = useState<'all' | 'budget' | 'razao'>('all')
-  const [filterPeriodo, setFilterPeriodo] = useState('')
-  const [sortCol,     setSortCol]     = useState<DetColKey>('data')
-  const [sortDir,     setSortDir]     = useState<'asc' | 'desc'>('asc')
-  const [visibleCols, setVisibleCols] = useState<Set<DetColKey>>(new Set(DET_COLS.map(c => c.key)))
-  const [showCols,    setShowCols]    = useState(false)
-  const [showCCFilter, setShowCCFilter] = useState(false)
-  const [ccSearch,    setCCSearch]    = useState('')
-  const colsRef   = useRef<HTMLDivElement>(null)
-  const ccRef     = useRef<HTMLDivElement>(null)
+const ROW_H  = 30   // px — altura fixa de cada linha da tabela
+const OVERSCAN = 8  // linhas extras acima/abaixo da viewport
 
+export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuState; onClose: () => void }) {
+  const [rows,          setRows]          = useState<DetalhamentoLinha[]>([])
+  const [truncated,     setTruncated]     = useState(false)
+  const [loading,       setLoading]       = useState(true)
+  const [textInput,     setTextInput]     = useState('')
+  const [filterCentros, setFilterCentros] = useState<string[]>([])
+  const [filterTipo,    setFilterTipo]    = useState<'all' | 'budget' | 'razao'>('all')
+  const [filterPeriodo, setFilterPeriodo] = useState('')
+  const [sortCol,       setSortCol]       = useState<DetColKey>('data')
+  const [sortDir,       setSortDir]       = useState<'asc' | 'desc'>('asc')
+  const [visibleCols,   setVisibleCols]   = useState<Set<DetColKey>>(new Set(DET_COLS.map(c => c.key)))
+  const [showCols,      setShowCols]      = useState(false)
+  const [showCCFilter,  setShowCCFilter]  = useState(false)
+  const [ccSearch,      setCCSearch]      = useState('')
+  const [scrollTop,     setScrollTop]     = useState(0)
+  const [containerH,    setContainerH]    = useState(600)
+
+  // Defers expensive filter until browser is idle — keeps input snappy
+  const deferredText = useDeferredValue(textInput)
+
+  const colsRef  = useRef<HTMLDivElement>(null)
+  const ccRef    = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Click-outside handler for dropdowns
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (colsRef.current && !colsRef.current.contains(e.target as Node)) setShowCols(false)
@@ -100,7 +105,19 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
     return () => window.removeEventListener('mousedown', handler)
   }, [])
 
+  // Track container height for virtual scroll
   useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const obs = new ResizeObserver(() => setContainerH(el.clientHeight))
+    obs.observe(el)
+    setContainerH(el.clientHeight)
+    return () => obs.disconnect()
+  }, [loading])
+
+  // Fetch data
+  useEffect(() => {
+    setRows([]); setLoading(true)
     const p = new URLSearchParams()
     if (ctx.node.dre)         p.set('dre',           ctx.node.dre)
     if (ctx.node.agrupamento) p.set('agrupamento',   ctx.node.agrupamento)
@@ -115,7 +132,13 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
       .then(data => { setRows(data.rows ?? data); setTruncated(data.truncated ?? false); setLoading(false) })
   }, [ctx])
 
-  // Derived filter options from loaded data
+  // Pre-compute one lowercase search string per row (done once after fetch)
+  const rowSearchStrings = useMemo(() =>
+    rows.map(r => DET_COLS.map(c => String(colValue(r, c.key))).join('\n').toLowerCase()),
+    [rows]
+  )
+
+  // Filter options derived from data
   const centroOptions = useMemo(() => {
     const map = new Map<string, string>()
     for (const r of rows) map.set(r.centro_custo, r.nome_centro_custo)
@@ -130,6 +153,61 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
     return [...s].sort()
   }, [rows])
 
+  // Main filter + sort — memoized, runs only when deps change
+  const displayed = useMemo(() => {
+    const centroSet = new Set(filterCentros)
+    const q = deferredText.toLowerCase()
+    const filtered = rows.filter((r, i) => {
+      if (filterTipo !== 'all' && r.tipo !== filterTipo) return false
+      if (filterPeriodo && r.data_lancamento?.substring(0, 7) !== filterPeriodo) return false
+      if (centroSet.size > 0 && !centroSet.has(r.centro_custo)) return false
+      if (q && !rowSearchStrings[i].includes(q)) return false
+      return true
+    })
+    return filtered.sort((a, b) => {
+      const va = colValue(a, sortCol)
+      const vb = colValue(b, sortCol)
+      const cmp = typeof va === 'number' && typeof vb === 'number'
+        ? va - vb
+        : String(va).localeCompare(String(vb))
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+  }, [rows, rowSearchStrings, filterTipo, filterPeriodo, filterCentros, deferredText, sortCol, sortDir])
+
+  const total = useMemo(() => displayed.reduce((s, r) => s + r.debito_credito, 0), [displayed])
+
+  // Reset scroll when filters change
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0
+    setScrollTop(0)
+  }, [filterTipo, filterPeriodo, filterCentros, deferredText, sortCol, sortDir])
+
+  // Virtual scroll handler
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    setScrollTop((e.target as HTMLDivElement).scrollTop)
+  }, [])
+
+  // Virtual window calculation
+  const startIdx     = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN)
+  const endIdx       = Math.min(displayed.length, Math.ceil((scrollTop + containerH) / ROW_H) + OVERSCAN)
+  const visibleRows  = displayed.slice(startIdx, endIdx)
+  const paddingTop   = startIdx * ROW_H
+  const paddingBottom = Math.max(0, (displayed.length - endIdx) * ROW_H)
+
+  const toggleSort = (key: DetColKey) => {
+    if (sortCol === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(key); setSortDir('asc') }
+  }
+  const toggleCentro = (cc: string) =>
+    setFilterCentros(prev => prev.includes(cc) ? prev.filter(x => x !== cc) : [...prev, cc])
+
+  const activeFiltersCount = (ctx.departamentos?.length ?? 0) + (ctx.periodos?.length ?? 0) + (ctx.centros?.length ?? 0)
+  const localFiltersActive = filterCentros.length > 0 || filterTipo !== 'all' || !!filterPeriodo
+  const visibleDefs = DET_COLS.filter(c => visibleCols.has(c.key))
+  const filteredCCOptions = ccSearch
+    ? centroOptions.filter(o => o.label.toLowerCase().includes(ccSearch.toLowerCase()))
+    : centroOptions
+
   const title = [
     ctx.node.dre,
     ctx.node.agrupamento !== ctx.node.dre ? ctx.node.agrupamento : null,
@@ -137,42 +215,6 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
     ctx.periodo ? `· ${formatPeriodo(ctx.periodo)}` : null,
     ctx.tipo !== 'ambos' ? `· ${ctx.tipo === 'budget' ? 'Budget' : 'Realizado'}` : null,
   ].filter(Boolean).join(' › ')
-
-  const displayed = rows
-    .filter(r => {
-      if (filterTipo !== 'all' && r.tipo !== filterTipo) return false
-      if (filterPeriodo && r.data_lancamento?.substring(0, 7) !== filterPeriodo) return false
-      if (filterCentros.length > 0 && !filterCentros.includes(r.centro_custo)) return false
-      if (textFilter) {
-        const q = textFilter.toLowerCase()
-        if (!DET_COLS.some(c => String(colValue(r, c.key)).toLowerCase().includes(q))) return false
-      }
-      return true
-    })
-    .sort((a, b) => {
-      const va = colValue(a, sortCol)
-      const vb = colValue(b, sortCol)
-      const cmp = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb))
-      return sortDir === 'asc' ? cmp : -cmp
-    })
-
-  const total = displayed.reduce((s, r) => s + r.debito_credito, 0)
-
-  const toggleSort = (key: DetColKey) => {
-    if (sortCol === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortCol(key); setSortDir('asc') }
-  }
-
-  const toggleCentro = (cc: string) =>
-    setFilterCentros(prev => prev.includes(cc) ? prev.filter(x => x !== cc) : [...prev, cc])
-
-  const activeFiltersCount = (ctx.departamentos?.length ?? 0) + (ctx.periodos?.length ?? 0) + (ctx.centros?.length ?? 0)
-  const localFiltersActive = filterCentros.length > 0 || filterTipo !== 'all' || !!filterPeriodo
-  const visibleDefs = DET_COLS.filter(c => visibleCols.has(c.key))
-
-  const filteredCCOptions = ccSearch
-    ? centroOptions.filter(o => o.label.toLowerCase().includes(ccSearch.toLowerCase()))
-    : centroOptions
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-6 px-4 overflow-auto"
@@ -211,10 +253,9 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
           <div className="border-b bg-gray-50 px-5 py-2 space-y-2">
             {/* Row 1: search + cols + count */}
             <div className="flex items-center gap-2">
-              <input type="text" value={textFilter} onChange={e => setTextFilter(e.target.value)}
+              <input type="text" value={textInput} onChange={e => setTextInput(e.target.value)}
                 placeholder="Buscar em todos os campos…"
                 className="flex-1 text-xs border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white" />
-
               <div className="relative" ref={colsRef}>
                 <button onClick={() => setShowCols(v => !v)}
                   className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-400 hover:text-indigo-700 text-gray-600 transition-colors">
@@ -236,7 +277,6 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
                   </div>
                 )}
               </div>
-
               <span className="text-xs text-gray-400 whitespace-nowrap">{displayed.length} de {rows.length} lançamentos</span>
               {truncated && (
                 <span className="text-xs text-amber-600 font-medium whitespace-nowrap">⚠ Limite de 50 000 atingido</span>
@@ -249,8 +289,7 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
 
               {/* Centro de Custo multi-select */}
               <div className="relative" ref={ccRef}>
-                <button
-                  onClick={() => setShowCCFilter(v => !v)}
+                <button onClick={() => setShowCCFilter(v => !v)}
                   className={cn(
                     'flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border transition-colors',
                     filterCentros.length > 0
@@ -259,22 +298,17 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
                   )}>
                   Centro de Custo
                   {filterCentros.length > 0 && (
-                    <span className="bg-indigo-600 text-white rounded-full px-1.5 py-0 text-[10px] font-bold">{filterCentros.length}</span>
+                    <span className="bg-indigo-600 text-white rounded-full px-1.5 text-[10px] font-bold">{filterCentros.length}</span>
                   )}
                 </button>
                 {showCCFilter && (
                   <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-xl shadow-xl p-2 w-72">
-                    <input
-                      type="text"
-                      value={ccSearch}
-                      onChange={e => setCCSearch(e.target.value)}
+                    <input type="text" value={ccSearch} onChange={e => setCCSearch(e.target.value)}
                       placeholder="Buscar centro…"
                       className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                      autoFocus
-                    />
+                      autoFocus />
                     {filterCentros.length > 0 && (
-                      <button
-                        onClick={() => setFilterCentros([])}
+                      <button onClick={() => setFilterCentros([])}
                         className="w-full text-left text-xs text-indigo-600 hover:text-indigo-800 px-1 py-0.5 mb-1">
                         Limpar seleção ({filterCentros.length})
                       </button>
@@ -296,15 +330,12 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
                 )}
               </div>
 
-              {/* Tipo */}
+              {/* Tipo toggle */}
               <div className="flex bg-white border border-gray-200 rounded-lg overflow-hidden text-xs">
                 {(['all', 'budget', 'razao'] as const).map(v => (
-                  <button key={v}
-                    onClick={() => setFilterTipo(v)}
-                    className={cn(
-                      'px-2.5 py-1 transition-colors',
-                      filterTipo === v ? 'bg-indigo-600 text-white font-medium' : 'text-gray-600 hover:bg-gray-50'
-                    )}>
+                  <button key={v} onClick={() => setFilterTipo(v)}
+                    className={cn('px-2.5 py-1 transition-colors',
+                      filterTipo === v ? 'bg-indigo-600 text-white font-medium' : 'text-gray-600 hover:bg-gray-50')}>
                     {v === 'all' ? 'Todos' : v === 'budget' ? 'Budget' : 'Real'}
                   </button>
                 ))}
@@ -312,24 +343,16 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
 
               {/* Período */}
               {periodoOptions.length > 1 && (
-                <select
-                  value={filterPeriodo}
-                  onChange={e => setFilterPeriodo(e.target.value)}
-                  className={cn(
-                    'text-xs border rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-colors',
-                    filterPeriodo ? 'border-indigo-500 text-indigo-700' : 'border-gray-200 text-gray-600'
-                  )}>
+                <select value={filterPeriodo} onChange={e => setFilterPeriodo(e.target.value)}
+                  className={cn('text-xs border rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-colors',
+                    filterPeriodo ? 'border-indigo-500 text-indigo-700' : 'border-gray-200 text-gray-600')}>
                   <option value="">Todos os períodos</option>
-                  {periodoOptions.map(p => (
-                    <option key={p} value={p}>{formatPeriodo(p)}</option>
-                  ))}
+                  {periodoOptions.map(p => <option key={p} value={p}>{formatPeriodo(p)}</option>)}
                 </select>
               )}
 
-              {/* Clear all local filters */}
               {localFiltersActive && (
-                <button
-                  onClick={() => { setFilterCentros([]); setFilterTipo('all'); setFilterPeriodo('') }}
+                <button onClick={() => { setFilterCentros([]); setFilterTipo('all'); setFilterPeriodo('') }}
                   className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 px-1.5 py-1 rounded hover:bg-red-50 transition-colors">
                   <X size={11} /> Limpar filtros
                 </button>
@@ -343,9 +366,10 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
             <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : (
-          <div className="flex-1 overflow-auto">
-            <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-gray-700 text-white">
+          /* Virtual-scrolled table */
+          <div ref={scrollRef} className="flex-1 overflow-auto" onScroll={handleScroll}>
+            <table className="w-full text-xs" style={{ tableLayout: 'fixed' }}>
+              <thead className="sticky top-0 bg-gray-700 text-white z-10">
                 <tr>
                   {visibleDefs.map(c => (
                     <th key={c.key} onClick={() => toggleSort(c.key)}
@@ -361,28 +385,46 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
                 </tr>
               </thead>
               <tbody>
-                {displayed.map((r, i) => (
-                  <tr key={r.id} className={cn('border-b border-gray-100', i % 2 === 0 ? 'bg-white' : 'bg-gray-50/60')}>
-                    {visibleCols.has('data')          && <td className="px-3 py-1.5 whitespace-nowrap font-mono">{r.data_lancamento}</td>}
-                    {visibleCols.has('tipo')          && <td className="px-3 py-1.5">
-                      <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium',
-                        r.tipo === 'budget' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700')}>
-                        {r.tipo === 'budget' ? 'Budget' : 'Real'}
-                      </span>
-                    </td>}
-                    {visibleCols.has('centro')        && <td className="px-3 py-1.5 whitespace-nowrap">{r.centro_custo}{r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}</td>}
-                    {visibleCols.has('dre')           && <td className="px-3 py-1.5 whitespace-nowrap">{r.dre}</td>}
-                    {visibleCols.has('agrupamento')   && <td className="px-3 py-1.5 whitespace-nowrap">{r.agrupamento_arvore}</td>}
-                    {visibleCols.has('conta')         && <td className="px-3 py-1.5 whitespace-nowrap">{r.numero_conta_contabil} — {r.nome_conta_contabil}</td>}
-                    {visibleCols.has('valor')         && <td className={cn('px-3 py-1.5 text-right whitespace-nowrap font-semibold', r.debito_credito < 0 ? 'text-red-600' : 'text-gray-800')}>
-                      {formatCurrency(r.debito_credito)}
-                    </td>}
-                    {visibleCols.has('contrapartida') && <td className="px-3 py-1.5 whitespace-nowrap text-gray-500">{r.nome_conta_contrapartida}</td>}
-                    {visibleCols.has('obs')           && <td className="px-3 py-1.5 max-w-xs truncate text-gray-500">{r.observacao}</td>}
+                {/* Top spacer */}
+                {paddingTop > 0 && (
+                  <tr style={{ height: paddingTop }}>
+                    <td colSpan={visibleDefs.length} />
                   </tr>
-                ))}
+                )}
+
+                {visibleRows.map((r, localIdx) => {
+                  const i = startIdx + localIdx
+                  return (
+                    <tr key={r.id} style={{ height: ROW_H }}
+                      className={cn('border-b border-gray-100', i % 2 === 0 ? 'bg-white' : 'bg-gray-50/60')}>
+                      {visibleCols.has('data')          && <td className="px-3 py-1.5 whitespace-nowrap font-mono overflow-hidden text-ellipsis">{r.data_lancamento}</td>}
+                      {visibleCols.has('tipo')          && <td className="px-3 py-1.5">
+                        <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium',
+                          r.tipo === 'budget' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700')}>
+                          {r.tipo === 'budget' ? 'Budget' : 'Real'}
+                        </span>
+                      </td>}
+                      {visibleCols.has('centro')        && <td className="px-3 py-1.5 whitespace-nowrap overflow-hidden text-ellipsis">{r.centro_custo}{r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}</td>}
+                      {visibleCols.has('dre')           && <td className="px-3 py-1.5 whitespace-nowrap overflow-hidden text-ellipsis">{r.dre}</td>}
+                      {visibleCols.has('agrupamento')   && <td className="px-3 py-1.5 whitespace-nowrap overflow-hidden text-ellipsis">{r.agrupamento_arvore}</td>}
+                      {visibleCols.has('conta')         && <td className="px-3 py-1.5 whitespace-nowrap overflow-hidden text-ellipsis">{r.numero_conta_contabil} — {r.nome_conta_contabil}</td>}
+                      {visibleCols.has('valor')         && <td className={cn('px-3 py-1.5 text-right whitespace-nowrap font-semibold', r.debito_credito < 0 ? 'text-red-600' : 'text-gray-800')}>
+                        {formatCurrency(r.debito_credito)}
+                      </td>}
+                      {visibleCols.has('contrapartida') && <td className="px-3 py-1.5 whitespace-nowrap overflow-hidden text-ellipsis text-gray-500">{r.nome_conta_contrapartida}</td>}
+                      {visibleCols.has('obs')           && <td className="px-3 py-1.5 overflow-hidden text-ellipsis text-gray-500 max-w-xs">{r.observacao}</td>}
+                    </tr>
+                  )
+                })}
+
+                {/* Bottom spacer */}
+                {paddingBottom > 0 && (
+                  <tr style={{ height: paddingBottom }}>
+                    <td colSpan={visibleDefs.length} />
+                  </tr>
+                )}
               </tbody>
-              <tfoot className="sticky bottom-0 bg-gray-800 text-white font-bold">
+              <tfoot className="sticky bottom-0 bg-gray-800 text-white font-bold z-10">
                 <tr>
                   <td colSpan={visibleDefs.filter(c => c.key !== 'valor').length} className="px-3 py-2 text-right">
                     Total ({displayed.length} lançamentos)
