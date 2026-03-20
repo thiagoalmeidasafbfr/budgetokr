@@ -3,8 +3,8 @@ import './globals.css'
 import { Sidebar } from '@/components/Sidebar'
 
 export const metadata: Metadata = {
-  title: 'BudgetOKR — Budget vs Razão',
-  description: 'Plataforma de comparação orçamentária e métricas departamentais',
+  title: 'Glorioso Finance',
+  description: 'Plataforma de gestão financeira do Botafogo de Futebol e Regatas',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
