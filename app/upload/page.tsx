@@ -59,10 +59,13 @@ export default function UploadPage() {
 
   const analyzeFile = async () => {
     if (!file || !tipo) return
-    const fd = new FormData()
-    fd.append('file', file)
-    fd.append('tipo', tipo)
-    const res = await fetch('/api/upload', { method: 'POST', body: fd })
+    const bytes = await file.arrayBuffer()
+    const params = new URLSearchParams({ tipo })
+    const res = await fetch(`/api/upload?${params}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: bytes,
+    })
     const data = await res.json()
     if (!res.ok) { setError(data.error); return }
 
@@ -117,14 +120,19 @@ export default function UploadPage() {
     if (missing.length) { setError(`Mapeie: ${missing.map(f => f.label).join(', ')}`); return }
 
     setStep('importing'); setProgress(10)
-    const fd = new FormData()
-    fd.append('file', file)
-    fd.append('tipo', tipo)
-    fd.append('mapping', JSON.stringify(mapping))
-    fd.append('mode', tipo === 'dre_linhas' ? 'replace' : mode)
+    const bytes  = await file.arrayBuffer()
+    const params = new URLSearchParams({
+      tipo,
+      mapping: JSON.stringify(mapping),
+      mode: tipo === 'dre_linhas' ? 'replace' : mode,
+    })
 
     const interval = setInterval(() => setProgress(p => Math.min(p + 6, 88)), 400)
-    const res  = await fetch('/api/upload', { method: 'POST', body: fd })
+    const res  = await fetch(`/api/upload?${params}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: bytes,
+    })
     clearInterval(interval); setProgress(100)
 
     const data = await res.json()

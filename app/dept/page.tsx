@@ -1126,7 +1126,7 @@ export default function DeptDashboardPage() {
   const [allPeriodos,      setAllPeriodos]      = useState<string[]>([])
   const [selDept,          setSelDept]          = useState<string>('')
   const [selPeriods,       setSelPeriods]       = useState<string[]>([])
-  const [selYear,          setSelYear]          = useState<string | null>(null)
+  const [selYear,          setSelYear]          = useState<string | null>('2026')
   const [dashData,         setDashData]         = useState<DashboardData | null>(null)
   const [loading,          setLoading]          = useState(false)
   const [kpis,             setKpis]             = useState<KpiManual[]>([])
@@ -1169,6 +1169,9 @@ export default function DeptDashboardPage() {
         (Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean)
       )].sort() as string[]
       setAllPeriodos(unique)
+      // Apply default year 2026 filter
+      const yr2026 = unique.filter(p => p.startsWith('2026'))
+      if (yr2026.length > 0) setSelPeriods(yr2026)
     })
   }, [])
 

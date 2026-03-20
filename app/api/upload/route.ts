@@ -4,6 +4,9 @@ import { getDb } from '@/lib/db'
 
 export const maxDuration = 60
 
+// Accepted content types for upload
+// We support both multipart/form-data (legacy) and application/octet-stream (preferred for large files)
+
 /**
  * Converte qualquer valor vindo do Excel para número JS correto.
  *
@@ -110,14 +113,33 @@ function parseDate(v: unknown): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const formData = await req.formData()
-    const file     = formData.get('file') as File
-    const tipo     = formData.get('tipo') as string
-    const mapping  = formData.get('mapping') as string
+    const sp      = new URL(req.url).searchParams
+    const ct      = req.headers.get('content-type') ?? ''
 
-    if (!file) return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
+    let bytes: ArrayBuffer
+    let tipo:    string
+    let mapping: string | null
+    let modeFromQuery: string | null
 
-    const bytes    = await file.arrayBuffer()
+    if (ct.includes('application/octet-stream')) {
+      // ── New protocol: file as raw binary, metadata in query params ──────────
+      bytes         = await req.arrayBuffer()
+      tipo          = sp.get('tipo') ?? ''
+      mapping       = sp.get('mapping')
+      modeFromQuery = sp.get('mode')
+    } else {
+      // ── Legacy protocol: multipart/form-data ─────────────────────────────────
+      const formData = await req.formData()
+      const file     = formData.get('file') as File
+      tipo           = (formData.get('tipo') as string) ?? ''
+      mapping        = formData.get('mapping') as string | null
+      modeFromQuery  = formData.get('mode') as string | null
+      if (!file) return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
+      bytes = await file.arrayBuffer()
+    }
+
+    if (!bytes || bytes.byteLength === 0)
+      return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
     // cellNF:true → preserva o format code (cell.z) para detectarmos datas
     const workbook = XLSX.read(bytes, { type: 'array', cellNF: true })
     const sheet    = workbook.Sheets[workbook.SheetNames[0]]
@@ -168,7 +190,7 @@ export async function POST(req: NextRequest) {
     // ── Lançamentos Budget ou Razão ──────────────────────────────────────────
     if (tipo === 'lancamentos_budget' || tipo === 'lancamentos_razao') {
       const tipoVal = tipo === 'lancamentos_budget' ? 'budget' : 'razao'
-      const modeRaw = (formData.get('mode') as string) ?? 'append'
+      const modeRaw = modeFromQuery ?? 'append'
 
       if (modeRaw === 'replace') {
         db.prepare(`DELETE FROM lancamentos WHERE tipo = ?`).run(tipoVal)
@@ -282,7 +304,7 @@ export async function POST(req: NextRequest) {
 
     // ── Estrutura DRE (linhas + subtotais) ───────────────────────────────────
     if (tipo === 'dre_linhas') {
-      const modeRaw = (formData.get('mode') as string) ?? 'replace'
+      const modeRaw = modeFromQuery ?? 'replace'
       if (modeRaw === 'replace') {
         db.prepare(`DELETE FROM dre_linhas`).run()
       }
