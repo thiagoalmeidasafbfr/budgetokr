@@ -404,6 +404,7 @@ export function getSummary() {
 export interface DRERow {
   dre: string
   agrupamento_arvore: string
+  nome_conta_contabil: string
   ordem_dre: number
   periodo: string
   budget: number
@@ -451,14 +452,15 @@ export function getDRE(
     SELECT
       COALESCE(ca.dre, 'Sem classificação') as dre,
       COALESCE(ca.agrupamento_arvore, '') as agrupamento_arvore,
+      COALESCE(ca.nome_conta_contabil, '') as nome_conta_contabil,
       COALESCE(MIN(ca.ordem_dre), 999) as ordem_dre,
       strftime('%Y-%m', l.data_lancamento) as periodo,
       SUM(CASE WHEN l.tipo = 'budget' THEN l.debito_credito ELSE 0 END) as budget,
       SUM(CASE WHEN l.tipo = 'razao'  THEN l.debito_credito ELSE 0 END) as razao
     ${STAR_SCHEMA_JOIN}
     ${whereClause}
-    GROUP BY ca.dre, ca.agrupamento_arvore, periodo
-    ORDER BY COALESCE(MIN(ca.ordem_dre), 999), ca.dre, ca.agrupamento_arvore, periodo
+    GROUP BY ca.dre, ca.agrupamento_arvore, ca.nome_conta_contabil, periodo
+    ORDER BY COALESCE(MIN(ca.ordem_dre), 999), ca.dre, ca.agrupamento_arvore, ca.nome_conta_contabil, periodo
   `
 
   return db.prepare(sql).all(...params) as DRERow[]

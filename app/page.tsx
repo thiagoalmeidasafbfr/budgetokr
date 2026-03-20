@@ -25,6 +25,7 @@ export default function Dashboard() {
   const [medidas, setMedidas] = useState<Array<{ id: number; nome: string; cor: string }>>([])
   const [loading, setLoading] = useState(true)
   const [empty,   setEmpty]   = useState(false)
+  const [selYear, setSelYear] = useState<string>('')
 
   useEffect(() => {
     Promise.all([
@@ -76,8 +77,12 @@ export default function Dashboard() {
     </div>
   )
 
+  // Extract years and filter by selected year
+  const anos = [...new Set(analise.map(r => r.periodo?.substring(0, 4)).filter(Boolean))].sort()
+  const filtered = selYear ? analise.filter(r => r.periodo?.startsWith(selYear + '-')) : analise
+
   // Aggregate by department — usa nome_departamento como chave de exibição
-  const byDept = analise.reduce<Record<string, { budget: number; razao: number; codigo: string }>>((acc, r) => {
+  const byDept = filtered.reduce<Record<string, { budget: number; razao: number; codigo: string }>>((acc, r) => {
     // chave de exibição: nome do departamento (fallback para código)
     const label = (r.nome_departamento && r.nome_departamento.trim())
       ? r.nome_departamento.trim()
@@ -89,7 +94,7 @@ export default function Dashboard() {
   }, {})
 
   // Aggregate by period
-  const byPeriod = analise.reduce<Record<string, { budget: number; razao: number }>>((acc, r) => {
+  const byPeriod = filtered.reduce<Record<string, { budget: number; razao: number }>>((acc, r) => {
     if (!acc[r.periodo]) acc[r.periodo] = { budget: 0, razao: 0 }
     acc[r.periodo].budget += r.budget
     acc[r.periodo].razao  += r.razao
@@ -105,8 +110,11 @@ export default function Dashboard() {
     .sort((a, b) => Math.abs(b.variacao) - Math.abs(a.variacao))
     .slice(0, 10)
 
-  const variacao    = (summary?.total_razao ?? 0) - (summary?.total_budget ?? 0)
-  const variacaoPct = summary?.total_budget ? (variacao / Math.abs(summary.total_budget)) * 100 : 0
+  const filteredTotals = selYear
+    ? filtered.reduce((acc, r) => ({ budget: acc.budget + r.budget, razao: acc.razao + r.razao }), { budget: 0, razao: 0 })
+    : { budget: summary?.total_budget ?? 0, razao: summary?.total_razao ?? 0 }
+  const variacao    = filteredTotals.razao - filteredTotals.budget
+  const variacaoPct = filteredTotals.budget ? (variacao / Math.abs(filteredTotals.budget)) * 100 : 0
 
   return (
     <div className="space-y-5">
@@ -115,7 +123,23 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-500 text-sm mt-0.5">Visão consolidada Budget vs Razão</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {anos.length > 1 && (
+            <div className="flex bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5">
+              <button onClick={() => setSelYear('')}
+                className={cn('px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
+                  !selYear ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+                Todos
+              </button>
+              {anos.map(ano => (
+                <button key={ano} onClick={() => setSelYear(ano)}
+                  className={cn('px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
+                    selYear === ano ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+                  {ano}
+                </button>
+              ))}
+            </div>
+          )}
           {medidas.length > 0 && (
             <Link href="/medidas"><Button variant="outline" size="sm"><Target size={13} /> {medidas.length} Medida{medidas.length !== 1 ? 's' : ''}</Button></Link>
           )}
@@ -125,8 +149,8 @@ export default function Dashboard() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <SCard title="Budget Total"   value={formatCurrency(summary?.total_budget ?? 0)} sub={`${summary?.linhas_budget.toLocaleString()} linhas`}   icon={<BarChart3 size={16} className="text-indigo-500" />}  bg="bg-indigo-50" />
-        <SCard title="Razão Total"    value={formatCurrency(summary?.total_razao  ?? 0)} sub={`${summary?.linhas_razao.toLocaleString()} linhas`}    icon={<TrendingUp size={16} className="text-emerald-500" />} bg="bg-emerald-50" />
+        <SCard title="Budget Total"   value={formatCurrency(filteredTotals.budget)} sub={selYear ? `Ano ${selYear}` : `${summary?.linhas_budget.toLocaleString()} linhas`}   icon={<BarChart3 size={16} className="text-indigo-500" />}  bg="bg-indigo-50" />
+        <SCard title="Razão Total"    value={formatCurrency(filteredTotals.razao)} sub={selYear ? `Ano ${selYear}` : `${summary?.linhas_razao.toLocaleString()} linhas`}    icon={<TrendingUp size={16} className="text-emerald-500" />} bg="bg-emerald-50" />
         <SCard title="Variação"       value={formatCurrency(variacao)}                    sub={formatPct(variacaoPct)}
           icon={variacao >= 0 ? <TrendingUp size={16} className="text-emerald-500" /> : <TrendingDown size={16} className="text-red-400" />}
           bg={variacao >= 0 ? 'bg-emerald-50' : 'bg-red-50'} highlight />
