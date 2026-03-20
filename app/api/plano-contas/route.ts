@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
+import { getUserFromHeaders } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,6 +26,10 @@ interface LancamentoAgg {
  * Only updates accounts where Nome is non-empty.
  */
 export async function POST(req: NextRequest) {
+  const user = getUserFromHeaders(req)
+  if (user?.role !== 'master') {
+    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+  }
   try {
     const db = getDb()
     const body = await req.json()
@@ -70,6 +75,10 @@ export async function POST(req: NextRequest) {
  * Body: { numero_conta_contabil: string, nome_conta_contabil: string }
  */
 export async function PUT(req: NextRequest) {
+  const user = getUserFromHeaders(req)
+  if (user?.role !== 'master') {
+    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+  }
   try {
     const db = getDb()
     const body = await req.json()
@@ -97,6 +106,10 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  const user = getUserFromHeaders(req)
+  if (user?.role !== 'master') {
+    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+  }
   try {
     const db = getDb()
     const sp = new URL(req.url).searchParams

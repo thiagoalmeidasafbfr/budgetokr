@@ -55,6 +55,7 @@ const nav: NavItem[] = [
     icon: ListTree,
     label: 'Plano de Contas',
     sublabel: 'Hierarquia por nível',
+    masterOnly: true,
   },
 
   { type: 'section', label: 'KPIs & Medidas', masterOnly: true },
