@@ -107,7 +107,7 @@ export interface AnaliseRow {
 }
 
 // ─── Upload ───────────────────────────────────────────────────────────────────
-export type UploadTipo = 'lancamentos_budget' | 'lancamentos_razao' | 'centros_custo' | 'contas_contabeis' | 'dre_linhas'
+export type UploadTipo = 'lancamentos_budget' | 'lancamentos_razao' | 'centros_custo' | 'contas_contabeis' | 'dre_linhas' | 'capex_budget' | 'capex_razao'
 
 export const LANCAMENTO_COLUMNS = [
   { key: 'data_lancamento',           label: 'Data de Lançamento',         required: false },
@@ -137,6 +137,20 @@ export const CONTA_CONTABIL_COLUMNS = [
   { key: 'agrupamento_arvore',    label: 'Agrupamento Árvore',    required: false },
   { key: 'dre',                   label: 'DRE',                   required: false },
   { key: 'ordem_dre',             label: 'Ordem DRE',             required: false },
+] as const
+
+export const CAPEX_COLUMNS = [
+  { key: 'data_lancamento',           label: 'Data de Lançamento',         required: false },
+  { key: 'data_ano',                  label: 'Ano (substitui data)',        required: false },
+  { key: 'data_mes',                  label: 'Mês — número (substitui data)', required: false },
+  { key: 'nome_projeto',              label: 'Nome do Projeto',             required: true  },
+  { key: 'nome_conta_contabil',       label: 'Nome Conta Contábil',         required: false },
+  { key: 'numero_conta_contabil',     label: 'Número Conta Contábil',       required: true  },
+  { key: 'centro_custo',              label: 'Centro de Custo',             required: true  },
+  { key: 'nome_conta_contrapartida',  label: 'Nome Conta Contra Partida',   required: false },
+  { key: 'fonte',                     label: 'Fonte',                       required: false },
+  { key: 'observacao',                label: 'Observação',                  required: false },
+  { key: 'debito_credito',            label: 'Débito / Crédito (MC)',        required: true  },
 ] as const
 
 export const DRE_LINHAS_COLUMNS = [

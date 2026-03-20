@@ -240,6 +240,57 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, rowCount: raw.length, tipo: tipoVal })
     }
 
+    // ── CAPEX Budget ou Razão ─────────────────────────────────────────────────
+    if (tipo === 'capex_budget' || tipo === 'capex_razao') {
+      const tipoVal = tipo === 'capex_budget' ? 'budget' : 'razao'
+      const modeRaw = (formData.get('mode') as string) ?? 'append'
+
+      if (modeRaw === 'replace') {
+        db.prepare(`DELETE FROM capex WHERE tipo = ?`).run(tipoVal)
+      }
+
+      const insert = db.prepare(`
+        INSERT INTO capex
+          (tipo, data_lancamento, nome_projeto, nome_conta_contabil, numero_conta_contabil,
+           centro_custo, nome_conta_contrapartida, fonte, observacao, debito_credito)
+        VALUES (?,?,?,?,?,?,?,?,?,?)
+      `)
+
+      const insertMany = db.transaction((rows: Record<string, unknown>[]) => {
+        for (const row of rows) {
+          const anoRaw = get(row, 'data_ano')
+          const mesRaw = get(row, 'data_mes')
+          let dataFinal: string
+          if (anoRaw && mesRaw) {
+            const ano = parseInt(String(anoRaw), 10)
+            const mes = parseInt(String(mesRaw), 10)
+            if (ano > 1900 && mes >= 1 && mes <= 12) {
+              dataFinal = `${ano}-${String(mes).padStart(2, '0')}-01`
+            } else {
+              dataFinal = parseDate(get(row, 'data_lancamento'))
+            }
+          } else {
+            dataFinal = parseDate(get(row, 'data_lancamento'))
+          }
+          insert.run(
+            tipoVal,
+            dataFinal,
+            String(get(row, 'nome_projeto')              ?? ''),
+            String(get(row, 'nome_conta_contabil')       ?? ''),
+            String(get(row, 'numero_conta_contabil')     ?? ''),
+            String(get(row, 'centro_custo')              ?? ''),
+            String(get(row, 'nome_conta_contrapartida')  ?? ''),
+            String(get(row, 'fonte')                     ?? ''),
+            String(get(row, 'observacao')                ?? ''),
+            parseNumber(get(row, 'debito_credito')),
+          )
+        }
+      })
+
+      insertMany(raw)
+      return NextResponse.json({ success: true, rowCount: raw.length, tipo: tipoVal })
+    }
+
     // ── Centros de Custo ─────────────────────────────────────────────────────
     if (tipo === 'centros_custo') {
       const upsert = db.prepare(`

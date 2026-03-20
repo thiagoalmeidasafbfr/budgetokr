@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 import {
   LANCAMENTO_COLUMNS, CENTRO_CUSTO_COLUMNS, CONTA_CONTABIL_COLUMNS, DRE_LINHAS_COLUMNS,
-  type UploadTipo
+  CAPEX_COLUMNS, type UploadTipo
 } from '@/lib/types'
 
 type Step = 'choose' | 'upload' | 'mapping' | 'importing' | 'done'
@@ -16,6 +16,8 @@ type Step = 'choose' | 'upload' | 'mapping' | 'importing' | 'done'
 const TIPO_OPTIONS: Array<{ value: UploadTipo; label: string; desc: string; color: string }> = [
   { value: 'lancamentos_budget',  label: 'Lançamentos — Budget',       desc: 'Valores orçados por conta e centro de custo',      color: 'indigo' },
   { value: 'lancamentos_razao',   label: 'Lançamentos — Razão (Real)', desc: 'Valores realizados / movimentos contábeis reais',  color: 'emerald' },
+  { value: 'capex_budget',        label: 'CAPEX — Budget',             desc: 'Orçamento de investimentos (ativo) por projeto',   color: 'cyan' },
+  { value: 'capex_razao',         label: 'CAPEX — Razão (Real)',       desc: 'Investimentos realizados por projeto',             color: 'teal' },
   { value: 'centros_custo',       label: 'Centros de Custo',           desc: 'Dimensão: CC → Departamento → Área',              color: 'amber' },
   { value: 'contas_contabeis',    label: 'Contas Contábeis',           desc: 'Dimensão: Conta → Agrupamento → DRE (com ordem)', color: 'purple' },
   { value: 'dre_linhas',          label: 'Estrutura da DRE',           desc: 'Ordem, subtotais e sinais da DRE gerencial',      color: 'rose' },
@@ -23,6 +25,7 @@ const TIPO_OPTIONS: Array<{ value: UploadTipo; label: string; desc: string; colo
 
 function getColumns(tipo: UploadTipo) {
   if (tipo === 'lancamentos_budget' || tipo === 'lancamentos_razao') return LANCAMENTO_COLUMNS
+  if (tipo === 'capex_budget' || tipo === 'capex_razao') return CAPEX_COLUMNS
   if (tipo === 'centros_custo')   return CENTRO_CUSTO_COLUMNS
   if (tipo === 'dre_linhas')      return DRE_LINHAS_COLUMNS
   return CONTA_CONTABIL_COLUMNS
@@ -191,10 +194,13 @@ export default function UploadPage() {
               <div className={cn('w-8 h-8 rounded-lg mb-3 flex items-center justify-center text-white text-xs font-bold',
                 opt.color === 'indigo' && 'bg-indigo-500',
                 opt.color === 'emerald' && 'bg-emerald-500',
+                opt.color === 'cyan' && 'bg-cyan-500',
+                opt.color === 'teal' && 'bg-teal-500',
                 opt.color === 'amber' && 'bg-amber-500',
                 opt.color === 'purple' && 'bg-purple-500',
+                opt.color === 'rose' && 'bg-rose-500',
               )}>
-                {opt.value === 'lancamentos_budget' ? 'B' : opt.value === 'lancamentos_razao' ? 'R' : opt.value === 'centros_custo' ? 'CC' : 'CA'}
+                {opt.value === 'lancamentos_budget' ? 'B' : opt.value === 'lancamentos_razao' ? 'R' : opt.value === 'capex_budget' ? 'CB' : opt.value === 'capex_razao' ? 'CR' : opt.value === 'centros_custo' ? 'CC' : opt.value === 'dre_linhas' ? 'DRE' : 'CA'}
               </div>
               <p className="font-semibold text-gray-900 text-sm">{opt.label}</p>
               <p className="text-xs text-gray-400 mt-0.5">{opt.desc}</p>
@@ -214,7 +220,7 @@ export default function UploadPage() {
           </div>
 
           {/* Mode for lancamentos */}
-          {(tipo === 'lancamentos_budget' || tipo === 'lancamentos_razao') && (
+          {(tipo === 'lancamentos_budget' || tipo === 'lancamentos_razao' || tipo === 'capex_budget' || tipo === 'capex_razao') && (
             <Card>
               <CardContent className="p-4">
                 <p className="text-sm font-medium text-gray-700 mb-2">Modo de importação</p>

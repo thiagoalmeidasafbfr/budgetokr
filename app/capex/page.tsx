@@ -1,0 +1,336 @@
+'use client'
+import { useState, useEffect, useCallback } from 'react'
+import { Filter, X, Table2, Download, BarChart3, ChevronDown } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
+import { YearFilter } from '@/components/YearFilter'
+import dynamic from 'next/dynamic'
+
+const CapexCharts = dynamic(() => import('@/components/CapexCharts'), {
+  ssr: false,
+  loading: () => <div className="h-[300px] bg-gray-50 rounded-lg animate-pulse" />,
+})
+
+interface CapexRow {
+  nome_projeto?: string
+  centro_custo?: string
+  nome_centro_custo?: string
+  departamento: string
+  nome_departamento: string
+  periodo: string
+  budget: number
+  razao: number
+  variacao: number
+  variacao_pct: number
+}
+
+type ViewMode = 'table' | 'chart'
+type GroupBy = 'projeto' | 'departamento' | 'centro_custo' | 'periodo'
+
+export default function CapexPage() {
+  const [data,          setData]          = useState<CapexRow[]>([])
+  const [departamentos, setDepartamentos] = useState<string[]>([])
+  const [periodos,      setPeriodos]      = useState<string[]>([])
+  const [projetos,      setProjetos]      = useState<string[]>([])
+  const [selDepts,      setSelDepts]      = useState<string[]>([])
+  const [selPeriods,    setSelPeriods]    = useState<string[]>([])
+  const [selProjetos,   setSelProjetos]   = useState<string[]>([])
+  const [selYear,       setSelYear]       = useState<string | null>(null)
+  const [viewMode,      setViewMode]      = useState<ViewMode>('table')
+  const [groupBy,       setGroupBy]       = useState<GroupBy>('projeto')
+  const [loading,       setLoading]       = useState(false)
+  const [deptUser,      setDeptUser]      = useState<{ department: string } | null>(null)
+
+  useEffect(() => {
+    async function init() {
+      const me = await fetch('/api/me').then(r => r.ok ? r.json() : null).catch(() => null)
+      const isDept = me?.role === 'dept' && me.department
+      if (isDept) { setDeptUser({ department: me.department }); setSelDepts([me.department]) }
+      const [depts, dates, projs] = await Promise.all([
+        fetch('/api/capex?type=distinct&col=nome_departamento', { cache: 'no-store' }).then(r => r.json()),
+        fetch('/api/capex?type=distinct&col=data_lancamento', { cache: 'no-store' }).then(r => r.json()),
+        fetch('/api/capex?type=distinct&col=nome_projeto', { cache: 'no-store' }).then(r => r.json()),
+      ])
+      setDepartamentos(Array.isArray(depts) ? depts : [])
+      setPeriodos([...new Set((Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean))].sort() as string[])
+      setProjetos(Array.isArray(projs) ? projs : [])
+    }
+    init()
+  }, [])
+
+  useEffect(() => {
+    if (selYear) {
+      setSelPeriods(periodos.filter(p => p.startsWith(selYear)))
+    } else {
+      setSelPeriods([])
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selYear])
+
+  useEffect(() => {
+    loadData(selDepts, selPeriods, selProjetos, groupBy)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selDepts, selPeriods, selProjetos, groupBy])
+
+  const loadData = useCallback(async (depts: string[], prds: string[], projs: string[], gb: GroupBy) => {
+    setLoading(true)
+    const params = new URLSearchParams()
+    if (depts.length) params.set('departamentos', depts.join(','))
+    if (prds.length)  params.set('periodos', prds.join(','))
+    if (projs.length) params.set('projetos', projs.join(','))
+    params.set('groupByProjeto', String(gb === 'projeto' || gb === 'centro_custo'))
+    params.set('groupByCentro', String(gb === 'centro_custo'))
+    const res = await fetch(`/api/capex?${params}`, { cache: 'no-store' })
+    if (res.ok) setData(await res.json())
+    setLoading(false)
+  }, [])
+
+  // Aggregate by groupBy key
+  const grouped = data.reduce<Record<string, { budget: number; razao: number; variacao: number; sub: Set<string>; projeto?: string; dept?: string; cc?: string }>>((acc, row) => {
+    let key: string
+    if (groupBy === 'projeto') {
+      key = row.nome_projeto || '—'
+    } else if (groupBy === 'departamento') {
+      key = row.nome_departamento?.trim() || row.departamento || '—'
+    } else if (groupBy === 'centro_custo') {
+      key = `${row.nome_projeto || '—'} → ${row.nome_centro_custo?.trim() || row.centro_custo || '—'}`
+    } else {
+      key = row.periodo
+    }
+    if (!acc[key]) acc[key] = { budget: 0, razao: 0, variacao: 0, sub: new Set(), projeto: row.nome_projeto, dept: row.nome_departamento, cc: row.centro_custo }
+    acc[key].budget   += row.budget
+    acc[key].razao    += row.razao
+    acc[key].variacao += row.variacao
+    acc[key].sub.add(row.periodo)
+    return acc
+  }, {})
+
+  const tableRows = Object.entries(grouped)
+    .map(([key, vals]) => ({
+      key,
+      label: groupBy === 'periodo' ? formatPeriodo(key) : key,
+      ...vals,
+      variacao_pct: vals.budget ? (vals.variacao / Math.abs(vals.budget)) * 100 : 0,
+    }))
+    .sort((a, b) => groupBy === 'periodo'
+      ? a.key.localeCompare(b.key)
+      : Math.abs(b.variacao) - Math.abs(a.variacao))
+
+  const totals = tableRows.reduce((a, r) => ({ budget: a.budget + r.budget, razao: a.razao + r.razao, variacao: a.variacao + r.variacao }), { budget: 0, razao: 0, variacao: 0 })
+  const chartData = tableRows.slice(0, 15).map(r => ({ ...r, key: r.label }))
+
+  const exportCSV = () => {
+    const colLabel = groupBy === 'projeto' ? 'Projeto' : groupBy === 'departamento' ? 'Departamento' : groupBy === 'centro_custo' ? 'Projeto → Centro de Custo' : 'Período'
+    const rows = [
+      [colLabel, 'Budget', 'Razão', 'Variação', '%'],
+      ...tableRows.map(r => [r.key, r.budget, r.razao, r.variacao, r.variacao_pct.toFixed(2)]),
+    ]
+    const csv = rows.map(r => r.join(';')).join('\n')
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = 'capex-analise.csv'; a.click()
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">CAPEX — Investimentos</h1>
+          <p className="text-gray-500 text-sm mt-0.5">Budget vs Realizado por projeto · {data.length.toLocaleString()} registros</p>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <YearFilter periodos={periodos} selYear={selYear} onChange={y => setSelYear(y)} />
+          <Button variant="outline" size="sm" onClick={exportCSV}><Download size={13} /> CSV</Button>
+        </div>
+      </div>
+
+      <div className="flex gap-4">
+        {/* Sidebar filters */}
+        <div className="w-52 flex-shrink-0 space-y-3">
+          <Card>
+            <CardContent className="p-3 space-y-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                <Filter size={11} /> Filtros
+              </p>
+
+              {/* Projetos */}
+              <div>
+                <p className="text-xs font-medium text-gray-600 mb-1">Projetos</p>
+                <div className="space-y-0.5 max-h-40 overflow-y-auto">
+                  {projetos.map(p => (
+                    <label key={p} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                      <input type="checkbox" checked={selProjetos.includes(p)}
+                        onChange={e => setSelProjetos(prev => e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}
+                        className="w-3 h-3 accent-indigo-600" />
+                      <span className="text-xs text-gray-600 truncate">{p || '—'}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Departamentos */}
+              {deptUser ? (
+                <div>
+                  <p className="text-xs font-medium text-gray-600 mb-1">Departamento</p>
+                  <p className="text-xs text-indigo-700 font-semibold px-1 py-0.5 bg-indigo-50 rounded">{deptUser.department}</p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-xs font-medium text-gray-600 mb-1">Departamentos</p>
+                  <div className="space-y-0.5 max-h-32 overflow-y-auto">
+                    {departamentos.map(d => (
+                      <label key={d} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                        <input type="checkbox" checked={selDepts.includes(d)}
+                          onChange={e => setSelDepts(prev => e.target.checked ? [...prev, d] : prev.filter(x => x !== d))}
+                          className="w-3 h-3 accent-indigo-600" />
+                        <span className="text-xs text-gray-600 truncate">{d || '—'}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Períodos */}
+              <div>
+                <p className="text-xs font-medium text-gray-600 mb-1">Períodos</p>
+                <div className="space-y-0.5 max-h-32 overflow-y-auto">
+                  {periodos.map(p => (
+                    <label key={p} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                      <input type="checkbox" checked={selPeriods.includes(p)}
+                        onChange={e => setSelPeriods(prev => e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}
+                        className="w-3 h-3 accent-indigo-600" />
+                      <span className="text-xs text-gray-600">{formatPeriodo(p)}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {(selDepts.length > 0 || selPeriods.length > 0 || selProjetos.length > 0) && (
+                <Button size="sm" variant="outline" onClick={() => { setSelDepts([]); setSelPeriods([]); setSelProjetos([]) }} className="w-full h-7 text-xs">
+                  <X size={10} /> Limpar filtros
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Main */}
+        <div className="flex-1 min-w-0 space-y-3">
+          {/* Summary cards */}
+          <div className="grid grid-cols-4 gap-3">
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-xs text-gray-500">Budget CAPEX</p>
+                <p className="text-lg font-bold text-gray-900">{formatCurrency(totals.budget)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-xs text-gray-500">Realizado CAPEX</p>
+                <p className="text-lg font-bold text-gray-900">{formatCurrency(totals.razao)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-xs text-gray-500">Variação</p>
+                <p className={cn('text-lg font-bold', colorForVariance(totals.variacao))}>{formatCurrency(totals.variacao)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-xs text-gray-500">% Variação</p>
+                <p className={cn('text-lg font-bold', colorForVariance(totals.variacao))}>
+                  {formatPct(totals.budget ? (totals.variacao / Math.abs(totals.budget)) * 100 : 0)}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* View controls */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5">
+              {([['table', 'Tabela', <Table2 key="t" size={13} />], ['chart', 'Gráfico', <BarChart3 key="c" size={13} />]] as const).map(([v, l, icon]) => (
+                <button key={v} onClick={() => setViewMode(v as ViewMode)}
+                  className={cn('flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                    viewMode === v ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+                  {icon}{l}
+                </button>
+              ))}
+            </div>
+            <div className="flex bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5 ml-auto">
+              {([
+                ['projeto',       'Projeto'],
+                ['departamento',  'Departamento'],
+                ['centro_custo',  'CC por Projeto'],
+                ['periodo',       'Período'],
+              ] as const).map(([g, label]) => (
+                <button key={g} onClick={() => setGroupBy(g)}
+                  className={cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                    groupBy === g ? 'bg-gray-100 text-gray-800' : 'text-gray-500 hover:bg-gray-50')}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Active filters badges */}
+          {(selDepts.length > 0 || selPeriods.length > 0 || selProjetos.length > 0) && (
+            <div className="flex flex-wrap gap-1">
+              {selProjetos.map(p => <Badge key={`p-${p}`} variant="default" className="gap-1">{p}<button onClick={() => setSelProjetos(prev => prev.filter(x => x !== p))}><X size={9} /></button></Badge>)}
+              {selDepts.map(d => <Badge key={`d-${d}`} variant="secondary" className="gap-1">{d}<button onClick={() => setSelDepts(prev => prev.filter(x => x !== d))}><X size={9} /></button></Badge>)}
+              {selPeriods.map(p => <Badge key={`t-${p}`} variant="outline" className="gap-1">{formatPeriodo(p)}<button onClick={() => setSelPeriods(prev => prev.filter(x => x !== p))}><X size={9} /></button></Badge>)}
+            </div>
+          )}
+
+          {loading && <div className="flex items-center justify-center h-40"><div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>}
+
+          {/* TABLE VIEW */}
+          {!loading && viewMode === 'table' && (
+            <Card>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b bg-gray-50">
+                    <th className="text-left px-5 py-3 font-medium text-gray-500">
+                      {groupBy === 'projeto' ? 'Projeto' : groupBy === 'departamento' ? 'Departamento' : groupBy === 'centro_custo' ? 'Projeto → Centro de Custo' : 'Período'}
+                    </th>
+                    <th className="text-right px-5 py-3 font-medium text-gray-500">Budget</th>
+                    <th className="text-right px-5 py-3 font-medium text-gray-500">Razão</th>
+                    <th className="text-right px-5 py-3 font-medium text-gray-500">Variação</th>
+                    <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>
+                  </tr></thead>
+                  <tbody>
+                    {tableRows.map((row, i) => (
+                      <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                        <td className="px-5 py-3 font-medium text-gray-900">{row.label}</td>
+                        <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.budget)}</td>
+                        <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.razao)}</td>
+                        <td className={cn('px-5 py-3 text-right font-semibold', colorForVariance(row.variacao))}>{formatCurrency(row.variacao)}</td>
+                        <td className="px-5 py-3 text-right"><span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(row.variacao))}>{formatPct(row.variacao_pct)}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot><tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
+                    <td className="px-5 py-3">Total</td>
+                    <td className="px-5 py-3 text-right">{formatCurrency(totals.budget)}</td>
+                    <td className="px-5 py-3 text-right">{formatCurrency(totals.razao)}</td>
+                    <td className={cn('px-5 py-3 text-right', colorForVariance(totals.variacao))}>{formatCurrency(totals.variacao)}</td>
+                    <td className="px-5 py-3 text-right">
+                      <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(totals.variacao))}>
+                        {formatPct(totals.budget ? (totals.variacao / Math.abs(totals.budget)) * 100 : 0)}
+                      </span>
+                    </td>
+                  </tr></tfoot>
+                </table>
+              </div>
+            </Card>
+          )}
+
+          {/* CHART VIEW */}
+          {!loading && viewMode === 'chart' && <CapexCharts chartData={chartData} groupBy={groupBy} />}
+        </div>
+      </div>
+    </div>
+  )
+}
