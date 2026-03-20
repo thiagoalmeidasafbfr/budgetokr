@@ -310,7 +310,7 @@ function DreFull({
               <td className={cn('px-5 py-2.5', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-700')}
                 style={{ paddingLeft: `${20 + row.depth * 24}px` }}>
                 <div className="flex items-center gap-1.5">
-                  {row.children.length > 0 && !row.isSubtotal ? (
+                  {row.isGroup && !row.isSubtotal ? (
                     <button onClick={() => onToggle(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
                       {expanded.has(row.name) ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
                     </button>
@@ -1276,35 +1276,20 @@ export default function DeptDashboardPage() {
         {selDept && (
           <div className="px-3 py-2 border-b border-gray-100">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Períodos</p>
-            {/* Seletor de Ano (toggle style) */}
-            {(() => {
-              const anos = [...new Set(allPeriodos.map(p => p.split('-')[0]))].sort()
-              if (anos.length <= 1) return null
-              const activeYear = anos.find(ano => {
-                const anoP = allPeriodos.filter(p => p.startsWith(ano + '-'))
-                return anoP.length > 0 && anoP.every(p => selPeriods.includes(p)) && selPeriods.every(p => p.startsWith(ano + '-'))
-              }) ?? ''
-              return (
-                <div className="mb-2">
-                  <div className="flex bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5">
-                    <button onClick={() => setSelPeriods([])}
-                      className={cn('px-2 py-1 rounded-md text-xs font-medium transition-colors',
-                        !selPeriods.length ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
-                      Todos
-                    </button>
-                    {anos.map(ano => (
-                      <button key={ano} onClick={() => {
-                        setSelPeriods(allPeriodos.filter(p => p.startsWith(ano + '-')))
-                      }}
-                        className={cn('px-2 py-1 rounded-md text-xs font-medium transition-colors',
-                          activeYear === ano ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
-                        {ano}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )
-            })()}
+            <div className="space-y-0.5 max-h-48 overflow-y-auto">
+              {allPeriodos.map(p => (
+                <label key={p} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                  <input
+                    type="checkbox"
+                    checked={selPeriods.includes(p)}
+                    onChange={e => setSelPeriods(prev =>
+                      e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}
+                    className="w-3 h-3 accent-indigo-600"
+                  />
+                  <span className="text-xs text-gray-600">{formatPeriodo(p)}</span>
+                </label>
+              ))}
+            </div>
             {selPeriods.length > 0 && (
               <button
                 onClick={() => setSelPeriods([])}

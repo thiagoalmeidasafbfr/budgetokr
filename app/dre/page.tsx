@@ -44,7 +44,6 @@ interface ContextMenuState {
   departamentos?: string[] // filtros ativos da DRE principal
   periodos?: string[]      // filtros ativos da DRE principal
   centros?: string[]       // subfiltro de centros de custo
-  nome_conta_contabil?: string // filtro de conta contábil (drill-down nível 3)
 }
 
 interface DetalhamentoLinha {
@@ -120,7 +119,6 @@ function DetalhamentoModal({
     const p = new URLSearchParams()
     if (ctx.node.dre)         p.set('dre',           ctx.node.dre)
     if (ctx.node.agrupamento) p.set('agrupamento',   ctx.node.agrupamento)
-    if (ctx.nome_conta_contabil) p.set('nome_conta_contabil', ctx.nome_conta_contabil)
     if (ctx.periodo)          p.set('periodo',        ctx.periodo)
     if (ctx.tipo !== 'ambos') p.set('tipo',           ctx.tipo)
     // Pass active main-page filters
@@ -490,8 +488,6 @@ export default function DREPage() {
       departamentos: selDepts.length ? selDepts : undefined,
       periodos:      selPeriods.length ? selPeriods : undefined,
       centros:       selCentros.length ? selCentros : undefined,
-      // depth=2 nodes are conta contábil — pass the name to filter detail
-      nome_conta_contabil: node.depth === 2 ? node.name : undefined,
     })
   }
 
@@ -541,12 +537,8 @@ export default function DREPage() {
   }
 
   const expandAll = () => {
-    const all = new Set<string>()
-    hierarchy.forEach(h => {
-      if (h.dre) all.add(h.dre)
-      if (h.agrupamento_arvore) all.add(h.agrupamento_arvore)
-    })
-    setExpanded(all)
+    const groups = new Set(hierarchy.map(h => h.dre).filter(Boolean))
+    setExpanded(groups)
   }
   const collapseAll = () => setExpanded(new Set())
 
@@ -674,37 +666,19 @@ export default function DREPage() {
                 </div>
               )}
 
-              {/* Seletor de Ano (toggle style) */}
-              {(() => {
-                const anos = [...new Set(periodos.map(p => p.split('-')[0]))].sort()
-                if (anos.length <= 1) return null
-                // Determine which year is fully selected (single-select logic)
-                const activeYear = anos.find(ano => {
-                  const anoP = periodos.filter(p => p.startsWith(ano + '-'))
-                  return anoP.length > 0 && anoP.every(p => selPeriods.includes(p)) && selPeriods.every(p => p.startsWith(ano + '-'))
-                }) ?? ''
-                return (
-                  <div>
-                    <p className="text-xs font-medium text-gray-600 mb-1">Ano</p>
-                    <div className="flex bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5">
-                      <button onClick={() => setSelPeriods([])}
-                        className={cn('px-2 py-1 rounded-md text-xs font-medium transition-colors',
-                          !selPeriods.length ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
-                        Todos
-                      </button>
-                      {anos.map(ano => (
-                        <button key={ano} onClick={() => {
-                          setSelPeriods(periodos.filter(p => p.startsWith(ano + '-')))
-                        }}
-                          className={cn('px-2 py-1 rounded-md text-xs font-medium transition-colors',
-                            activeYear === ano ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
-                          {ano}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })()}
+              <div>
+                <p className="text-xs font-medium text-gray-600 mb-1">Períodos</p>
+                <div className="space-y-0.5 max-h-32 overflow-y-auto">
+                  {periodos.map(p => (
+                    <label key={p} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                      <input type="checkbox" checked={selPeriods.includes(p)}
+                        onChange={e => setSelPeriods(prev => e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}
+                        className="w-3 h-3 accent-indigo-600" />
+                      <span className="text-xs text-gray-600">{formatPeriodo(p)}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
               <div className="flex gap-1">
                 <Button size="sm" onClick={applyFilters} className="flex-1 text-xs h-7"><RefreshCw size={10} /> Filtrar</Button>
                 {(selDepts.length > 0 || selPeriods.length > 0 || selCentros.length > 0) && (
@@ -783,7 +757,7 @@ export default function DREPage() {
                         <td className={cn('px-5 py-2.5', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-700')}
                           style={{ paddingLeft: `${20 + row.depth * 24}px` }}>
                           <div className="flex items-center gap-1.5">
-                            {row.children.length > 0 && !row.isSubtotal ? (
+                            {row.isGroup && !row.isSubtotal ? (
                               <button onClick={() => toggleExpand(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
                                 {expanded.has(row.name)
                                   ? <ChevronDown size={14} className="text-gray-400" />
@@ -874,7 +848,7 @@ export default function DREPage() {
                                 : 'text-gray-700')}
                               style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
                               <div className="flex items-center gap-1">
-                                {row.children.length > 0 && !row.isSubtotal ? (
+                                {row.isGroup && !row.isSubtotal ? (
                                   <button onClick={() => toggleExpand(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
                                     {expanded.has(row.name)
                                       ? <ChevronDown size={13} className="text-gray-400" />
@@ -1052,7 +1026,7 @@ export default function DREPage() {
                                 : 'text-gray-700')}
                               style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
                               <div className="flex items-center gap-1">
-                                {row.children.length > 0 && !row.isSubtotal ? (
+                                {row.isGroup && !row.isSubtotal ? (
                                   <button onClick={() => toggleExpand(row.name)} className="p-0.5 hover:bg-gray-200 rounded">
                                     {expanded.has(row.name)
                                       ? <ChevronDown size={13} className="text-gray-400" />

@@ -261,36 +261,19 @@ export default function AnalisePage() {
                   </div>
                 </div>
               )}
-              {/* Seletor de Ano (toggle style) */}
-              {(() => {
-                const anos = [...new Set(periodos.map(p => p.split('-')[0]))].sort()
-                if (anos.length <= 1) return null
-                const activeYear = anos.find(ano => {
-                  const anoP = periodos.filter(p => p.startsWith(ano + '-'))
-                  return anoP.length > 0 && anoP.every(p => selPeriods.includes(p)) && selPeriods.every(p => p.startsWith(ano + '-'))
-                }) ?? ''
-                return (
-                  <div>
-                    <p className="text-xs font-medium text-gray-600 mb-1">Ano</p>
-                    <div className="flex bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5">
-                      <button onClick={() => setSelPeriods([])}
-                        className={cn('px-2 py-1 rounded-md text-xs font-medium transition-colors',
-                          !selPeriods.length ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
-                        Todos
-                      </button>
-                      {anos.map(ano => (
-                        <button key={ano} onClick={() => {
-                          setSelPeriods(periodos.filter(p => p.startsWith(ano + '-')))
-                        }}
-                          className={cn('px-2 py-1 rounded-md text-xs font-medium transition-colors',
-                            activeYear === ano ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
-                          {ano}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })()}
+              <div>
+                <p className="text-xs font-medium text-gray-600 mb-1">Períodos</p>
+                <div className="space-y-0.5 max-h-32 overflow-y-auto">
+                  {periodos.map(p => (
+                    <label key={p} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                      <input type="checkbox" checked={selPeriods.includes(p)}
+                        onChange={e => setSelPeriods(prev => e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}
+                        className="w-3 h-3 accent-indigo-600" />
+                      <span className="text-xs text-gray-600">{formatPeriodo(p)}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
               {(selDepts.length > 0 || selPeriods.length > 0) && (
                 <Button size="sm" variant="outline" onClick={() => { setSelDepts([]); setSelPeriods([]) }} className="w-full h-7 text-xs"><X size={10} /> Limpar filtros</Button>
               )}

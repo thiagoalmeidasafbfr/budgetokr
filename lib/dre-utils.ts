@@ -62,7 +62,6 @@ export function sortQuarterLabels(labels: string[]): string[] {
 export interface DRERow {
   dre: string
   agrupamento_arvore: string
-  nome_conta_contabil: string
   ordem_dre: number
   periodo: string
   budget: number
@@ -78,11 +77,6 @@ export function buildTreeFromLinhas(
     budget: number; razao: number
     byPeriod: Record<string, { budget: number; razao: number }>
   }>()
-  // Track conta contábil level aggregation
-  const contaAgg = new Map<string, {
-    budget: number; razao: number
-    byPeriod: Record<string, { budget: number; razao: number }>
-  }>()
   for (const row of data) {
     const key = `${row.dre}||${row.agrupamento_arvore}`
     if (!lineAgg.has(key)) lineAgg.set(key, { budget: 0, razao: 0, byPeriod: {} })
@@ -93,19 +87,6 @@ export function buildTreeFromLinhas(
       if (!agg.byPeriod[row.periodo]) agg.byPeriod[row.periodo] = { budget: 0, razao: 0 }
       agg.byPeriod[row.periodo].budget += row.budget
       agg.byPeriod[row.periodo].razao  += row.razao
-    }
-    // Conta contábil level
-    if (row.nome_conta_contabil) {
-      const contaKey = `${row.dre}||${row.agrupamento_arvore}||${row.nome_conta_contabil}`
-      if (!contaAgg.has(contaKey)) contaAgg.set(contaKey, { budget: 0, razao: 0, byPeriod: {} })
-      const ca = contaAgg.get(contaKey)!
-      ca.budget += row.budget
-      ca.razao  += row.razao
-      if (row.periodo) {
-        if (!ca.byPeriod[row.periodo]) ca.byPeriod[row.periodo] = { budget: 0, razao: 0 }
-        ca.byPeriod[row.periodo].budget += row.budget
-        ca.byPeriod[row.periodo].razao  += row.razao
-      }
     }
   }
 
@@ -189,33 +170,11 @@ export function buildTreeFromLinhas(
           cByP[p] = { budget: v.budget * linha.sinal, razao: v.razao * linha.sinal }
         }
         const cv = cr - cb
-        // Build grandchildren (conta contábil level)
-        const grandchildren: TreeNode[] = []
-        const contaPrefix = `${linha.nome}||${child}||`
-        for (const [contaKey, contaData] of contaAgg) {
-          if (!contaKey.startsWith(contaPrefix)) continue
-          const contaNome = contaKey.substring(contaPrefix.length)
-          if (!contaNome) continue
-          const gcb = contaData.budget * linha.sinal
-          const gcr = contaData.razao  * linha.sinal
-          const gcByP: Record<string, { budget: number; razao: number }> = {}
-          for (const [p, v] of Object.entries(contaData.byPeriod)) {
-            gcByP[p] = { budget: v.budget * linha.sinal, razao: v.razao * linha.sinal }
-          }
-          const gcv = gcr - gcb
-          grandchildren.push({
-            name: contaNome, isGroup: false, depth: 2, ordem: 999,
-            budget: gcb, razao: gcr, variacao: gcv,
-            variacao_pct: gcb ? (gcv / Math.abs(gcb)) * 100 : 0,
-            children: [], byPeriod: gcByP, dre: linha.nome, agrupamento: child,
-          })
-        }
         children.push({
-          name: child, isGroup: grandchildren.length > 0, depth: 1, ordem: 999,
+          name: child, isGroup: false, depth: 1, ordem: 999,
           budget: cb, razao: cr, variacao: cv,
           variacao_pct: cb ? (cv / Math.abs(cb)) * 100 : 0,
-          children: grandchildren.sort((a, b) => a.name.localeCompare(b.name)),
-          byPeriod: cByP, dre: linha.nome, agrupamento: child,
+          children: [], byPeriod: cByP, dre: linha.nome, agrupamento: child,
         })
       }
       const var_ = razao - budget
@@ -253,11 +212,6 @@ export function buildTree(
     budget: number; razao: number; ordem_dre: number
     byPeriod: Record<string, { budget: number; razao: number }>
   }>()
-  // Track conta contábil level aggregation
-  const contaAgg = new Map<string, {
-    budget: number; razao: number
-    byPeriod: Record<string, { budget: number; razao: number }>
-  }>()
   for (const row of data) {
     const key = `${row.dre}||${row.agrupamento_arvore}`
     if (!lineAgg.has(key)) lineAgg.set(key, { budget: 0, razao: 0, ordem_dre: row.ordem_dre ?? 999, byPeriod: {} })
@@ -268,19 +222,6 @@ export function buildTree(
       if (!agg.byPeriod[row.periodo]) agg.byPeriod[row.periodo] = { budget: 0, razao: 0 }
       agg.byPeriod[row.periodo].budget += row.budget
       agg.byPeriod[row.periodo].razao  += row.razao
-    }
-    // Conta contábil level
-    if (row.nome_conta_contabil) {
-      const contaKey = `${row.dre}||${row.agrupamento_arvore}||${row.nome_conta_contabil}`
-      if (!contaAgg.has(contaKey)) contaAgg.set(contaKey, { budget: 0, razao: 0, byPeriod: {} })
-      const ca = contaAgg.get(contaKey)!
-      ca.budget += row.budget
-      ca.razao  += row.razao
-      if (row.periodo) {
-        if (!ca.byPeriod[row.periodo]) ca.byPeriod[row.periodo] = { budget: 0, razao: 0 }
-        ca.byPeriod[row.periodo].budget += row.budget
-        ca.byPeriod[row.periodo].razao  += row.razao
-      }
     }
   }
 
@@ -304,27 +245,11 @@ export function buildTree(
         groupByPeriod[p].razao  += vals.razao
       }
       const variacao = agg.razao - agg.budget
-      // Build grandchildren (conta contábil level)
-      const grandchildren: TreeNode[] = []
-      const contaPrefix = `${parent}||${child}||`
-      for (const [contaKey, contaData] of contaAgg) {
-        if (!contaKey.startsWith(contaPrefix)) continue
-        const contaNome = contaKey.substring(contaPrefix.length)
-        if (!contaNome) continue
-        const gcv = contaData.razao - contaData.budget
-        grandchildren.push({
-          name: contaNome, isGroup: false, depth: 2, ordem: 999,
-          budget: contaData.budget, razao: contaData.razao, variacao: gcv,
-          variacao_pct: contaData.budget ? (gcv / Math.abs(contaData.budget)) * 100 : 0,
-          children: [], byPeriod: contaData.byPeriod, dre: parent, agrupamento: child,
-        })
-      }
       children.push({
-        name: child, isGroup: grandchildren.length > 0, depth: 1, ordem: agg.ordem_dre,
+        name: child, isGroup: false, depth: 1, ordem: agg.ordem_dre,
         budget: agg.budget, razao: agg.razao, variacao,
         variacao_pct: agg.budget ? (variacao / Math.abs(agg.budget)) * 100 : 0,
-        children: grandchildren.sort((a, b) => a.name.localeCompare(b.name)),
-        byPeriod: agg.byPeriod, dre: parent, agrupamento: child,
+        children: [], byPeriod: agg.byPeriod, dre: parent, agrupamento: child,
       })
     }
 
@@ -369,14 +294,11 @@ export function buildTree(
 
 export function flattenTree(tree: TreeNode[], expanded: Set<string>): TreeNode[] {
   const result: TreeNode[] = []
-  function walk(nodes: TreeNode[]) {
-    for (const node of nodes) {
-      result.push(node)
-      if (expanded.has(node.name) && node.children.length > 0) {
-        walk(node.children)
-      }
+  for (const node of tree) {
+    result.push(node)
+    if (node.isGroup && expanded.has(node.name)) {
+      for (const child of node.children) result.push(child)
     }
   }
-  walk(tree)
   return result
 }
