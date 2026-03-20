@@ -117,67 +117,48 @@ export async function POST(req: NextRequest) {
 
     if (!file) return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
 
-    const bytes = await file.arrayBuffer()
-
-    // ── Etapa de análise (sem mapping): lê só primeiras linhas ────────────
-    if (!mapping) {
-      // sheetRows limita a leitura para performance em arquivos grandes
-      const wb = XLSX.read(bytes, { type: 'array', sheetRows: 15 })
-      const sh = wb.Sheets[wb.SheetNames[0]]
-      const sample = XLSX.utils.sheet_to_json(sh, { defval: '', rawNumbers: false }) as Record<string, unknown>[]
-      if (!sample.length) return NextResponse.json({ error: 'Arquivo vazio' }, { status: 400 })
-      // Estima total de linhas pelo range completo do arquivo (sem sheetRows)
-      const wbFull = XLSX.read(bytes, { type: 'array', bookSheets: true })
-      const shFull = XLSX.read(bytes, { type: 'array', sheetRows: 0 })
-      const ref = shFull.Sheets[shFull.SheetNames[0]]?.['!ref'] ?? ''
-      let total = sample.length
-      if (ref) {
-        const match = ref.match(/:.*?(\d+)$/)
-        if (match) total = parseInt(match[1]) - 1 // subtract header row
-      }
-      return NextResponse.json({ columns: Object.keys(sample[0]), sample: sample.slice(0, 5), total })
-    }
-
-    // ── Etapa de importação: lê o arquivo completo ────────────────────────
+    const bytes    = await file.arrayBuffer()
+    // cellNF:true → preserva o format code (cell.z) para detectarmos datas
     const workbook = XLSX.read(bytes, { type: 'array', cellNF: true })
     const sheet    = workbook.Sheets[workbook.SheetNames[0]]
 
-    // ── Pré-processa células de data ─────────────────────────────────────
-    // Converte datas numéricas (serial) para ISO string, mudando o tipo
-    // da célula para string. Isso permite usar rawNumbers:true (muito mais
-    // rápido) sem perder as datas.
-    const ref = sheet['!ref']
-    if (ref) {
-      const range = XLSX.utils.decode_range(ref)
-      for (let R = range.s.r; R <= range.e.r; R++) {
-        for (let C = range.s.c; C <= range.e.c; C++) {
-          const addr = XLSX.utils.encode_cell({ r: R, c: C })
-          const cell = sheet[addr]
-          if (!cell || cell.t !== 'n') continue
-          const fmt = String(cell.z ?? '')
-          const fmtClean = fmt.replace(/"[^"]*"/g, '').replace(/\[[^\]]*\]/g, '')
-          if (!/[yYdD]/.test(fmtClean)) continue
-          try {
-            const dd = XLSX.SSF.parse_date_code(cell.v as number)
-            if (dd && dd.y > 1900 && dd.y < 2200) {
-              const iso = `${dd.y}-${String(dd.m).padStart(2,'0')}-${String(dd.d).padStart(2,'0')}`
-              cell.t = 's'   // marca como string para rawNumbers:true preservar
-              cell.v = iso
-              cell.w = iso
-            }
-          } catch { /* não é serial de data */ }
+    // ── Pré-processa células de data ─────────────────────────────────────────
+    // Problema: rawNumbers:false usa o valor formatado (.w) que depende do
+    // formato da célula no Excel (pode ser M/D/YY americano = "12/31/24"
+    // em vez de "01/01/2025"). A solução é detectar células numéricas com
+    // formato de data pelo código de formato (.z), extrair o número serial
+    // e converter para ISO via parse_date_code — completamente independente
+    // de locale e timezone.
+    for (const key of Object.keys(sheet)) {
+      if (key.startsWith('!')) continue
+      const cell = sheet[key]
+      if (!cell || cell.t !== 'n') continue
+      const fmt = String(cell.z ?? '')
+      // Formato de data contém d/m/y (fora de texto entre aspas e colchetes)
+      const fmtClean = fmt.replace(/"[^"]*"/g, '').replace(/\[[^\]]*\]/g, '')
+      if (!/[yYdD]/.test(fmtClean)) continue
+      try {
+        const dd = XLSX.SSF.parse_date_code(cell.v as number)
+        if (dd && dd.y > 1900 && dd.y < 2200) {
+          // Substitui o valor formatado pelo ISO — sem locale, sem timezone
+          cell.w = `${dd.y}-${String(dd.m).padStart(2,'0')}-${String(dd.d).padStart(2,'0')}`
         }
-      }
+      } catch { /* não é serial de data */ }
     }
 
-    // rawNumbers:true → números ficam como float nativo (sem conversão string),
-    // ~5x mais rápido para arquivos grandes
+    // rawNumbers: false → células numéricas não-data chegam como string pt-BR
     const raw = XLSX.utils.sheet_to_json(sheet, {
       defval:     '',
-      rawNumbers: true,
+      rawNumbers: false,
     }) as Record<string, unknown>[]
 
     if (!raw.length) return NextResponse.json({ error: 'Arquivo vazio' }, { status: 400 })
+
+    const columns = Object.keys(raw[0])
+
+    if (!mapping) {
+      return NextResponse.json({ columns, sample: raw.slice(0, 5), total: raw.length })
+    }
 
     const map: Record<string, string> = JSON.parse(mapping)
     const get = (row: Record<string, unknown>, key: string) => map[key] ? row[map[key]] : ''
@@ -200,8 +181,11 @@ export async function POST(req: NextRequest) {
         VALUES (?,?,?,?,?,?,?,?,?)
       `)
 
-      const insertBatch = db.transaction((rows: Record<string, unknown>[]) => {
+      const insertMany = db.transaction((rows: Record<string, unknown>[]) => {
         for (const row of rows) {
+          // Se os campos Ano e Mês estão mapeados, constrói a data como
+          // YYYY-MM-01 — mais confiável que a célula de data do Excel,
+          // que pode ter seriais deslocados (ex.: 31/12/2024 para Janeiro).
           const anoRaw = get(row, 'data_ano')
           const mesRaw = get(row, 'data_mes')
           let dataFinal: string
@@ -230,11 +214,7 @@ export async function POST(req: NextRequest) {
         }
       })
 
-      // Insere em batches de 5000 linhas para melhor performance
-      const BATCH = 5000
-      for (let i = 0; i < raw.length; i += BATCH) {
-        insertBatch(raw.slice(i, i + BATCH))
-      }
+      insertMany(raw)
       return NextResponse.json({ success: true, rowCount: raw.length, tipo: tipoVal })
     }
 
