@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAnalise, getDRE, getMedidas, getDRELinhas, getDeptMedidas, getMedidaResultados } from '@/lib/query'
+import { getDb } from '@/lib/db'
 import { getUserFromHeaders } from '@/lib/session'
 import type { Medida } from '@/lib/types'
 
@@ -98,7 +99,36 @@ export async function GET(req: NextRequest) {
       return { medida, isRatio, byPeriodo: byPeriodoMedida }
     }).filter(Boolean)
 
-    return NextResponse.json({ byPeriodo, dreGrupos, medidaCards })
+    // CAPEX summary by project for this department
+    const db = getDb()
+    const capexConditions: string[] = ['cc.nome_departamento = ?']
+    const capexParams: unknown[] = [departamento]
+    if (periodos?.length) {
+      capexConditions.push(`strftime('%Y-%m', c.data_lancamento) IN (${periodos.map(() => '?').join(',')})`)
+      capexParams.push(...periodos)
+    }
+    const capexWhere = capexConditions.length ? `WHERE ${capexConditions.join(' AND ')}` : ''
+    const capexProjetos = db.prepare(`
+      SELECT
+        c.nome_projeto,
+        SUM(CASE WHEN c.tipo = 'budget' THEN c.debito_credito ELSE 0 END) as budget,
+        SUM(CASE WHEN c.tipo = 'razao'  THEN c.debito_credito ELSE 0 END) as razao
+      FROM capex c
+      LEFT JOIN centros_custo cc ON c.centro_custo = cc.centro_custo
+      ${capexWhere}
+      GROUP BY c.nome_projeto
+      ORDER BY c.nome_projeto
+    `).all(...capexParams) as Array<{ nome_projeto: string; budget: number; razao: number }>
+
+    const capexRows = capexProjetos.map(r => ({
+      ...r,
+      budget: r.budget ?? 0,
+      razao: r.razao ?? 0,
+      variacao: (r.razao ?? 0) - (r.budget ?? 0),
+      variacao_pct: r.budget ? (((r.razao ?? 0) - r.budget) / Math.abs(r.budget)) * 100 : 0,
+    }))
+
+    return NextResponse.json({ byPeriodo, dreGrupos, medidaCards, capexProjetos: capexRows })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: String(e) }, { status: 500 })
