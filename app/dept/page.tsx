@@ -1127,6 +1127,7 @@ export default function DeptDashboardPage() {
   const [selDept,          setSelDept]          = useState<string>('')
   const [selPeriods,       setSelPeriods]       = useState<string[]>([])
   const [selYear,          setSelYear]          = useState<string | null>('2026')
+  const [razaoPeriods,     setRazaoPeriods]     = useState<string[]>([])
   const [dashData,         setDashData]         = useState<DashboardData | null>(null)
   const [loading,          setLoading]          = useState(false)
   const [kpis,             setKpis]             = useState<KpiManual[]>([])
@@ -1163,15 +1164,19 @@ export default function DeptDashboardPage() {
     Promise.all([
       fetch('/api/analise?type=distinct&col=nome_departamento', { cache: 'no-store' }).then(r => r.json()),
       fetch('/api/analise?type=distinct&col=data_lancamento',   { cache: 'no-store' }).then(r => r.json()),
-    ]).then(([depts, dates]) => {
+      fetch('/api/analise?type=razao-periods',                  { cache: 'no-store' }).then(r => r.json()),
+    ]).then(([depts, dates, razaoPds]) => {
       setDepartamentos(Array.isArray(depts) ? depts : [])
       const unique = [...new Set(
         (Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean)
       )].sort() as string[]
       setAllPeriodos(unique)
-      // Apply default year 2026 filter
-      const yr2026 = unique.filter(p => p.startsWith('2026'))
-      if (yr2026.length > 0) setSelPeriods(yr2026)
+      const rp = Array.isArray(razaoPds) ? razaoPds as string[] : []
+      setRazaoPeriods(rp)
+      // Default to YTD periods (where razão exists); fallback to all 2026
+      const ytd2026 = unique.filter(p => p.startsWith('2026') && rp.includes(p))
+      const def2026 = ytd2026.length > 0 ? ytd2026 : unique.filter(p => p.startsWith('2026'))
+      if (def2026.length > 0) setSelPeriods(def2026)
     })
   }, [])
 
@@ -1376,7 +1381,9 @@ export default function DeptDashboardPage() {
                   selYear={selYear}
                   onChange={y => {
                     setSelYear(y)
-                    setSelPeriods(y ? allPeriodos.filter(p => p.startsWith(y)) : [])
+                    if (!y) { setSelPeriods([]); return }
+                    const ytd = allPeriodos.filter(p => p.startsWith(y) && razaoPeriods.includes(p))
+                    setSelPeriods(ytd.length > 0 ? ytd : allPeriodos.filter(p => p.startsWith(y)))
                   }}
                 />
                 {loading && (

@@ -135,8 +135,9 @@ export default function Dashboard() {
     return acc
   }, {})
 
-  // Aggregate by period
-  const byPeriod = filteredAnalise.reduce<Record<string, { budget: number; razao: number }>>((acc, r) => {
+  // Aggregate by period — use YTD source so chart aligns with summary cards
+  const periodSource = selYear && hasYtdData ? ytdData : filteredAnalise
+  const byPeriod = periodSource.reduce<Record<string, { budget: number; razao: number }>>((acc, r) => {
     if (!acc[r.periodo]) acc[r.periodo] = { budget: 0, razao: 0 }
     acc[r.periodo].budget += r.budget
     acc[r.periodo].razao  += r.razao

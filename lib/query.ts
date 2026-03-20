@@ -387,6 +387,18 @@ export function getAnalise(
   }))
 }
 
+// ─── Periods that have actual Razão data (for YTD default) ────────────────────
+export function getRazaoPeriods(): string[] {
+  const db = getDb()
+  const rows = db.prepare(`
+    SELECT DISTINCT strftime('%Y-%m', l.data_lancamento) AS periodo
+    FROM lancamentos l
+    WHERE l.tipo = 'razao' AND l.data_lancamento IS NOT NULL
+    ORDER BY periodo
+  `).all() as Array<{ periodo: string }>
+  return rows.map(r => r.periodo).filter(Boolean)
+}
+
 // ─── Distinct values para autocomplete ───────────────────────────────────────
 export function getDistinctValues(column: FilterColumn, limit = 500): string[] {
   const db = getDb()
