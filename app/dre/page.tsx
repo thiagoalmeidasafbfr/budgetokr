@@ -5,7 +5,7 @@ import { YearFilter } from '@/components/YearFilter'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
+import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, getDeptColor, cn } from '@/lib/utils'
 import { toQuarterLabel, groupByQuarter, sortQuarterLabels, buildTree, buildTreeFromLinhas, flattenTree } from '@/lib/dre-utils'
 import type { DRERow, DREAccountRow, TreeNode, DRELinha } from '@/lib/dre-utils'
 import dynamic from 'next/dynamic'
@@ -52,6 +52,7 @@ export default function DREPage() {
   const [commentText,   setCommentText]   = useState('')
   const [trendTarget,   setTrendTarget]   = useState<{ title: string; conta?: string; agrupamento?: string; dre?: string } | null>(null)
   const ctxRef = useRef<HTMLDivElement>(null)
+  const expandTargetRef = useRef<string | null>(null)
 
   // Fecha context menu ao clicar fora
   useEffect(() => {
@@ -91,12 +92,16 @@ export default function DREPage() {
 
       // Read URL params (support deep-links from favorites and comment log)
       const sp = new URLSearchParams(window.location.search)
-      const urlDepts   = sp.get('depts')?.split(',').filter(Boolean)   ?? []
-      const urlPeriods = sp.get('periods')?.split(',').filter(Boolean) ?? []
-      const urlCentros = sp.get('centros')?.split(',').filter(Boolean) ?? []
-      const urlView    = sp.get('view') as typeof viewMode | null
+      const urlDepts    = sp.get('depts')?.split(',').filter(Boolean)    ?? []
+      const urlPeriods  = sp.get('periods')?.split(',').filter(Boolean)  ?? []
+      const urlCentros  = sp.get('centros')?.split(',').filter(Boolean)  ?? []
+      const urlExpanded = sp.get('expanded')?.split(',').filter(Boolean) ?? []
+      const urlView     = sp.get('view') as typeof viewMode | null
       // Legacy single-dept param from comment log
-      const urlDept    = sp.get('dept')
+      const urlDept     = sp.get('dept')
+      // Deep-link: expand path to specific row (from eye button)
+      expandTargetRef.current = sp.get('expand')
+      if (urlExpanded.length) setExpanded(new Set(urlExpanded))
 
       const [hier, linhas, depts, dates] = await Promise.all([
         fetch('/api/dre?type=hierarchy').then(r => r.json()),
@@ -145,16 +150,16 @@ export default function DREPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Keep URL in sync with current filter state so favorites capture the exact view
+  // Keep URL in sync with current filter + expansion state so favorites capture the exact view
   useEffect(() => {
     const p = new URLSearchParams()
-    if (selDepts.length)   p.set('depts',   selDepts.join(','))
-    if (selPeriods.length) p.set('periods', selPeriods.join(','))
-    if (selCentros.length) p.set('centros', selCentros.join(','))
-    if (viewMode !== 'total') p.set('view', viewMode)
-    const search = p.toString()
-    window.history.replaceState({}, '', `/dre${search ? '?' + search : ''}`)
-  }, [selDepts, selPeriods, selCentros, viewMode])
+    if (selDepts.length)    p.set('depts',    selDepts.join(','))
+    if (selPeriods.length)  p.set('periods',  selPeriods.join(','))
+    if (selCentros.length)  p.set('centros',  selCentros.join(','))
+    if (viewMode !== 'total') p.set('view',   viewMode)
+    if (expanded.size > 0)  p.set('expanded', [...expanded].join(','))
+    window.history.replaceState({}, '', `/dre${p.toString() ? '?' + p.toString() : ''}`)
+  }, [selDepts, selPeriods, selCentros, viewMode, expanded])
 
   const loadData = useCallback(async (depts: string[], prds: string[], centros: string[]) => {
     setLoading(true)
@@ -183,10 +188,13 @@ export default function DREPage() {
 
   useEffect(() => { if (selPeriods.length > 0) loadComments(selPeriods) }, [selPeriods, loadComments])
 
+  // Per-dept color for dots — consistent color per department name
+  const ownDotColor = getDeptColor(deptUser?.department).dot
+
   // commentCellMap: key = `${dre_linha}||${tipo_valor}||${periodo??''}`
   // Dots on VALUE cells (not row names)
-  // Dept: orange = own comment, purple = master replied
-  // Master: only their own private notes (purple), dept tickets invisible in DRE
+  // Dept: dept-color = own comment, purple = master replied
+  // Master: only their own private notes (indigo), dept tickets invisible in DRE
   const commentCellMap = useMemo(() => {
     const map = new Map<string, { hasOwn: boolean; hasReply: boolean; comments: DREComment[] }>()
     for (const c of comments) {
@@ -280,6 +288,37 @@ export default function DREPage() {
     setExpanded(groups)
   }
   const collapseAll = () => setExpanded(new Set())
+
+  // Auto-expand path to target row when tree is loaded (from eye-button deep-link)
+  useEffect(() => {
+    const target = expandTargetRef.current
+    if (!target || tree.length === 0) return
+    const keys: string[] = []
+    outer: for (const node of tree) {
+      if (node.name === target) { keys.push(node.name); break }
+      for (const child of node.children ?? []) {
+        if (child.name === target || child.agrupamento === target) {
+          keys.push(node.name); break outer
+        }
+        for (const acct of child.children ?? []) {
+          if (acct.name === target || acct.conta === target) {
+            keys.push(node.name)
+            keys.push(child.agrupamento || child.name)
+            break outer
+          }
+        }
+      }
+    }
+    if (keys.length > 0) {
+      setExpanded(prev => new Set([...prev, ...keys]))
+      setTimeout(() => {
+        const el = document.querySelector(`[data-row="${CSS.escape(target)}"]`)
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 200)
+    }
+    expandTargetRef.current = null
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tree])
 
   // Build tree from raw data — memoized: only recomputes when data changes
   const tree = useMemo(() => dreLinhas.length > 0
@@ -400,10 +439,10 @@ export default function DREPage() {
               {existing.map(c => (
                 <div key={c.id} className={cn(
                   'rounded-lg p-2.5 text-xs flex items-start gap-2',
-                  c.parent_id ? 'bg-purple-50 border border-purple-100' : 'bg-orange-50 border border-orange-100'
+                  c.parent_id ? 'bg-purple-50 border border-purple-100' : `${getDeptColor(c.departamento || deptUser?.department).bg} border ${getDeptColor(c.departamento || deptUser?.department).border}`
                 )}>
                   <span className={cn('w-2 h-2 rounded-full mt-0.5 flex-shrink-0',
-                    c.parent_id ? 'bg-purple-500' : 'bg-orange-400')} />
+                    c.parent_id ? 'bg-purple-500' : getDeptColor(c.departamento || deptUser?.department).dot)} />
                   <div className="flex-1">
                     <p className="text-gray-700">{c.texto}</p>
                     <p className="text-[10px] text-gray-400 mt-1">
@@ -571,7 +610,7 @@ export default function DREPage() {
                   </thead>
                   <tbody>
                     {flatRows.map((row, i) => (
-                      <tr key={i}
+                      <tr key={i} data-row={row.name}
                         onContextMenu={e => openCtxMenu(e, row, undefined, 'ambos')}
                         className={cn(
                           'border-b transition-colors cursor-context-menu',
@@ -612,7 +651,7 @@ export default function DREPage() {
                                 {formatCurrency(row.budget)}
                                 {d && (
                                   <span className="absolute -top-1 -right-1.5 flex gap-0.5">
-                                    {d.hasOwn   && <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shadow-sm" />}
+                                    {d.hasOwn   && <span className={cn("w-1.5 h-1.5 rounded-full shadow-sm", ownDotColor)} />}
                                     {d.hasReply && <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-sm" />}
                                   </span>
                                 )}
@@ -634,7 +673,7 @@ export default function DREPage() {
                                 {formatCurrency(row.razao)}
                                 {d && (
                                   <span className="absolute -top-1 -right-1.5 flex gap-0.5">
-                                    {d.hasOwn   && <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shadow-sm" />}
+                                    {d.hasOwn   && <span className={cn("w-1.5 h-1.5 rounded-full shadow-sm", ownDotColor)} />}
                                     {d.hasReply && <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-sm" />}
                                   </span>
                                 )}
@@ -701,7 +740,7 @@ export default function DREPage() {
                         const rowTotVar    = rowTotRazao - rowTotBudget
                         const rowTotPct    = rowTotBudget ? (rowTotVar / Math.abs(rowTotBudget)) * 100 : 0
                         return (
-                          <tr key={i}
+                          <tr key={i} data-row={row.name}
                             onContextMenu={e => openCtxMenu(e, row, undefined, 'ambos')}
                             className={cn(
                               'border-b transition-colors cursor-context-menu',
@@ -750,7 +789,7 @@ export default function DREPage() {
                                     )}
                                     {dots && (
                                       <span className="absolute -top-1 -right-1 flex gap-px">
-                                        {dots.hasOwn   && <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shadow-sm" />}
+                                        {dots.hasOwn   && <span className={cn("w-1.5 h-1.5 rounded-full shadow-sm", ownDotColor)} />}
                                         {dots.hasReply && <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-sm" />}
                                       </span>
                                     )}
@@ -807,7 +846,7 @@ export default function DREPage() {
                     </thead>
                     <tbody>
                       {flatRows.map((row, i) => (
-                        <tr key={i}
+                        <tr key={i} data-row={row.name}
                           onContextMenu={e => openCtxMenu(e, row, undefined, 'ambos')}
                           className={cn(
                             'border-b transition-colors cursor-context-menu',
@@ -848,7 +887,7 @@ export default function DREPage() {
                                     {formatCurrency(cell.budget)}
                                     {dotsB && (
                                       <span className="absolute -top-1 -right-1 flex gap-px">
-                                        {dotsB.hasOwn   && <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shadow-sm" />}
+                                        {dotsB.hasOwn   && <span className={cn("w-1.5 h-1.5 rounded-full shadow-sm", ownDotColor)} />}
                                         {dotsB.hasReply && <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-sm" />}
                                       </span>
                                     )}
@@ -864,7 +903,7 @@ export default function DREPage() {
                                     {formatCurrency(cell.razao)}
                                     {dotsR && (
                                       <span className="absolute -top-1 -right-1 flex gap-px">
-                                        {dotsR.hasOwn   && <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shadow-sm" />}
+                                        {dotsR.hasOwn   && <span className={cn("w-1.5 h-1.5 rounded-full shadow-sm", ownDotColor)} />}
                                         {dotsR.hasReply && <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-sm" />}
                                       </span>
                                     )}
@@ -920,7 +959,7 @@ export default function DREPage() {
                       {flatRows.map((row, i) => {
                         const byQ = groupByQuarter(row.byPeriod)
                         return (
-                          <tr key={i}
+                          <tr key={i} data-row={row.name}
                             onContextMenu={e => openCtxMenu(e, row, undefined, 'ambos')}
                             className={cn('border-b transition-colors cursor-context-menu',
                               row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50')}>
@@ -1125,7 +1164,7 @@ export default function DREPage() {
                             const deltaRazao = vA.razao - vB.razao
                             const deltaPct = vB.razao ? ((deltaRazao) / Math.abs(vB.razao)) * 100 : 0
                             return (
-                              <tr key={i}
+                              <tr key={i} data-row={row.name}
                                 onContextMenu={e => openCtxMenu(e, row, undefined, 'ambos')}
                                 className={cn('border-b transition-colors cursor-context-menu',
                                   row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50')}>

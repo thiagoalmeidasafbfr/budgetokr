@@ -17,7 +17,7 @@ type SessionUser = { userId: string; role: 'master' | 'dept'; department?: strin
 
 type NavLink  = { type: 'link';    href: string; icon: React.ElementType; label: string; sublabel?: string; masterOnly?: boolean; deptOnly?: boolean }
 type NavGroup = { type: 'group';   icon: React.ElementType; label: string; masterOnly?: boolean; children: { href: string; label: string; icon?: React.ElementType }[] }
-type NavSep   = { type: 'section'; label: string; masterOnly?: boolean }
+type NavSep   = { type: 'section'; label: string; masterOnly?: boolean; deptOnly?: boolean }
 type NavItem  = NavLink | NavGroup | NavSep
 
 // ─── Nav config ─────────────────────────────────────────────────────────────────
@@ -38,13 +38,6 @@ const nav: NavItem[] = [
     icon: LineChart,
     label: 'DRE',
     sublabel: 'P&L · Resultado',
-  },
-  {
-    type: 'link', href: '/dept/comments',
-    icon: MessageSquare,
-    label: 'Meus Comentários',
-    sublabel: 'Tickets e respostas',
-    deptOnly: true,
   },
   {
     type: 'link', href: '/analise',
@@ -70,6 +63,15 @@ const nav: NavItem[] = [
     label: 'Plano de Contas',
     sublabel: 'Hierarquia por nível',
     masterOnly: true,
+  },
+
+  { type: 'section', label: 'Meus Tickets', deptOnly: true },
+  {
+    type: 'link', href: '/dept/comments',
+    icon: MessageSquare,
+    label: 'Comentários',
+    sublabel: 'Tickets e respostas',
+    deptOnly: true,
   },
 
   { type: 'section', label: 'KPIs & Medidas', masterOnly: true },
@@ -197,7 +199,7 @@ export function Sidebar() {
         {loaded && user && nav.map((item, i) => {
           // Esconde itens masterOnly para dept, deptOnly para master
           if (item.masterOnly && !isMaster) return null
-          if ('deptOnly' in item && item.deptOnly && isMaster) return null
+          if (item.deptOnly && isMaster) return null
 
           // ── Section label ──────────────────────────────────────────────────
           if (item.type === 'section') {
