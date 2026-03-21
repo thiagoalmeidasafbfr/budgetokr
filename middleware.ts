@@ -31,8 +31,14 @@ export async function middleware(request: NextRequest) {
 
   // Usuário de departamento: restrições de acesso
   if (user.role === 'dept') {
-    // Bloqueia métodos de escrita para dept users (todas as APIs)
-    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method) && pathname.startsWith('/api/')) {
+    // APIs onde dept pode escrever (comentários)
+    const DEPT_WRITE_ALLOWED = ['/api/dre/comments']
+    // Bloqueia métodos de escrita para dept users (todas as APIs exceto as permitidas)
+    if (
+      ['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method) &&
+      pathname.startsWith('/api/') &&
+      !DEPT_WRITE_ALLOWED.some(p => pathname === p || pathname.startsWith(p + '/') || pathname.startsWith(p + '?'))
+    ) {
       return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
     }
 
