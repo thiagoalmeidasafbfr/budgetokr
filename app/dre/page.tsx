@@ -109,7 +109,7 @@ export default function DREPage() {
       // The eye button in comment pages stores state here before navigating.
       // This avoids race conditions and works even when already on /dre (same-
       // route soft navigation doesn't re-run useEffect([]).
-      let dl: { depts?: string[]; periods?: string[]; centros?: string[]; view?: string; expand?: string } = {}
+      let dl: { depts?: string[]; periods?: string[]; centros?: string[]; view?: string; expand?: string; expandAgrup?: string } = {}
       try {
         const raw = sessionStorage.getItem('dre_deeplink')
         if (raw) { sessionStorage.removeItem('dre_deeplink'); dl = JSON.parse(raw) }
@@ -123,8 +123,8 @@ export default function DREPage() {
       const urlExpanded = sp.get('expanded')?.split(',').filter(Boolean) ?? []
       const urlView     = (sp.get('view') ?? dl.view) as typeof viewMode | null
 
-      // Expand target: sessionStorage > URL
-      expandTargetRef.current = dl.expand ?? sp.get('expand')
+      // Scroll target stored for later (after data loads)
+      expandTargetRef.current = dl.expand ?? sp.get('expand') ?? null
       if (urlExpanded.length) setExpanded(new Set(urlExpanded))
 
       const [hier, linhas, depts, dates] = await Promise.all([
@@ -133,8 +133,33 @@ export default function DREPage() {
         fetch('/api/dre?type=distinct&col=nome_departamento').then(r => r.json()),
         fetch('/api/dre?type=distinct&col=data_lancamento').then(r => r.json()),
       ])
-      setHierarchy(Array.isArray(hier) ? hier : [])
+      const hierList = Array.isArray(hier) ? hier as Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }> : []
+      setHierarchy(hierList)
       setDreLinhas(Array.isArray(linhas) ? linhas : [])
+
+      // ── Pre-expand via hierarchy (no tree traversal needed) ───────────────────
+      // When coming from the eye button, sessionStorage contains the expand target
+      // (dre_linha = account/subgroup display name) and expandAgrup (depth-1
+      // subgroup name). We look up the depth-0 DRE line from hierarchy and call
+      // setExpanded synchronously — so the table renders already expanded when
+      // data arrives, bypassing the tree-effect timing chain entirely.
+      const dlExpandAgrup = dl.expandAgrup ?? null
+      const dlExpand      = dl.expand ?? sp.get('expand') ?? null
+      if (dlExpand && !urlExpanded.length) {
+        if (dlExpandAgrup) {
+          // Target is depth-1 or depth-2: find its depth-0 parent in hierarchy
+          const dreParent = hierList.find(h => h.agrupamento_arvore === dlExpandAgrup)?.dre
+          if (dreParent) {
+            setExpanded(new Set([dreParent, dlExpandAgrup]))
+          } else {
+            // Fallback: just expand whatever dre_linha names we have
+            setExpanded(new Set([dlExpand]))
+          }
+        } else {
+          // Target is depth-0: just expand it directly
+          setExpanded(new Set([dlExpand]))
+        }
+      }
       setDepartamentos(Array.isArray(depts) ? depts : [])
       const allPeriods = ([...new Set(
         (Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean)
