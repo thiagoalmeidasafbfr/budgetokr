@@ -66,6 +66,28 @@ export default function Dashboard() {
   // Load widget config from localStorage on mount
   useEffect(() => { setWidgets(loadWidgetConfig()) }, [])
 
+  const toggleWidget = useCallback((id: WidgetId) => {
+    setWidgets(prev => {
+      const next = prev.map(w => w.id === id ? { ...w, visible: !w.visible } : w)
+      saveWidgetConfig(next)
+      return next
+    })
+  }, [])
+
+  const moveWidget = useCallback((id: WidgetId, direction: -1 | 1) => {
+    setWidgets(prev => {
+      const sorted = [...prev].sort((a, b) => a.order - b.order)
+      const idx = sorted.findIndex(w => w.id === id)
+      const swapIdx = idx + direction
+      if (swapIdx < 0 || swapIdx >= sorted.length) return prev
+      const temp = sorted[idx].order
+      sorted[idx] = { ...sorted[idx], order: sorted[swapIdx].order }
+      sorted[swapIdx] = { ...sorted[swapIdx], order: temp }
+      saveWidgetConfig(sorted)
+      return sorted
+    })
+  }, [])
+
   useEffect(() => {
     Promise.all([
       fetch('/api/analise?type=summary').then(r => r.json()),
@@ -191,28 +213,6 @@ export default function Dashboard() {
     .map(([dept, vals]) => ({ dept, variacao: vals.razao - vals.budget }))
     .sort((a, b) => b.variacao - a.variacao)
     .slice(0, 10)
-
-  const toggleWidget = useCallback((id: WidgetId) => {
-    setWidgets(prev => {
-      const next = prev.map(w => w.id === id ? { ...w, visible: !w.visible } : w)
-      saveWidgetConfig(next)
-      return next
-    })
-  }, [])
-
-  const moveWidget = useCallback((id: WidgetId, direction: -1 | 1) => {
-    setWidgets(prev => {
-      const sorted = [...prev].sort((a, b) => a.order - b.order)
-      const idx = sorted.findIndex(w => w.id === id)
-      const swapIdx = idx + direction
-      if (swapIdx < 0 || swapIdx >= sorted.length) return prev
-      const temp = sorted[idx].order
-      sorted[idx] = { ...sorted[idx], order: sorted[swapIdx].order }
-      sorted[swapIdx] = { ...sorted[swapIdx], order: temp }
-      saveWidgetConfig(sorted)
-      return sorted
-    })
-  }, [])
 
   const sortedWidgets = [...widgets].sort((a, b) => a.order - b.order)
   const isWidgetVisible = (id: WidgetId) => widgets.find(w => w.id === id)?.visible ?? true
