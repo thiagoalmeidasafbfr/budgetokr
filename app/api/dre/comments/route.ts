@@ -4,57 +4,95 @@ import { getUserFromHeaders } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
 
-// GET /api/dre/comments?periodos=2026-01,2026-02
+// ──────────────────────────────────────────────────────────────────────────────
+// Visibility rules:
+//  • Dept in DRE  → own tickets (parent_id IS NULL) + master replies to their dept
+//  • Master in DRE → only master's own private notes (user_role='master', parent_id IS NULL, departamento IS NULL)
+//  • Log pages (context=log) → ALL rows (master only)
+//  • Dept log (context=dept-log) → dept's tickets + master replies to that dept
+// ──────────────────────────────────────────────────────────────────────────────
+
 export async function GET(req: NextRequest) {
   try {
-    const sp = new URL(req.url).searchParams
+    const sp       = new URL(req.url).searchParams
+    const context  = sp.get('context') ?? 'dre'
     const periodos = sp.get('periodos')
-    const dreLinha = sp.get('dre_linha')
 
     const user = getUserFromHeaders(req)
-    const db = getDb()
-    const conditions: string[] = []
-    const params: unknown[] = []
+    const db   = getDb()
 
-    // Dept users only see their own comments + master comments
-    if (user?.role === 'dept') {
-      conditions.push(`(user_role = 'master' OR departamento = ?)`)
-      params.push(user.department ?? '')
+    const conditions: string[] = []
+    const params: unknown[]    = []
+
+    if (context === 'log') {
+      if (user?.role !== 'master') return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+      // return all — no extra conditions
+    } else if (context === 'dept-log') {
+      const dept = user?.role === 'dept' ? user.department : sp.get('dept')
+      if (!dept) return NextResponse.json([])
+      conditions.push(`departamento = ?`)
+      params.push(dept)
+    } else {
+      // 'dre' context: role-based DRE page visibility
+      if (user?.role === 'dept') {
+        conditions.push(`departamento = ?`)
+        params.push(user.department ?? '')
+      } else {
+        // Master sees ONLY their own private notes in the DRE
+        conditions.push(`(user_role = 'master' AND parent_id IS NULL AND departamento IS NULL)`)
+      }
     }
 
     if (periodos) {
       const list = periodos.split(',').filter(Boolean)
       if (list.length) {
-        // Include comments with no specific period (periodo IS NULL) alongside period-filtered ones
         conditions.push(`(periodo IN (${list.map(() => '?').join(',')}) OR periodo IS NULL)`)
         params.push(...list)
       }
     }
-    if (dreLinha) { conditions.push('dre_linha = ?'); params.push(dreLinha) }
-    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
 
-    const rows = db.prepare(`SELECT * FROM dre_comments ${where} ORDER BY created_at DESC`).all(...params)
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+    const rows  = db.prepare(`SELECT * FROM dre_comments ${where} ORDER BY created_at DESC`).all(...params)
     return NextResponse.json(rows)
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
 }
 
-// POST /api/dre/comments
+// POST — create new ticket or master reply
 export async function POST(req: NextRequest) {
   try {
     const user = getUserFromHeaders(req)
     const body = await req.json()
-    const { dre_linha, agrupamento, conta, periodo, texto } = body
+    const { dre_linha, agrupamento, conta, periodo, tipo_valor, texto, parent_id, filter_state } = body
     if (!dre_linha || !texto) return NextResponse.json({ error: 'dre_linha e texto obrigatórios' }, { status: 400 })
 
     const db = getDb()
+
+    let departamento = user?.department ?? null
+    if (parent_id) {
+      // Reply: inherit parent's departamento and update parent status
+      const parent = db.prepare('SELECT departamento FROM dre_comments WHERE id = ?').get(parent_id) as { departamento: string | null } | undefined
+      if (parent) departamento = parent.departamento
+      db.prepare(`UPDATE dre_comments SET status = 'replied', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(parent_id)
+    }
+
     const r = db.prepare(`
-      INSERT INTO dre_comments (dre_linha, agrupamento, conta, periodo, texto, usuario, user_role, departamento)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO dre_comments
+        (dre_linha, agrupamento, conta, periodo, tipo_valor, texto, usuario, user_role, departamento, parent_id, status, filter_state)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)
     `).run(
-      dre_linha, agrupamento ?? null, conta ?? null, periodo ?? null, texto,
-      user?.userId ?? null, user?.role ?? 'master', user?.department ?? null
+      dre_linha,
+      agrupamento ?? null,
+      conta       ?? null,
+      periodo     ?? null,
+      tipo_valor  ?? 'realizado',
+      texto,
+      user?.userId ?? null,
+      user?.role   ?? 'master',
+      departamento,
+      parent_id   ?? null,
+      JSON.stringify(filter_state ?? {})
     )
 
     const row = db.prepare('SELECT * FROM dre_comments WHERE id = ?').get(r.lastInsertRowid)
@@ -64,30 +102,43 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PUT /api/dre/comments
+// PUT — edit text OR close ticket
 export async function PUT(req: NextRequest) {
   try {
-    const { id, texto } = await req.json()
-    if (!id || !texto) return NextResponse.json({ error: 'id e texto obrigatórios' }, { status: 400 })
+    const user = getUserFromHeaders(req)
+    const { id, action, texto, motivo } = await req.json()
+    if (!id) return NextResponse.json({ error: 'id obrigatório' }, { status: 400 })
 
     const db = getDb()
-    db.prepare('UPDATE dre_comments SET texto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(texto, id)
-    const row = db.prepare('SELECT * FROM dre_comments WHERE id = ?').get(id)
-    return NextResponse.json(row)
+    if (action === 'close') {
+      db.prepare(`
+        UPDATE dre_comments
+        SET status = 'closed', resolved_at = CURRENT_TIMESTAMP,
+            resolved_by = ?, resolved_motivo = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(user?.userId ?? 'master', motivo ?? '', id)
+    } else {
+      if (!texto) return NextResponse.json({ error: 'texto obrigatório' }, { status: 400 })
+      db.prepare('UPDATE dre_comments SET texto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(texto, id)
+    }
+    return NextResponse.json(db.prepare('SELECT * FROM dre_comments WHERE id = ?').get(id))
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
 }
 
-// DELETE /api/dre/comments?id=X
+// DELETE
 export async function DELETE(req: NextRequest) {
   try {
     const user = getUserFromHeaders(req)
-    const id = new URL(req.url).searchParams.get('id')
+    const id   = new URL(req.url).searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id obrigatório' }, { status: 400 })
-    // Dept users can only delete their own comments
     if (user?.role === 'dept') {
-      getDb().prepare('DELETE FROM dre_comments WHERE id = ? AND departamento = ?').run(id, user.department ?? '')
+      // Dept can only delete own tickets with no replies yet
+      getDb().prepare(`
+        DELETE FROM dre_comments WHERE id = ? AND departamento = ? AND parent_id IS NULL
+        AND id NOT IN (SELECT DISTINCT parent_id FROM dre_comments WHERE parent_id IS NOT NULL)
+      `).run(id, user.department ?? '')
     } else {
       getDb().prepare('DELETE FROM dre_comments WHERE id = ?').run(id)
     }

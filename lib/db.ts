@@ -12,7 +12,7 @@ if (!fs.existsSync(DATA_DIR)) {
 // Use globalThis to persist DB across HMR in dev mode
 const globalForDb = globalThis as unknown as { __budgetokr_db?: Database.Database; __budgetokr_schema_v?: number }
 
-const SCHEMA_VERSION = 14;
+const SCHEMA_VERSION = 15;
 
 export function getDb(): Database.Database {
   // Re-run migrations if schema version changed (e.g. after code deploy)
@@ -188,6 +188,16 @@ function initSchema(db: Database.Database) {
     if (version < 14) {
       try { db.exec(`ALTER TABLE dre_comments ADD COLUMN user_role TEXT DEFAULT 'master'`) } catch { /* ok */ }
       try { db.exec(`ALTER TABLE dre_comments ADD COLUMN departamento TEXT`) } catch { /* ok */ }
+    }
+    // v14 → v15: full ticket system — tipo_valor, parent_id, status, resolved, filter_state
+    if (version < 15) {
+      try { db.exec(`ALTER TABLE dre_comments ADD COLUMN tipo_valor TEXT DEFAULT 'realizado'`) } catch { /* ok */ }
+      try { db.exec(`ALTER TABLE dre_comments ADD COLUMN parent_id INTEGER`) } catch { /* ok */ }
+      try { db.exec(`ALTER TABLE dre_comments ADD COLUMN status TEXT DEFAULT 'open'`) } catch { /* ok */ }
+      try { db.exec(`ALTER TABLE dre_comments ADD COLUMN resolved_at DATETIME`) } catch { /* ok */ }
+      try { db.exec(`ALTER TABLE dre_comments ADD COLUMN resolved_by TEXT`) } catch { /* ok */ }
+      try { db.exec(`ALTER TABLE dre_comments ADD COLUMN resolved_motivo TEXT`) } catch { /* ok */ }
+      try { db.exec(`ALTER TABLE dre_comments ADD COLUMN filter_state TEXT DEFAULT '{}'`) } catch { /* ok */ }
     }
 
     if (!row) {
