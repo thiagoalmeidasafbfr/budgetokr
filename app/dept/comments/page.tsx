@@ -1,11 +1,11 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   MessageSquare, Clock, CheckCircle2, AlertCircle, Reply,
   RefreshCw, Eye, ChevronDown, ChevronUp, Trash2
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
-import Link from 'next/link'
 import { cn, getDeptColor } from '@/lib/utils'
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
@@ -65,28 +65,30 @@ function StatusBadge({ status }: { status?: string }) {
   )
 }
 
-function buildDRELink(comment: DREComment): string {
+function navigateToDRE(comment: DREComment, router: ReturnType<typeof useRouter>) {
   try {
-    const fs = comment.filter_state ? JSON.parse(comment.filter_state) : {}
-    const p = new URLSearchParams()
-    const depts = fs.depts?.length ? fs.depts : (comment.departamento ? [comment.departamento] : [])
-    if (depts.length) p.set('depts', depts.join(','))
-    const periods = fs.periods?.length ? fs.periods : (comment.periodo ? [comment.periodo] : [])
-    if (periods.length) { p.set('periods', periods.join(',')); p.set('view', 'periodo') }
-    if (fs.centros?.length) p.set('centros', fs.centros.join(','))
-    if (comment.dre_linha) p.set('expand', comment.dre_linha)
-    return `/dre${p.toString() ? '?' + p.toString() : ''}`
-  } catch {
-    return '/dre'
-  }
+    const fs = comment.filter_state ? JSON.parse(comment.filter_state as string) : {}
+    const depts   = fs.depts?.length   ? fs.depts   : (comment.departamento ? [comment.departamento] : [])
+    const periods = fs.periods?.length ? fs.periods : (comment.periodo       ? [comment.periodo]       : [])
+    const centros = fs.centros?.length ? fs.centros : []
+    sessionStorage.setItem('dre_deeplink', JSON.stringify({
+      depts, periods, centros,
+      view:   periods.length ? 'periodo' : 'total',
+      expand: comment.dre_linha ?? null,
+    }))
+  } catch { /* ignore */ }
+  router.push('/dre')
 }
 
 // ─── Ticket Card ─────────────────────────────────────────────────────────────────
 
-function TicketCard({ ticket, onDelete }: { ticket: Ticket; onDelete: (id: number) => void }) {
+function TicketCard({ ticket, onDelete, onView }: {
+  ticket: Ticket
+  onDelete: (id: number) => void
+  onView: (ticket: Ticket) => void
+}) {
   const [expanded, setExpanded] = useState(ticket.replies.length > 0 || ticket.status !== 'open')
   const isClosed = ticket.status === 'closed'
-  const dreLink  = buildDRELink(ticket)
   const dColor   = getDeptColor(ticket.departamento)
 
   return (
@@ -151,13 +153,13 @@ function TicketCard({ ticket, onDelete }: { ticket: Ticket; onDelete: (id: numbe
 
           {/* Actions */}
           <div className="flex items-center gap-1 flex-shrink-0">
-            <Link
-              href={dreLink}
-              title="Ver na DRE"
+            <button
+              onClick={() => onView(ticket)}
+              title="Ver na DRE com filtros aplicados"
               className="p-1.5 rounded-lg text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
             >
               <Eye size={13} />
-            </Link>
+            </button>
             {!isClosed && ticket.replies.length === 0 && (
               <button
                 onClick={() => onDelete(ticket.id)}
@@ -205,6 +207,7 @@ function TicketCard({ ticket, onDelete }: { ticket: Ticket; onDelete: (id: numbe
 // ─── Main Page ────────────────────────────────────────────────────────────────────
 
 export default function DeptCommentsPage() {
+  const router = useRouter()
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter]   = useState<'all' | 'open' | 'replied' | 'closed'>('all')
@@ -316,7 +319,12 @@ export default function DeptCommentsPage() {
       {!loading && filtered.length > 0 && (
         <div className="space-y-3">
           {filtered.map(ticket => (
-            <TicketCard key={ticket.id} ticket={ticket} onDelete={handleDelete} />
+            <TicketCard
+              key={ticket.id}
+              ticket={ticket}
+              onDelete={handleDelete}
+              onView={t => navigateToDRE(t, router)}
+            />
           ))}
         </div>
       )}
