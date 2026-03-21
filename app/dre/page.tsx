@@ -20,8 +20,9 @@ const TrendChartModal = dynamic(() => import('@/components/TrendChart'), { ssr: 
 
 interface DREComment {
   id: number; dre_linha: string; agrupamento?: string; conta?: string
-  periodo?: string; texto: string; usuario?: string; user_role?: string
-  departamento?: string; created_at: string
+  periodo?: string; tipo_valor?: string; texto: string; usuario?: string
+  user_role?: string; departamento?: string; parent_id?: number
+  status?: string; filter_state?: string; created_at: string
 }
 
 export default function DREPage() {
@@ -47,7 +48,7 @@ export default function DREPage() {
   const [detModal,      setDetModal]      = useState<ContextMenuState | null>(null)
   const [deptUser,      setDeptUser]      = useState<{ department: string } | null>(null)
   const [comments,      setComments]      = useState<DREComment[]>([])
-  const [commentEdit,   setCommentEdit]   = useState<{ dre_linha: string; agrupamento?: string; conta?: string; periodo?: string } | null>(null)
+  const [commentEdit,   setCommentEdit]   = useState<{ dre_linha: string; agrupamento?: string; conta?: string; periodo?: string; tipo_valor?: string } | null>(null)
   const [commentText,   setCommentText]   = useState('')
   const [trendTarget,   setTrendTarget]   = useState<{ title: string; conta?: string; agrupamento?: string; dre?: string } | null>(null)
   const ctxRef = useRef<HTMLDivElement>(null)
@@ -182,38 +183,52 @@ export default function DREPage() {
 
   useEffect(() => { if (selPeriods.length > 0) loadComments(selPeriods) }, [selPeriods, loadComments])
 
-  // Comment helpers
-  // commentRowMap: dre_linha → all comments for that line (any period) — used for row-name dots
-  // commentCellMap: `dre_linha||periodo` → dots for specific cells in period views
-  const { commentRowMap, commentCellMap } = useMemo(() => {
-    const rowMap  = new Map<string, { hasMaster: boolean; hasDept: boolean; comments: DREComment[] }>()
-    const cellMap = new Map<string, { hasMaster: boolean; hasDept: boolean }>()
+  // commentCellMap: key = `${dre_linha}||${tipo_valor}||${periodo??''}`
+  // Dots on VALUE cells (not row names)
+  // Dept: orange = own comment, purple = master replied
+  // Master: only their own private notes (purple), dept tickets invisible in DRE
+  const commentCellMap = useMemo(() => {
+    const map = new Map<string, { hasOwn: boolean; hasReply: boolean; comments: DREComment[] }>()
     for (const c of comments) {
-      const rowEntry = rowMap.get(c.dre_linha) ?? { hasMaster: false, hasDept: false, comments: [] }
-      if (c.user_role === 'master') rowEntry.hasMaster = true
-      else rowEntry.hasDept = true
-      rowEntry.comments.push(c)
-      rowMap.set(c.dre_linha, rowEntry)
-
-      if (c.periodo) {
-        const ck = `${c.dre_linha}||${c.periodo}`
-        const ce = cellMap.get(ck) ?? { hasMaster: false, hasDept: false }
-        if (c.user_role === 'master') ce.hasMaster = true
-        else ce.hasDept = true
-        cellMap.set(ck, ce)
+      const tv  = c.tipo_valor ?? 'realizado'
+      const per = c.periodo ?? ''
+      const ck  = `${c.dre_linha}||${tv}||${per}`
+      const e   = map.get(ck) ?? { hasOwn: false, hasReply: false, comments: [] }
+      // For dept: root ticket = "own", master reply = "reply"
+      // For master: all returned comments are their own notes
+      if (deptUser) {
+        if (c.parent_id) e.hasReply = true   // master replied to this ticket
+        else             e.hasOwn  = true    // dept's own ticket
+      } else {
+        e.hasOwn = true  // master's private note
       }
+      e.comments.push(c)
+      map.set(ck, e)
     }
-    return { commentRowMap: rowMap, commentCellMap: cellMap }
-  }, [comments])
+    return map
+  }, [comments, deptUser])
+
+  // Open comment dialog helper — captures filter state for master to reconstruct the view
+  const openCommentDialog = (row: TreeNode, tipoValor: 'budget' | 'realizado', periodo?: string) => {
+    setCommentEdit({
+      dre_linha: row.name, agrupamento: row.agrupamento, conta: row.conta,
+      periodo, tipo_valor: tipoValor,
+    })
+    setCommentText('')
+  }
 
   const saveComment = async () => {
     if (!commentEdit || !commentText.trim()) return
     const res = await fetch('/api/dre/comments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...commentEdit, texto: commentText.trim() }),
+      body: JSON.stringify({
+        ...commentEdit,
+        texto: commentText.trim(),
+        filter_state: { depts: selDepts, periods: selPeriods, centros: selCentros },
+      }),
     })
-    if (!res.ok) return // silently keep dialog open on error
+    if (!res.ok) return
     setCommentText('')
     setCommentEdit(null)
     loadComments(selPeriods)
@@ -345,19 +360,6 @@ export default function DREPage() {
             }}>
             <TrendingUp size={13} /> Gráfico de Tendência
           </button>
-          <button
-            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-700 flex items-center gap-2"
-            onClick={() => {
-              setCommentEdit({
-                dre_linha: ctxMenu.node.name,
-                agrupamento: ctxMenu.node.agrupamento,
-                conta: ctxMenu.node.conta,
-                periodo: ctxMenu.periodo,
-              })
-              setCtxMenu(null)
-            }}>
-            <MessageSquare size={13} /> Comentar
-          </button>
         </div>
       )}
 
@@ -377,44 +379,57 @@ export default function DREPage() {
       )}
 
       {/* Modal de comentário */}
-      {commentEdit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" onClick={e => { if (e.target === e.currentTarget) setCommentEdit(null) }}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-5 space-y-3">
-            <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-              <MessageSquare size={14} className="text-indigo-500" /> Comentário
-            </h3>
-            <p className="text-xs text-gray-500">{commentEdit.dre_linha}{commentEdit.periodo ? ` · ${commentEdit.periodo}` : ''}</p>
-
-            {/* Existing comments for this line (all periods) */}
-            {(commentRowMap.get(commentEdit.dre_linha)?.comments ?? [])
-              .filter(c => !commentEdit.periodo || c.periodo === commentEdit.periodo || !c.periodo)
-              .map(c => (
-              <div key={c.id} className={cn(
-                'rounded-lg p-2.5 text-xs text-gray-700 flex items-start gap-2',
-                c.user_role === 'dept' ? 'bg-orange-50 border border-orange-100' : 'bg-purple-50 border border-purple-100'
-              )}>
-                <span className={cn('w-2 h-2 rounded-full mt-0.5 flex-shrink-0', c.user_role === 'dept' ? 'bg-orange-400' : 'bg-purple-500')} />
-                <div className="flex-1">
-                  <p>{c.texto}</p>
-                  <p className="text-[10px] text-gray-400 mt-1">
-                    {c.usuario ?? (c.user_role === 'dept' ? c.departamento : 'master')} · {new Date(c.created_at).toLocaleString('pt-BR')}
-                  </p>
+      {commentEdit && (() => {
+        const tv  = commentEdit.tipo_valor ?? 'realizado'
+        const ck  = `${commentEdit.dre_linha}||${tv}||${commentEdit.periodo ?? ''}`
+        const existing = commentCellMap.get(ck)?.comments ?? []
+        const label = tv === 'budget' ? 'Orçado' : 'Realizado'
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6"
+            onClick={e => { if (e.target === e.currentTarget) setCommentEdit(null) }}>
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-5 space-y-3">
+              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <MessageSquare size={14} className="text-indigo-500" />
+                Comentário · <span className="text-indigo-600">{label}</span>
+              </h3>
+              <p className="text-xs text-gray-500">
+                {commentEdit.dre_linha}
+                {commentEdit.periodo && <span className="ml-1 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 font-medium">{commentEdit.periodo}</span>}
+              </p>
+              {/* Existing comments for this exact cell */}
+              {existing.map(c => (
+                <div key={c.id} className={cn(
+                  'rounded-lg p-2.5 text-xs flex items-start gap-2',
+                  c.parent_id ? 'bg-purple-50 border border-purple-100' : 'bg-orange-50 border border-orange-100'
+                )}>
+                  <span className={cn('w-2 h-2 rounded-full mt-0.5 flex-shrink-0',
+                    c.parent_id ? 'bg-purple-500' : 'bg-orange-400')} />
+                  <div className="flex-1">
+                    <p className="text-gray-700">{c.texto}</p>
+                    <p className="text-[10px] text-gray-400 mt-1">
+                      {c.parent_id ? '↩ Master' : (c.usuario ?? c.departamento)} · {new Date(c.created_at).toLocaleString('pt-BR')}
+                    </p>
+                    {c.status === 'closed' && c.resolved_motivo && (
+                      <p className="text-[10px] text-emerald-600 mt-0.5">
+                        ✓ Encerrado por {c.resolved_by} — {c.resolved_motivo}
+                      </p>
+                    )}
+                  </div>
+                  <button onClick={() => deleteComment(c.id)} className="text-red-400 hover:text-red-600 flex-shrink-0"><X size={12} /></button>
                 </div>
-                <button onClick={() => deleteComment(c.id)} className="text-red-400 hover:text-red-600 flex-shrink-0"><X size={12} /></button>
+              ))}
+              <textarea value={commentText} onChange={e => setCommentText(e.target.value)}
+                placeholder="Adicionar comentário…"
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 h-20 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400" autoFocus />
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setCommentEdit(null)} className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5">Cancelar</button>
+                <button onClick={saveComment} disabled={!commentText.trim()}
+                  className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 disabled:opacity-50">Salvar</button>
               </div>
-            ))}
-
-            <textarea value={commentText} onChange={e => setCommentText(e.target.value)}
-              placeholder="Adicionar comentário…"
-              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 h-20 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400" autoFocus />
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setCommentEdit(null)} className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5">Cancelar</button>
-              <button onClick={saveComment} disabled={!commentText.trim()}
-                className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 disabled:opacity-50">Salvar</button>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -581,25 +596,52 @@ export default function DREPage() {
                               <span className="w-5" />
                             )}
                             {row.name}
-                            {commentRowMap.has(row.name) && (() => {
-                              const e = commentRowMap.get(row.name)!
-                              return (
-                                <span className="flex items-center gap-0.5 ml-1 flex-shrink-0">
-                                  {e.hasDept   && <span className="w-1.5 h-1.5 rounded-full bg-orange-400" title="Comentário do departamento" />}
-                                  {e.hasMaster && <span className="w-1.5 h-1.5 rounded-full bg-purple-500" title="Comentário do master" />}
-                                </span>
-                              )
-                            })()}
                           </div>
                         </td>
-                        <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, undefined, 'budget') }}
-                          className={cn('px-5 py-2.5 text-right', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-600')}>
-                          {formatCurrency(row.budget)}
-                        </td>
-                        <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, undefined, 'razao') }}
-                          className={cn('px-5 py-2.5 text-right', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-600')}>
-                          {formatCurrency(row.razao)}
-                        </td>
+                        {/* Budget cell — clickable to comment, dot top-right of the number */}
+                        {(() => {
+                          const ck = `${row.name}||budget||`
+                          const d  = commentCellMap.get(ck)
+                          return (
+                            <td
+                              onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, undefined, 'budget') }}
+                              onClick={() => openCommentDialog(row, 'budget')}
+                              className={cn('px-5 py-2.5 text-right cursor-pointer relative select-none',
+                                row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-600')}>
+                              <span className="relative inline-block">
+                                {formatCurrency(row.budget)}
+                                {d && (
+                                  <span className="absolute -top-1 -right-1.5 flex gap-0.5">
+                                    {d.hasOwn   && <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shadow-sm" />}
+                                    {d.hasReply && <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-sm" />}
+                                  </span>
+                                )}
+                              </span>
+                            </td>
+                          )
+                        })()}
+                        {/* Realizado cell */}
+                        {(() => {
+                          const ck = `${row.name}||realizado||`
+                          const d  = commentCellMap.get(ck)
+                          return (
+                            <td
+                              onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, undefined, 'razao') }}
+                              onClick={() => openCommentDialog(row, 'realizado')}
+                              className={cn('px-5 py-2.5 text-right cursor-pointer relative select-none',
+                                row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-600')}>
+                              <span className="relative inline-block">
+                                {formatCurrency(row.razao)}
+                                {d && (
+                                  <span className="absolute -top-1 -right-1.5 flex gap-0.5">
+                                    {d.hasOwn   && <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shadow-sm" />}
+                                    {d.hasReply && <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-sm" />}
+                                  </span>
+                                )}
+                              </span>
+                            </td>
+                          )
+                        })()}
                         <td className={cn('px-5 py-2.5 text-right font-semibold', colorForVariance(row.variacao))}>
                           {formatCurrency(row.variacao)}
                         </td>
@@ -686,20 +728,20 @@ export default function DREPage() {
                               const v    = cell.razao - cell.budget
                               const pct  = cell.budget ? (v / Math.abs(cell.budget)) * 100 : 0
                               const hasData = cell.budget !== 0 || cell.razao !== 0
-                              const ck   = `${row.name}||${p}`
+                              // compact view shows "realizado" (razão) as the primary value
+                              const ck  = `${row.name}||realizado||${p}`
                               const dots = commentCellMap.get(ck)
                               return (
                                 <td key={p}
                                   onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'ambos') }}
-                                  onClick={() => { setCommentEdit({ dre_linha: row.name, agrupamento: row.agrupamento, conta: row.conta, periodo: p }); setCommentText('') }}
+                                  onClick={() => openCommentDialog(row, 'realizado', p)}
                                   className="px-1 py-2 text-center border-l-2 border-black cursor-pointer">
                                   <span className="relative inline-block">
                                     {hasData ? (
                                       <span title={`Orç: ${formatCurrency(cell.budget)}\nReal: ${formatCurrency(cell.razao)}\nVar: ${formatCurrency(v)}`}
                                         className={cn(
                                           'inline-block text-xs font-semibold px-1.5 py-0.5 rounded-full min-w-[52px] text-center',
-                                          bgColorForVariance(v),
-                                          colorForVariance(v),
+                                          bgColorForVariance(v), colorForVariance(v),
                                         )}>
                                         {formatPct(pct)}
                                       </span>
@@ -708,8 +750,8 @@ export default function DREPage() {
                                     )}
                                     {dots && (
                                       <span className="absolute -top-1 -right-1 flex gap-px">
-                                        {dots.hasDept   && <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shadow-sm" />}
-                                        {dots.hasMaster && <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-sm" />}
+                                        {dots.hasOwn   && <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shadow-sm" />}
+                                        {dots.hasReply && <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-sm" />}
                                       </span>
                                     )}
                                   </span>
@@ -788,27 +830,45 @@ export default function DREPage() {
                             </div>
                           </td>
                           {dataPeriods.map(p => {
-                            const cell = row.byPeriod[p] ?? { budget: 0, razao: 0 }
-                            const v = cell.razao - cell.budget
-                            const ck = `${row.name}||${p}`
-                            const dots = commentCellMap.get(ck)
+                            const cell   = row.byPeriod[p] ?? { budget: 0, razao: 0 }
+                            const v      = cell.razao - cell.budget
+                            const ckB    = `${row.name}||budget||${p}`
+                            const ckR    = `${row.name}||realizado||${p}`
+                            const dotsB  = commentCellMap.get(ckB)
+                            const dotsR  = commentCellMap.get(ckR)
                             return (
                               <React.Fragment key={p}>
-                                <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'budget') }}
-                                  className={cn('px-2 py-2 text-right text-xs border-l-2 border-black', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
-                                  {formatCurrency(cell.budget)}
+                                {/* Budget cell */}
+                                <td
+                                  onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'budget') }}
+                                  onClick={() => openCommentDialog(row, 'budget', p)}
+                                  className={cn('px-2 py-2 text-right text-xs border-l-2 border-black cursor-pointer relative select-none',
+                                    row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                  <span className="relative inline-block">
+                                    {formatCurrency(cell.budget)}
+                                    {dotsB && (
+                                      <span className="absolute -top-1 -right-1 flex gap-px">
+                                        {dotsB.hasOwn   && <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shadow-sm" />}
+                                        {dotsB.hasReply && <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-sm" />}
+                                      </span>
+                                    )}
+                                  </span>
                                 </td>
+                                {/* Realizado cell */}
                                 <td
                                   onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'razao') }}
-                                  onClick={() => { setCommentEdit({ dre_linha: row.name, agrupamento: row.agrupamento, conta: row.conta, periodo: p }); setCommentText('') }}
-                                  className={cn('px-2 py-2 text-right text-xs border-l border-gray-200 cursor-pointer relative', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
-                                  {formatCurrency(cell.razao)}
-                                  {dots && (
-                                    <span className="absolute top-0.5 right-0.5 flex gap-px">
-                                      {dots.hasDept   && <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />}
-                                      {dots.hasMaster && <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />}
-                                    </span>
-                                  )}
+                                  onClick={() => openCommentDialog(row, 'realizado', p)}
+                                  className={cn('px-2 py-2 text-right text-xs border-l border-gray-200 cursor-pointer relative select-none',
+                                    row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                  <span className="relative inline-block">
+                                    {formatCurrency(cell.razao)}
+                                    {dotsR && (
+                                      <span className="absolute -top-1 -right-1 flex gap-px">
+                                        {dotsR.hasOwn   && <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shadow-sm" />}
+                                        {dotsR.hasReply && <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-sm" />}
+                                      </span>
+                                    )}
+                                  </span>
                                 </td>
                                 <td className={cn('px-2 py-2 text-right text-xs font-semibold border-l border-gray-200', colorForVariance(v))}>
                                   {formatCurrency(v)}

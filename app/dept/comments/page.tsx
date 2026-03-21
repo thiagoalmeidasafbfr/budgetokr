@@ -1,0 +1,309 @@
+'use client'
+import { useState, useEffect, useCallback } from 'react'
+import {
+  MessageSquare, Clock, CheckCircle2, AlertCircle, Reply,
+  RefreshCw, Eye, ChevronDown, ChevronUp
+} from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
+import Link from 'next/link'
+import { cn } from '@/lib/utils'
+
+// ─── Types ──────────────────────────────────────────────────────────────────────
+
+interface DREComment {
+  id: number
+  dre_linha: string
+  periodo?: string
+  tipo_valor?: string
+  texto: string
+  usuario?: string
+  user_role?: string
+  departamento?: string
+  parent_id?: number | null
+  status?: string
+  resolved_at?: string
+  resolved_by?: string
+  resolved_motivo?: string
+  filter_state?: string
+  created_at: string
+}
+
+interface Ticket extends DREComment {
+  replies: DREComment[]
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────────
+
+function timeAgo(iso: string) {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000
+  if (diff < 60)    return 'agora'
+  if (diff < 3600)  return `${Math.floor(diff / 60)}min atrás`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h atrás`
+  if (diff < 86400 * 30) return `${Math.floor(diff / 86400)}d atrás`
+  return new Date(iso).toLocaleDateString('pt-BR')
+}
+
+function StatusBadge({ status }: { status?: string }) {
+  if (status === 'closed') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-500">
+        <CheckCircle2 size={10} /> Encerrado
+      </span>
+    )
+  }
+  if (status === 'replied') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-purple-50 text-purple-600">
+        <Reply size={10} /> Respondido
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-600">
+      <AlertCircle size={10} /> Aberto
+    </span>
+  )
+}
+
+function buildDRELink(comment: DREComment): string {
+  try {
+    const fs = comment.filter_state ? JSON.parse(comment.filter_state) : {}
+    const p = new URLSearchParams()
+    const depts = fs.depts?.length ? fs.depts : (comment.departamento ? [comment.departamento] : [])
+    if (depts.length) p.set('depts', depts.join(','))
+    const periods = fs.periods?.length ? fs.periods : (comment.periodo ? [comment.periodo] : [])
+    if (periods.length) { p.set('periods', periods.join(',')); p.set('view', 'periodo') }
+    if (fs.centros?.length) p.set('centros', fs.centros.join(','))
+    return `/dre${p.toString() ? '?' + p.toString() : ''}`
+  } catch {
+    return '/dre'
+  }
+}
+
+// ─── Ticket Card ─────────────────────────────────────────────────────────────────
+
+function TicketCard({ ticket }: { ticket: Ticket }) {
+  const [expanded, setExpanded] = useState(ticket.replies.length > 0 || ticket.status !== 'open')
+  const isClosed = ticket.status === 'closed'
+  const dreLink  = buildDRELink(ticket)
+
+  return (
+    <div className={cn(
+      'border rounded-xl overflow-hidden',
+      isClosed ? 'border-gray-200 bg-gray-50' : 'border-gray-200 bg-white'
+    )}>
+      {/* Header */}
+      <div className="px-4 py-3">
+        <div className="flex items-start gap-3">
+          <span className="w-2 h-2 rounded-full bg-orange-400 mt-1.5 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            {/* Meta */}
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <span className={cn('font-semibold text-sm', isClosed ? 'text-gray-500' : 'text-gray-800')}>
+                {ticket.dre_linha}
+              </span>
+              {ticket.periodo && (
+                <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">
+                  {ticket.periodo}
+                </span>
+              )}
+              {ticket.tipo_valor && (
+                <span className={cn(
+                  'text-xs font-medium px-1.5 py-0.5 rounded',
+                  ticket.tipo_valor === 'budget' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'
+                )}>
+                  {ticket.tipo_valor === 'budget' ? 'Budget' : 'Realizado'}
+                </span>
+              )}
+              <StatusBadge status={ticket.status} />
+            </div>
+
+            {/* Text */}
+            <p className={cn('text-sm', isClosed ? 'text-gray-500' : 'text-gray-700')}>{ticket.texto}</p>
+
+            {/* Footer meta */}
+            <div className="flex items-center gap-3 mt-1.5 text-[11px] text-gray-400">
+              <span className="flex items-center gap-1">
+                <Clock size={10} /> {timeAgo(ticket.created_at)}
+              </span>
+              {ticket.replies.length > 0 && (
+                <span className="text-purple-400">
+                  {ticket.replies.length} resposta{ticket.replies.length !== 1 ? 's' : ''} do master
+                </span>
+              )}
+            </div>
+
+            {/* Closed banner */}
+            {isClosed && (
+              <div className="mt-2 px-3 py-2 bg-gray-100 rounded-lg text-xs text-gray-500">
+                <span className="font-medium">
+                  Encerrado por {ticket.resolved_by || 'master'}
+                </span>
+                {ticket.resolved_at && <span> · {timeAgo(ticket.resolved_at)}</span>}
+                {ticket.resolved_motivo && (
+                  <span className="block mt-0.5 italic">"{ticket.resolved_motivo}"</span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <Link
+              href={dreLink}
+              title="Ver na DRE"
+              className="p-1.5 rounded-lg text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+            >
+              <Eye size={13} />
+            </Link>
+            {ticket.replies.length > 0 && (
+              <button
+                onClick={() => setExpanded(v => !v)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Replies (master responses) */}
+      {expanded && ticket.replies.length > 0 && (
+        <div className="border-t border-gray-100 bg-purple-50/40 divide-y divide-gray-100">
+          {ticket.replies.map(reply => (
+            <div key={reply.id} className="flex items-start gap-3 px-5 py-3">
+              <span className="w-2 h-2 rounded-full bg-purple-500 mt-1.5 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-xs font-semibold text-purple-700">Resposta do Master</span>
+                  <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                    <Clock size={9} /> {timeAgo(reply.created_at)}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-700">{reply.texto}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────────
+
+export default function DeptCommentsPage() {
+  const [tickets, setTickets] = useState<Ticket[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filter, setFilter]   = useState<'all' | 'open' | 'replied' | 'closed'>('all')
+
+  const load = useCallback(() => {
+    setLoading(true)
+    fetch('/api/dre/comments?context=dept-log')
+      .then(r => r.json())
+      .then((data: DREComment[]) => {
+        if (!Array.isArray(data)) { setLoading(false); return }
+        const roots   = data.filter(c => !c.parent_id)
+        const replies = data.filter(c => !!c.parent_id)
+        const tree: Ticket[] = roots.map(r => ({
+          ...r,
+          replies: replies.filter(rep => rep.parent_id === r.id)
+            .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
+        }))
+        tree.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        setTickets(tree)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const filtered = filter === 'all'
+    ? tickets
+    : tickets.filter(t => t.status === filter)
+
+  const counts = {
+    all:     tickets.length,
+    open:    tickets.filter(t => t.status === 'open').length,
+    replied: tickets.filter(t => t.status === 'replied').length,
+    closed:  tickets.filter(t => t.status === 'closed').length,
+  }
+
+  return (
+    <div className="space-y-5 max-w-2xl">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <MessageSquare size={22} className="text-indigo-500" /> Meus Comentários
+          </h1>
+          <p className="text-gray-500 text-sm mt-0.5">Seus comentários na DRE e respostas do master</p>
+        </div>
+        <button
+          onClick={load}
+          className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+          title="Atualizar"
+        >
+          <RefreshCw size={14} />
+        </button>
+      </div>
+
+      {/* Filter tabs */}
+      <div className="flex bg-white border border-gray-200 rounded-xl p-1 gap-1 w-fit">
+        {([
+          ['all',     'Todos',       counts.all],
+          ['open',    'Abertos',     counts.open],
+          ['replied', 'Respondidos', counts.replied],
+          ['closed',  'Encerrados',  counts.closed],
+        ] as const).map(([v, l, c]) => (
+          <button key={v} onClick={() => setFilter(v)}
+            className={cn('px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5',
+              filter === v ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+            {l}
+            {c > 0 && (
+              <span className={cn('text-xs px-1.5 py-0.5 rounded-full font-bold',
+                filter === v ? 'bg-indigo-500 text-white' : 'bg-gray-100 text-gray-500')}>
+                {c}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Loading */}
+      {loading && (
+        <div className="flex items-center justify-center h-40">
+          <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
+
+      {/* Empty */}
+      {!loading && filtered.length === 0 && (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-16 gap-3">
+            <MessageSquare size={32} className="text-gray-300" />
+            <p className="text-gray-400 text-sm">
+              {filter === 'all' ? 'Nenhum comentário ainda. Clique em um número na DRE para comentar.' : 'Nenhum comentário encontrado'}
+            </p>
+            {filter === 'all' && (
+              <Link href="/dre" className="text-sm text-indigo-500 hover:text-indigo-700 font-medium">
+                Ir para a DRE →
+              </Link>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Ticket list */}
+      {!loading && filtered.length > 0 && (
+        <div className="space-y-3">
+          {filtered.map(ticket => (
+            <TicketCard key={ticket.id} ticket={ticket} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
