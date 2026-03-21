@@ -16,8 +16,19 @@ export function TopBar() {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    // Try cache first (1 minute TTL) to avoid redundant fetch on every page navigation
+    try {
+      const raw = sessionStorage.getItem('_favs')
+      if (raw) {
+        const { data, ts } = JSON.parse(raw) as { data: Favorite[]; ts: number }
+        if (Date.now() - ts < 60_000) { setFavs(data); return }
+      }
+    } catch { /* ignore */ }
     fetch('/api/favorites').then(r => r.ok ? r.json() : []).then(data => {
-      if (Array.isArray(data)) setFavs(data)
+      if (Array.isArray(data)) {
+        setFavs(data)
+        try { sessionStorage.setItem('_favs', JSON.stringify({ data, ts: Date.now() })) } catch { /* ignore */ }
+      }
     }).catch(() => {})
   }, [])
 
@@ -34,6 +45,10 @@ export function TopBar() {
   const currentUrl = typeof window !== 'undefined' ? pathname + window.location.search : pathname
   const isCurrentFav = favs.some(f => f.url === currentUrl || f.url === pathname)
 
+  const syncCache = (updated: Favorite[]) => {
+    try { sessionStorage.setItem('_favs', JSON.stringify({ data: updated, ts: Date.now() })) } catch { /* ignore */ }
+  }
+
   const addFav = async () => {
     if (!nome.trim()) return
     const res = await fetch('/api/favorites', {
@@ -43,7 +58,9 @@ export function TopBar() {
     })
     if (res.ok) {
       const fav = await res.json()
-      setFavs(prev => [fav, ...prev])
+      const updated = [fav, ...favs]
+      setFavs(updated)
+      syncCache(updated)
       setNome('')
       setAdding(false)
     }
@@ -53,7 +70,9 @@ export function TopBar() {
     e.preventDefault()
     e.stopPropagation()
     await fetch(`/api/favorites?id=${id}`, { method: 'DELETE' })
-    setFavs(prev => prev.filter(f => f.id !== id))
+    const updated = favs.filter(f => f.id !== id)
+    setFavs(updated)
+    syncCache(updated)
   }
 
   return (
