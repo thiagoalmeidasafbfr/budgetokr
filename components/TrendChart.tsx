@@ -44,13 +44,12 @@ export default function TrendChart({ title, conta, agrupamento, dre, departament
   }, [conta, agrupamento, dre, departamentos, forecastMonths])
 
   const chartData = useMemo(() => {
-    const combined = series.map(s => ({
+    type Point = { periodo: string; raw: string; budget?: number; razao?: number; budgetFc?: number; razaoFc?: number }
+    const combined: Point[] = series.map(s => ({
       periodo: formatPeriodo(s.periodo),
       raw: s.periodo,
       budget: s.budget,
       razao: s.razao,
-      budgetFc: null as number | null,
-      razaoFc: null as number | null,
     }))
 
     if (showForecast && fcRazao.length > 0) {
@@ -65,10 +64,9 @@ export default function TrendChart({ title, conta, agrupamento, dre, departament
         combined.push({
           periodo: formatPeriodo(fcRazao[i].periodo),
           raw: fcRazao[i].periodo,
-          budget: null as unknown as number,
-          razao: null as unknown as number,
-          budgetFc: fcBudget[i]?.value ?? null,
-          razaoFc: fcRazao[i]?.value ?? null,
+          // budget/razao intentionally omitted → undefined → gap in actual lines
+          budgetFc: fcBudget[i]?.value ?? undefined,
+          razaoFc: fcRazao[i]?.value ?? undefined,
         })
       }
     }
@@ -116,7 +114,7 @@ export default function TrendChart({ title, conta, agrupamento, dre, departament
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
                 <YAxis tickFormatter={v => formatCurrency(v)} tick={{ fontSize: 10 }} width={90} />
-                <Tooltip formatter={(v) => formatCurrency(Number(v))} />
+                <Tooltip formatter={(v) => (v != null ? formatCurrency(Number(v)) : '')} />
                 <Legend />
                 <Line type="monotone" dataKey="budget" name="Budget" stroke="#6366f1" strokeWidth={2}
                   dot={{ r: 3 }} connectNulls={false} />

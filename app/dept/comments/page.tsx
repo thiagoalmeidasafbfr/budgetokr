@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import {
   MessageSquare, Clock, CheckCircle2, AlertCircle, Reply,
   RefreshCw, Eye, ChevronDown, ChevronUp, Trash2
