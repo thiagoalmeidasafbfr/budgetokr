@@ -12,7 +12,7 @@ if (!fs.existsSync(DATA_DIR)) {
 // Use globalThis to persist DB across HMR in dev mode
 const globalForDb = globalThis as unknown as { __budgetokr_db?: Database.Database; __budgetokr_schema_v?: number }
 
-const SCHEMA_VERSION = 13;
+const SCHEMA_VERSION = 14;
 
 export function getDb(): Database.Database {
   // Re-run migrations if schema version changed (e.g. after code deploy)
@@ -182,6 +182,12 @@ function initSchema(db: Database.Database) {
         );
         CREATE INDEX IF NOT EXISTS idx_favorites_user ON user_favorites(usuario);
       `)
+    }
+
+    // v13 → v14: add user_role + departamento to dre_comments for role-based visibility
+    if (version < 14) {
+      try { db.exec(`ALTER TABLE dre_comments ADD COLUMN user_role TEXT DEFAULT 'master'`) } catch { /* ok */ }
+      try { db.exec(`ALTER TABLE dre_comments ADD COLUMN departamento TEXT`) } catch { /* ok */ }
     }
 
     if (!row) {

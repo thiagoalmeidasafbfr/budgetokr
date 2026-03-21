@@ -6,11 +6,10 @@ import {
   LayoutDashboard, TrendingUp, LineChart, GitCompare,
   Target, Layers, FileText, Database, Upload,
   ChevronRight, Building2, BookOpen, LayoutList, Gauge,
-  LogOut, User, ListTree, Shield, Landmark, Moon, Sun, History,
+  LogOut, User, ListTree, Shield, Landmark, Moon, Sun, History, MessageSquare,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/components/ThemeProvider'
-import { FavoritesMenu } from '@/components/FavoritesMenu'
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -118,6 +117,13 @@ const nav: NavItem[] = [
     sublabel: 'Alterações em dados',
     masterOnly: true,
   },
+  {
+    type: 'link', href: '/admin/comments',
+    icon: MessageSquare,
+    label: 'Log de Comentários',
+    sublabel: 'Comentários da DRE',
+    masterOnly: true,
+  },
 ]
 
 // ─── Component ──────────────────────────────────────────────────────────────────
@@ -130,13 +136,11 @@ export function Sidebar() {
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
+    // Only fetch once on mount — navigation doesn't change the user
     fetch('/api/me')
       .then(r => {
         if (r.status === 401) {
-          // Not logged in — redirect to login (unless already there)
-          if (pathname !== '/login' && pathname !== '/logout') {
-            router.push('/login')
-          }
+          if (pathname !== '/login' && pathname !== '/logout') router.push('/login')
           setLoaded(true)
           return null
         }
@@ -144,7 +148,8 @@ export function Sidebar() {
       })
       .then(u => { if (u) setUser(u); setLoaded(true) })
       .catch(() => setLoaded(true))
-  }, [pathname, router])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Hide sidebar on login page
   if (pathname === '/login') return null
@@ -279,7 +284,6 @@ export function Sidebar() {
                 {user.role === 'master' ? 'Administrador' : (user.department || 'Departamento')}
               </p>
             </div>
-            <FavoritesMenu />
             <button
               onClick={toggleTheme}
               title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}

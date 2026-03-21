@@ -3,6 +3,8 @@ import { getDRE, getDREByAccount, getDREHierarchy, getDRELinhas, getDistinctValu
 import { getUserFromHeaders } from '@/lib/session'
 import type { FilterColumn } from '@/lib/types'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(req: NextRequest) {
   try {
     const sp   = new URL(req.url).searchParams
