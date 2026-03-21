@@ -53,6 +53,10 @@ export default function DREPage() {
   const [trendTarget,   setTrendTarget]   = useState<{ title: string; conta?: string; agrupamento?: string; dre?: string } | null>(null)
   const ctxRef = useRef<HTMLDivElement>(null)
   const expandTargetRef   = useRef<string | null>(null)
+  // Scroll target is stored separately so the scroll fires AFTER loading=false
+  // (when the table is actually in the DOM). The expand effect sets expanded
+  // immediately but can't scroll because the table is still hidden while loading.
+  const scrollTargetRef   = useRef<string | null>(null)
   // Holds centros to apply once the centros-list fetch completes — avoids the
   // race condition where the centros effect fires after init's setSelCentros
   const pendingCentrosRef = useRef<string[]>([])
@@ -343,18 +347,29 @@ export default function DREPage() {
     }
     if (keys.length > 0) {
       setExpanded(prev => new Set([...prev, ...keys]))
-      // Clear ref on success — job done
+      // Clear expand ref and store scroll target separately.
+      // The actual scroll happens in the loading effect below, which fires once
+      // the table is in the DOM (loading=false). Using setTimeout here would
+      // fail silently because the table is still hidden while loading=true.
       expandTargetRef.current = null
-      setTimeout(() => {
-        // CSS.escape is wrong for attribute *values* in selectors — scan manually
-        const el = Array.from(document.querySelectorAll('[data-row]'))
-          .find(e => e.getAttribute('data-row') === target) as HTMLElement | undefined
-        el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      }, 250)
+      scrollTargetRef.current = target
     }
     // Do NOT clear ref on failure: tree may still be loading accountData.
     // The effect will retry automatically when tree updates with full data.
   }, [tree])
+
+  // Scroll to the target row after loading completes and the table is in the DOM
+  useEffect(() => {
+    if (loading || !scrollTargetRef.current) return
+    const target = scrollTargetRef.current
+    scrollTargetRef.current = null
+    // rAF ensures React has painted the expanded rows before we query the DOM
+    requestAnimationFrame(() => {
+      const el = Array.from(document.querySelectorAll('[data-row]'))
+        .find(e => e.getAttribute('data-row') === target) as HTMLElement | undefined
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+  }, [loading])
 
   // Get all periods from data
   const dataPeriods = useMemo(
@@ -601,7 +616,7 @@ export default function DREPage() {
           {/* View toggle */}
           <div className="flex items-center gap-2">
             <div className="flex bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5">
-              {([['total', 'Consolidado'], ['periodo', 'Por Período'], ['trimestre', 'Trimestral'], ['comparativo', 'Comparativo'], ['cascata', 'Cascata']] as const).map(([v, label]) => (
+              {([['total', 'Consolidado'], ['periodo', 'Mensal'], ['trimestre', 'Trimestral'], ['comparativo', 'Comparativo'], ['cascata', 'Cascata']] as const).map(([v, label]) => (
                 <button key={v} onClick={() => setViewMode(v)}
                   className={cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
                     viewMode === v ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
