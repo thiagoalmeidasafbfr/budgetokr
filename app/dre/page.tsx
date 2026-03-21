@@ -318,12 +318,15 @@ export default function DREPage() {
     }
     if (keys.length > 0) {
       setExpanded(prev => new Set([...prev, ...keys]))
+      // Clear ref on success — job done
+      expandTargetRef.current = null
       setTimeout(() => {
         const el = document.querySelector(`[data-row="${CSS.escape(target)}"]`)
         el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      }, 200)
+      }, 250)
     }
-    expandTargetRef.current = null
+    // Do NOT clear ref on failure: tree may still be loading accountData.
+    // The effect will retry automatically when tree updates with full data.
   }, [tree])
 
   // Get all periods from data
