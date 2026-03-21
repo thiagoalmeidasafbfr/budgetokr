@@ -289,7 +289,14 @@ export default function DREPage() {
   }
   const collapseAll = () => setExpanded(new Set())
 
+  // Build tree from raw data — memoized: only recomputes when data changes
+  const tree = useMemo(() => dreLinhas.length > 0
+    ? buildTreeFromLinhas(rawData, hierarchy, dreLinhas, accountData)
+    : buildTree(rawData, hierarchy, accountData),
+  [rawData, hierarchy, dreLinhas, accountData])
+
   // Auto-expand path to target row when tree is loaded (from eye-button deep-link)
+  // Must be after `tree` is declared
   useEffect(() => {
     const target = expandTargetRef.current
     if (!target || tree.length === 0) return
@@ -317,14 +324,7 @@ export default function DREPage() {
       }, 200)
     }
     expandTargetRef.current = null
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tree])
-
-  // Build tree from raw data — memoized: only recomputes when data changes
-  const tree = useMemo(() => dreLinhas.length > 0
-    ? buildTreeFromLinhas(rawData, hierarchy, dreLinhas, accountData)
-    : buildTree(rawData, hierarchy, accountData),
-  [rawData, hierarchy, dreLinhas, accountData])
 
   // Get all periods from data
   const dataPeriods = useMemo(
