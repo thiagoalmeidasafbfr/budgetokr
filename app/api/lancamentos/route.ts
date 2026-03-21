@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
 import { getUserFromHeaders } from '@/lib/session'
+import { logAudit, logBulkAudit } from '@/lib/audit'
 
 const PAGE_SIZE = 100
 
@@ -97,9 +98,10 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH: update single field(s)
+// PATCH: update single field(s) — with audit logging
 export async function PATCH(req: NextRequest) {
   try {
+    const user = getUserFromHeaders(req)
     const { id, ...fields } = await req.json()
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
@@ -111,10 +113,27 @@ export async function PATCH(req: NextRequest) {
     if (!keys.length) return NextResponse.json({ error: 'No valid fields' }, { status: 400 })
 
     const db = getDb()
+
+    // Capture old values for audit
+    const oldRow = db.prepare('SELECT * FROM lancamentos WHERE id = ?').get(id) as Record<string, unknown> | undefined
+    if (!oldRow) return NextResponse.json({ error: 'Registro não encontrado' }, { status: 404 })
+
     const setClauses = keys.map(k => `${k} = ?`).join(', ')
     const values = keys.map(k => fields[k])
 
     db.prepare(`UPDATE lancamentos SET ${setClauses}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(...values, id)
+
+    // Log changes
+    const changes: Record<string, { old: unknown; new: unknown }> = {}
+    for (const k of keys) {
+      if (String(oldRow[k] ?? '') !== String(fields[k] ?? '')) {
+        changes[k] = { old: oldRow[k], new: fields[k] }
+      }
+    }
+    if (Object.keys(changes).length > 0) {
+      logBulkAudit('lancamentos', id, 'UPDATE', changes, user?.userId ?? null)
+    }
+
     const row = db.prepare('SELECT * FROM lancamentos WHERE id = ?').get(id)
     return NextResponse.json(row)
   } catch (e) {
@@ -122,12 +141,23 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-// DELETE: remove row
+// DELETE: remove row — with audit logging
 export async function DELETE(req: NextRequest) {
   try {
+    const user = getUserFromHeaders(req)
     const id = new URL(req.url).searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
-    getDb().prepare('DELETE FROM lancamentos WHERE id = ?').run(id)
+
+    const db = getDb()
+    const oldRow = db.prepare('SELECT * FROM lancamentos WHERE id = ?').get(id) as Record<string, unknown> | undefined
+
+    db.prepare('DELETE FROM lancamentos WHERE id = ?').run(id)
+
+    if (oldRow) {
+      logAudit('lancamentos', parseInt(id), 'DELETE', null,
+        JSON.stringify(oldRow), null, user?.userId ?? null)
+    }
+
     return NextResponse.json({ success: true })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })

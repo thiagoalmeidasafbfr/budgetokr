@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Filter, X, BarChart3, Table2, Download, RefreshCw, Target, ChevronDown } from 'lucide-react'
+import { Filter, X, BarChart3, Table2, Download, RefreshCw, Target, ChevronDown, Printer } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -253,6 +253,7 @@ export default function AnalisePage() {
         <div className="flex items-center gap-3 flex-wrap">
           <YearFilter periodos={periodos} selYear={selYear} onChange={y => { setSelYear(y) }} />
           <Button variant="outline" size="sm" onClick={exportCSV}><Download size={13} /> CSV</Button>
+          <Button variant="outline" size="sm" onClick={() => window.print()} className="no-print"><Printer size={13} /> PDF</Button>
         </div>
       </div>
 

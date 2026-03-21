@@ -12,7 +12,7 @@ if (!fs.existsSync(DATA_DIR)) {
 // Use globalThis to persist DB across HMR in dev mode
 const globalForDb = globalThis as unknown as { __budgetokr_db?: Database.Database; __budgetokr_schema_v?: number }
 
-const SCHEMA_VERSION = 12;
+const SCHEMA_VERSION = 13;
 
 export function getDb(): Database.Database {
   // Re-run migrations if schema version changed (e.g. after code deploy)
@@ -138,6 +138,50 @@ function initSchema(db: Database.Database) {
     // v11 → v12: tabela capex (CAPEX budget + razão com nome_projeto)
     if (version < 12) {
       // Tabela criada abaixo via CREATE TABLE IF NOT EXISTS
+    }
+    // v12 → v13: audit_log, dre_comments, user_favorites
+    if (version < 13) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS audit_log (
+          id             INTEGER PRIMARY KEY AUTOINCREMENT,
+          tabela         TEXT NOT NULL,
+          registro_id    INTEGER,
+          acao           TEXT NOT NULL,
+          campo          TEXT,
+          valor_anterior TEXT,
+          valor_novo     TEXT,
+          usuario        TEXT,
+          created_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_audit_tabela   ON audit_log(tabela);
+        CREATE INDEX IF NOT EXISTS idx_audit_registro ON audit_log(registro_id);
+        CREATE INDEX IF NOT EXISTS idx_audit_date     ON audit_log(created_at);
+
+        CREATE TABLE IF NOT EXISTS dre_comments (
+          id            INTEGER PRIMARY KEY AUTOINCREMENT,
+          dre_linha     TEXT NOT NULL,
+          agrupamento   TEXT,
+          conta         TEXT,
+          periodo       TEXT,
+          texto         TEXT NOT NULL,
+          usuario       TEXT,
+          created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_dre_comments_linha ON dre_comments(dre_linha);
+        CREATE INDEX IF NOT EXISTS idx_dre_comments_per   ON dre_comments(periodo);
+
+        CREATE TABLE IF NOT EXISTS user_favorites (
+          id         INTEGER PRIMARY KEY AUTOINCREMENT,
+          usuario    TEXT NOT NULL,
+          nome       TEXT NOT NULL,
+          url        TEXT NOT NULL,
+          filtros    TEXT DEFAULT '{}',
+          icone      TEXT DEFAULT 'star',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_favorites_user ON user_favorites(usuario);
+      `)
     }
 
     if (!row) {

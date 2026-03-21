@@ -243,7 +243,7 @@ export async function POST(req: NextRequest) {
     // ── CAPEX Budget ou Razão ─────────────────────────────────────────────────
     if (tipo === 'capex_budget' || tipo === 'capex_razao') {
       const tipoVal = tipo === 'capex_budget' ? 'budget' : 'razao'
-      const modeRaw = (formData.get('mode') as string) ?? 'append'
+      const modeRaw = modeFromQuery ?? 'append'
 
       if (modeRaw === 'replace') {
         db.prepare(`DELETE FROM capex WHERE tipo = ?`).run(tipoVal)
