@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import Link from 'next/link'
-import { cn } from '@/lib/utils'
+import { cn, getDeptColor } from '@/lib/utils'
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -74,12 +74,12 @@ function buildDRELink(comment: DREComment): string {
   try {
     const fs = comment.filter_state ? JSON.parse(comment.filter_state) : {}
     const p = new URLSearchParams()
-    // Use filter_state first, fall back to comment's own dept/period
     const depts = fs.depts?.length ? fs.depts : (comment.departamento ? [comment.departamento] : [])
     if (depts.length) p.set('depts', depts.join(','))
     const periods = fs.periods?.length ? fs.periods : (comment.periodo ? [comment.periodo] : [])
     if (periods.length) { p.set('periods', periods.join(',')); p.set('view', 'periodo') }
     if (fs.centros?.length) p.set('centros', fs.centros.join(','))
+    if (comment.dre_linha) p.set('expand', comment.dre_linha)
     return `/dre${p.toString() ? '?' + p.toString() : ''}`
   } catch {
     return '/dre'
@@ -181,8 +181,8 @@ function TicketCard({
       {/* Ticket header */}
       <div className="px-4 py-3">
         <div className="flex items-start gap-3">
-          {/* Dot */}
-          <span className="w-2 h-2 rounded-full bg-orange-400 mt-1.5 flex-shrink-0" />
+          {/* Dot — color per department */}
+          <span className={cn('w-2 h-2 rounded-full mt-1.5 flex-shrink-0', getDeptColor(ticket.departamento).dot)} />
 
           <div className="flex-1 min-w-0">
             {/* Meta row */}
@@ -484,8 +484,8 @@ export default function CommentsLogPage() {
       {!loading && Object.entries(byDept).map(([dept, deptTickets]) => (
         <div key={dept} className="space-y-3">
           <div className="flex items-center gap-2">
-            <Building2 size={14} className="text-orange-400" />
-            <span className="text-sm font-semibold text-gray-700">{dept}</span>
+            <Building2 size={14} className={getDeptColor(dept).text} />
+            <span className={cn('text-sm font-semibold', getDeptColor(dept).text)}>{dept}</span>
             <span className="text-xs text-gray-400">{deptTickets.length} ticket{deptTickets.length !== 1 ? 's' : ''}</span>
           </div>
           {deptTickets.map(ticket => (

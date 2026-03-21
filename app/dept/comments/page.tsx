@@ -2,11 +2,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   MessageSquare, Clock, CheckCircle2, AlertCircle, Reply,
-  RefreshCw, Eye, ChevronDown, ChevronUp
+  RefreshCw, Eye, ChevronDown, ChevronUp, Trash2
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import Link from 'next/link'
-import { cn } from '@/lib/utils'
+import { cn, getDeptColor } from '@/lib/utils'
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -74,6 +74,7 @@ function buildDRELink(comment: DREComment): string {
     const periods = fs.periods?.length ? fs.periods : (comment.periodo ? [comment.periodo] : [])
     if (periods.length) { p.set('periods', periods.join(',')); p.set('view', 'periodo') }
     if (fs.centros?.length) p.set('centros', fs.centros.join(','))
+    if (comment.dre_linha) p.set('expand', comment.dre_linha)
     return `/dre${p.toString() ? '?' + p.toString() : ''}`
   } catch {
     return '/dre'
@@ -82,10 +83,11 @@ function buildDRELink(comment: DREComment): string {
 
 // ─── Ticket Card ─────────────────────────────────────────────────────────────────
 
-function TicketCard({ ticket }: { ticket: Ticket }) {
+function TicketCard({ ticket, onDelete }: { ticket: Ticket; onDelete: (id: number) => void }) {
   const [expanded, setExpanded] = useState(ticket.replies.length > 0 || ticket.status !== 'open')
   const isClosed = ticket.status === 'closed'
   const dreLink  = buildDRELink(ticket)
+  const dColor   = getDeptColor(ticket.departamento)
 
   return (
     <div className={cn(
@@ -95,7 +97,7 @@ function TicketCard({ ticket }: { ticket: Ticket }) {
       {/* Header */}
       <div className="px-4 py-3">
         <div className="flex items-start gap-3">
-          <span className="w-2 h-2 rounded-full bg-orange-400 mt-1.5 flex-shrink-0" />
+          <span className={cn('w-2 h-2 rounded-full mt-1.5 flex-shrink-0', dColor.dot)} />
           <div className="flex-1 min-w-0">
             {/* Meta */}
             <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -156,6 +158,15 @@ function TicketCard({ ticket }: { ticket: Ticket }) {
             >
               <Eye size={13} />
             </Link>
+            {!isClosed && ticket.replies.length === 0 && (
+              <button
+                onClick={() => onDelete(ticket.id)}
+                title="Excluir comentário"
+                className="p-1.5 rounded-lg text-red-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+              >
+                <Trash2 size={13} />
+              </button>
+            )}
             {ticket.replies.length > 0 && (
               <button
                 onClick={() => setExpanded(v => !v)}
@@ -219,6 +230,11 @@ export default function DeptCommentsPage() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  const handleDelete = useCallback(async (id: number) => {
+    await fetch(`/api/dre/comments?id=${id}`, { method: 'DELETE' })
+    load()
+  }, [load])
 
   const filtered = filter === 'all'
     ? tickets
@@ -300,7 +316,7 @@ export default function DeptCommentsPage() {
       {!loading && filtered.length > 0 && (
         <div className="space-y-3">
           {filtered.map(ticket => (
-            <TicketCard key={ticket.id} ticket={ticket} />
+            <TicketCard key={ticket.id} ticket={ticket} onDelete={handleDelete} />
           ))}
         </div>
       )}
