@@ -104,7 +104,9 @@ export default function CommentsLogPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2 flex-wrap">
                       <span className="font-medium text-sm text-gray-800">{c.dre_linha}</span>
-                      {c.periodo && <span className="text-xs text-gray-400">· {c.periodo}</span>}
+                      {c.periodo
+                        ? <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">{c.periodo}</span>
+                        : <span className="text-xs text-gray-300">sem período</span>}
                     </div>
                     <p className="text-sm text-gray-700 mt-0.5">{c.texto}</p>
                     <p className="text-[11px] text-gray-400 mt-1">
@@ -112,10 +114,10 @@ export default function CommentsLogPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                    {c.user_role === 'dept' && c.departamento && (
+                    {c.departamento && (
                       <Link
-                        href={`/dre?dept=${encodeURIComponent(c.departamento)}`}
-                        title="Ver no DRE do departamento"
+                        href={`/dre?depts=${encodeURIComponent(c.departamento)}${c.periodo ? `&periods=${c.periodo}&view=periodo` : ''}`}
+                        title={`Ver no DRE${c.periodo ? ` · ${c.periodo}` : ''}`}
                         className="p-1.5 rounded-md text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50">
                         <ExternalLink size={13} />
                       </Link>

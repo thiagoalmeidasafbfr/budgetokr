@@ -88,8 +88,14 @@ export default function DREPage() {
       const isDept = me?.role === 'dept' && me.department
       if (isDept) { setDeptUser({ department: me.department }); setSelDepts([me.department]) }
 
-      // Support ?dept=X URL param (e.g. from comments log page)
-      const urlDept = new URLSearchParams(window.location.search).get('dept')
+      // Read URL params (support deep-links from favorites and comment log)
+      const sp = new URLSearchParams(window.location.search)
+      const urlDepts   = sp.get('depts')?.split(',').filter(Boolean)   ?? []
+      const urlPeriods = sp.get('periods')?.split(',').filter(Boolean) ?? []
+      const urlCentros = sp.get('centros')?.split(',').filter(Boolean) ?? []
+      const urlView    = sp.get('view') as typeof viewMode | null
+      // Legacy single-dept param from comment log
+      const urlDept    = sp.get('dept')
 
       const [hier, linhas, depts, dates] = await Promise.all([
         fetch('/api/dre?type=hierarchy').then(r => r.json()),
@@ -104,21 +110,50 @@ export default function DREPage() {
         (Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean)
       )].sort() as string[])
       setPeriodos(allPeriods)
+      if (urlView) setViewMode(urlView)
+
       const now = new Date()
       const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-      const defaultDepts = isDept ? [me.department] : urlDept ? [urlDept] : []
-      if (urlDept && !isDept) setSelDepts([urlDept])
+
+      // Determine initial depts
+      const initDepts = isDept ? [me.department]
+        : urlDepts.length ? urlDepts
+        : urlDept ? [urlDept]
+        : []
+      if (initDepts.length && !isDept) setSelDepts(initDepts)
+
+      // Determine initial periods (URL params take priority over YTD default)
+      const validUrlPeriods = urlPeriods.filter(p => allPeriods.includes(p))
       const ytd2026 = allPeriods.filter(p => p.startsWith('2026') && p <= curMonth)
-      const defaultPeriods = ytd2026.length > 0 ? ytd2026 : allPeriods.filter(p => p.startsWith('2026'))
-      if (defaultPeriods.length > 0) {
-        setSelPeriods(defaultPeriods)
-        loadData(defaultDepts, defaultPeriods, [])
+      const initPeriods = validUrlPeriods.length > 0 ? validUrlPeriods
+        : ytd2026.length > 0 ? ytd2026
+        : allPeriods.filter(p => p.startsWith('2026'))
+
+      // Initial centros
+      const initCentros = urlCentros
+      if (initCentros.length) setSelCentros(initCentros)
+
+      if (initPeriods.length > 0) {
+        setSelPeriods(initPeriods)
+        loadData(initDepts, initPeriods, initCentros)
       } else {
-        loadData(defaultDepts, [], [])
+        loadData(initDepts, [], initCentros)
       }
     }
     init()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Keep URL in sync with current filter state so favorites capture the exact view
+  useEffect(() => {
+    const p = new URLSearchParams()
+    if (selDepts.length)   p.set('depts',   selDepts.join(','))
+    if (selPeriods.length) p.set('periods', selPeriods.join(','))
+    if (selCentros.length) p.set('centros', selCentros.join(','))
+    if (viewMode !== 'total') p.set('view', viewMode)
+    const search = p.toString()
+    window.history.replaceState({}, '', `/dre${search ? '?' + search : ''}`)
+  }, [selDepts, selPeriods, selCentros, viewMode])
 
   const loadData = useCallback(async (depts: string[], prds: string[], centros: string[]) => {
     setLoading(true)
@@ -147,20 +182,28 @@ export default function DREPage() {
 
   useEffect(() => { if (selPeriods.length > 0) loadComments(selPeriods) }, [selPeriods, loadComments])
 
-  // Comment helpers — track which roles have commented on each line
-  const commentKey = (dre_linha: string) => dre_linha
-  // commentRoleMap: key=dre_linha → { hasMaster, hasDept, comments }
-  const commentRoleMap = useMemo(() => {
-    const map = new Map<string, { hasMaster: boolean; hasDept: boolean; comments: DREComment[] }>()
+  // Comment helpers
+  // commentRowMap: dre_linha → all comments for that line (any period) — used for row-name dots
+  // commentCellMap: `dre_linha||periodo` → dots for specific cells in period views
+  const { commentRowMap, commentCellMap } = useMemo(() => {
+    const rowMap  = new Map<string, { hasMaster: boolean; hasDept: boolean; comments: DREComment[] }>()
+    const cellMap = new Map<string, { hasMaster: boolean; hasDept: boolean }>()
     for (const c of comments) {
-      const k = c.dre_linha
-      const entry = map.get(k) ?? { hasMaster: false, hasDept: false, comments: [] }
-      if (c.user_role === 'master') entry.hasMaster = true
-      else entry.hasDept = true
-      entry.comments.push(c)
-      map.set(k, entry)
+      const rowEntry = rowMap.get(c.dre_linha) ?? { hasMaster: false, hasDept: false, comments: [] }
+      if (c.user_role === 'master') rowEntry.hasMaster = true
+      else rowEntry.hasDept = true
+      rowEntry.comments.push(c)
+      rowMap.set(c.dre_linha, rowEntry)
+
+      if (c.periodo) {
+        const ck = `${c.dre_linha}||${c.periodo}`
+        const ce = cellMap.get(ck) ?? { hasMaster: false, hasDept: false }
+        if (c.user_role === 'master') ce.hasMaster = true
+        else ce.hasDept = true
+        cellMap.set(ck, ce)
+      }
     }
-    return map
+    return { commentRowMap: rowMap, commentCellMap: cellMap }
   }, [comments])
 
   const saveComment = async () => {
@@ -342,8 +385,10 @@ export default function DREPage() {
             </h3>
             <p className="text-xs text-gray-500">{commentEdit.dre_linha}{commentEdit.periodo ? ` · ${commentEdit.periodo}` : ''}</p>
 
-            {/* Existing comments */}
-            {(commentRoleMap.get(commentKey(commentEdit.dre_linha))?.comments ?? []).map(c => (
+            {/* Existing comments for this line (all periods) */}
+            {(commentRowMap.get(commentEdit.dre_linha)?.comments ?? [])
+              .filter(c => !commentEdit.periodo || c.periodo === commentEdit.periodo || !c.periodo)
+              .map(c => (
               <div key={c.id} className={cn(
                 'rounded-lg p-2.5 text-xs text-gray-700 flex items-start gap-2',
                 c.user_role === 'dept' ? 'bg-orange-50 border border-orange-100' : 'bg-purple-50 border border-purple-100'
@@ -536,12 +581,12 @@ export default function DREPage() {
                               <span className="w-5" />
                             )}
                             {row.name}
-                            {commentRoleMap.has(commentKey(row.name)) && (() => {
-                              const e = commentRoleMap.get(commentKey(row.name))!
+                            {commentRowMap.has(row.name) && (() => {
+                              const e = commentRowMap.get(row.name)!
                               return (
                                 <span className="flex items-center gap-0.5 ml-1 flex-shrink-0">
-                                  {e.hasDept  && <span className="w-2 h-2 rounded-full bg-orange-400" title="Comentário do departamento" />}
-                                  {e.hasMaster && <span className="w-2 h-2 rounded-full bg-purple-500" title="Comentário do master" />}
+                                  {e.hasDept   && <span className="w-1.5 h-1.5 rounded-full bg-orange-400" title="Comentário do departamento" />}
+                                  {e.hasMaster && <span className="w-1.5 h-1.5 rounded-full bg-purple-500" title="Comentário do master" />}
                                 </span>
                               )
                             })()}
@@ -641,22 +686,33 @@ export default function DREPage() {
                               const v    = cell.razao - cell.budget
                               const pct  = cell.budget ? (v / Math.abs(cell.budget)) * 100 : 0
                               const hasData = cell.budget !== 0 || cell.razao !== 0
+                              const ck   = `${row.name}||${p}`
+                              const dots = commentCellMap.get(ck)
                               return (
                                 <td key={p}
                                   onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'ambos') }}
-                                  className="px-1 py-2 text-center border-l-2 border-black group/cell">
-                                  {hasData ? (
-                                    <span title={`Orç: ${formatCurrency(cell.budget)}\nReal: ${formatCurrency(cell.razao)}\nVar: ${formatCurrency(v)}`}
-                                      className={cn(
-                                        'inline-block text-xs font-semibold px-1.5 py-0.5 rounded-full min-w-[52px] text-center',
-                                        bgColorForVariance(v),
-                                        colorForVariance(v),
-                                      )}>
-                                      {formatPct(pct)}
-                                    </span>
-                                  ) : (
-                                    <span className="text-gray-200 text-xs">—</span>
-                                  )}
+                                  onClick={() => { setCommentEdit({ dre_linha: row.name, agrupamento: row.agrupamento, conta: row.conta, periodo: p }); setCommentText('') }}
+                                  className="px-1 py-2 text-center border-l-2 border-black cursor-pointer">
+                                  <span className="relative inline-block">
+                                    {hasData ? (
+                                      <span title={`Orç: ${formatCurrency(cell.budget)}\nReal: ${formatCurrency(cell.razao)}\nVar: ${formatCurrency(v)}`}
+                                        className={cn(
+                                          'inline-block text-xs font-semibold px-1.5 py-0.5 rounded-full min-w-[52px] text-center',
+                                          bgColorForVariance(v),
+                                          colorForVariance(v),
+                                        )}>
+                                        {formatPct(pct)}
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-200 text-xs">—</span>
+                                    )}
+                                    {dots && (
+                                      <span className="absolute -top-1 -right-1 flex gap-px">
+                                        {dots.hasDept   && <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shadow-sm" />}
+                                        {dots.hasMaster && <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-sm" />}
+                                      </span>
+                                    )}
+                                  </span>
                                 </td>
                               )
                             })}
@@ -734,15 +790,25 @@ export default function DREPage() {
                           {dataPeriods.map(p => {
                             const cell = row.byPeriod[p] ?? { budget: 0, razao: 0 }
                             const v = cell.razao - cell.budget
+                            const ck = `${row.name}||${p}`
+                            const dots = commentCellMap.get(ck)
                             return (
                               <React.Fragment key={p}>
                                 <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'budget') }}
                                   className={cn('px-2 py-2 text-right text-xs border-l-2 border-black', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
                                   {formatCurrency(cell.budget)}
                                 </td>
-                                <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'razao') }}
-                                  className={cn('px-2 py-2 text-right text-xs border-l border-gray-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                <td
+                                  onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'razao') }}
+                                  onClick={() => { setCommentEdit({ dre_linha: row.name, agrupamento: row.agrupamento, conta: row.conta, periodo: p }); setCommentText('') }}
+                                  className={cn('px-2 py-2 text-right text-xs border-l border-gray-200 cursor-pointer relative', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
                                   {formatCurrency(cell.razao)}
+                                  {dots && (
+                                    <span className="absolute top-0.5 right-0.5 flex gap-px">
+                                      {dots.hasDept   && <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />}
+                                      {dots.hasMaster && <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className={cn('px-2 py-2 text-right text-xs font-semibold border-l border-gray-200', colorForVariance(v))}>
                                   {formatCurrency(v)}
