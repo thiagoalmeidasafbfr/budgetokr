@@ -358,19 +358,6 @@ export default function DREPage() {
     // The effect will retry automatically when tree updates with full data.
   }, [tree])
 
-  // Scroll to the target row after loading completes and the table is in the DOM
-  useEffect(() => {
-    if (loading || !scrollTargetRef.current) return
-    const target = scrollTargetRef.current
-    scrollTargetRef.current = null
-    // rAF ensures React has painted the expanded rows before we query the DOM
-    requestAnimationFrame(() => {
-      const el = Array.from(document.querySelectorAll('[data-row]'))
-        .find(e => e.getAttribute('data-row') === target) as HTMLElement | undefined
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    })
-  }, [loading])
-
   // Get all periods from data
   const dataPeriods = useMemo(
     () => [...new Set(rawData.map(r => r.periodo).filter(Boolean))].sort(),
@@ -379,6 +366,25 @@ export default function DREPage() {
 
   // Flatten tree for table rendering — recomputes only when tree or expanded changes
   const flatRows = useMemo(() => flattenTree(tree, expanded), [tree, expanded])
+
+  // Scroll to the target row once it's visible in flatRows and the table is in the DOM.
+  // Placed after flatRows so we can use it as a dependency — the scroll fires only when
+  // the target row is actually rendered (expanded state applied) and loading is false.
+  useEffect(() => {
+    if (loading || !scrollTargetRef.current) return
+    const target = scrollTargetRef.current
+    // Wait until the target is in the rendered flat list (i.e., its parent was expanded)
+    if (!flatRows.some(r => r.name === target)) return
+    scrollTargetRef.current = null
+    // Double rAF: first frame commits React's DOM changes, second frame paints
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const el = Array.from(document.querySelectorAll('[data-row]'))
+          .find(e => e.getAttribute('data-row') === target) as HTMLElement | undefined
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      })
+    })
+  }, [flatRows, loading])
 
   // Totals — only real groups (não subtotais calculados que já somam os grupos)
   const totals = useMemo(() => tree
