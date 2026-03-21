@@ -80,7 +80,7 @@ function navigateToDRE(comment: DREComment, router: ReturnType<typeof useRouter>
     const centros = fs.centros?.length ? fs.centros : []
     sessionStorage.setItem('dre_deeplink', JSON.stringify({
       depts, periods, centros,
-      view:   periods.length ? 'periodo' : 'total',
+      view:   'total',
       expand: comment.dre_linha ?? null,
     }))
   } catch { /* ignore */ }
