@@ -52,7 +52,10 @@ export default function DREPage() {
   const [commentText,   setCommentText]   = useState('')
   const [trendTarget,   setTrendTarget]   = useState<{ title: string; conta?: string; agrupamento?: string; dre?: string } | null>(null)
   const ctxRef = useRef<HTMLDivElement>(null)
-  const expandTargetRef = useRef<string | null>(null)
+  const expandTargetRef   = useRef<string | null>(null)
+  // Holds centros to apply once the centros-list fetch completes — avoids the
+  // race condition where the centros effect fires after init's setSelCentros
+  const pendingCentrosRef = useRef<string[]>([])
 
   // Fecha context menu ao clicar fora
   useEffect(() => {
@@ -64,12 +67,20 @@ export default function DREPage() {
 
   // Carrega centros de custo disponíveis quando departamentos selecionados mudam
   useEffect(() => {
-    if (!selDepts.length) { setCentrosDisp([]); setSelCentros([]); return }
+    if (!selDepts.length) { setCentrosDisp([]); return } // don't clear selCentros here
     const p = new URLSearchParams({ type: 'centros', departamentos: selDepts.join(',') })
     fetch(`/api/dre?${p}`).then(r => r.json()).then(data => {
-      setCentrosDisp(Array.isArray(data) ? data : [])
-      // Remove centros que não pertencem mais ao departamento selecionado
-      setSelCentros(prev => prev.filter(c => (data as Array<{cc:string}>).some(d => d.cc === c)))
+      const avail = Array.isArray(data) ? (data as Array<{cc:string}>) : []
+      setCentrosDisp(avail)
+      // If init stored pending centros (from deep-link), apply them now that we have the list
+      const pending = pendingCentrosRef.current
+      if (pending.length > 0) {
+        pendingCentrosRef.current = []
+        setSelCentros(pending.filter(c => avail.some(d => d.cc === c)))
+      } else {
+        // Normal case: remove centros that no longer belong to the selected dept
+        setSelCentros(prev => prev.filter(c => avail.some(d => d.cc === c)))
+      }
     })
   }, [selDepts])
 
@@ -88,19 +99,28 @@ export default function DREPage() {
     async function init() {
       const me = await fetch('/api/me').then(r => r.ok ? r.json() : null).catch(() => null)
       const isDept = me?.role === 'dept' && me.department
-      if (isDept) { setDeptUser({ department: me.department }); setSelDepts([me.department]) }
+      if (isDept) setDeptUser({ department: me.department })
 
-      // Read URL params (support deep-links from favorites and comment log)
+      // ── Deep-link: sessionStorage takes priority over URL params ──────────────
+      // The eye button in comment pages stores state here before navigating.
+      // This avoids race conditions and works even when already on /dre (same-
+      // route soft navigation doesn't re-run useEffect([]).
+      let dl: { depts?: string[]; periods?: string[]; centros?: string[]; view?: string; expand?: string } = {}
+      try {
+        const raw = sessionStorage.getItem('dre_deeplink')
+        if (raw) { sessionStorage.removeItem('dre_deeplink'); dl = JSON.parse(raw) }
+      } catch { /* ignore */ }
+
+      // Fallback: read URL params (for bookmarks / favorites)
       const sp = new URLSearchParams(window.location.search)
       const urlDepts    = sp.get('depts')?.split(',').filter(Boolean)    ?? []
       const urlPeriods  = sp.get('periods')?.split(',').filter(Boolean)  ?? []
       const urlCentros  = sp.get('centros')?.split(',').filter(Boolean)  ?? []
       const urlExpanded = sp.get('expanded')?.split(',').filter(Boolean) ?? []
-      const urlView     = sp.get('view') as typeof viewMode | null
-      // Legacy single-dept param from comment log
-      const urlDept     = sp.get('dept')
-      // Deep-link: expand path to specific row (from eye button)
-      expandTargetRef.current = sp.get('expand')
+      const urlView     = (sp.get('view') ?? dl.view) as typeof viewMode | null
+
+      // Expand target: sessionStorage > URL
+      expandTargetRef.current = dl.expand ?? sp.get('expand')
       if (urlExpanded.length) setExpanded(new Set(urlExpanded))
 
       const [hier, linhas, depts, dates] = await Promise.all([
@@ -121,23 +141,28 @@ export default function DREPage() {
       const now = new Date()
       const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
-      // Determine initial depts
+      // Determine initial depts (sessionStorage > URL > dept-user forced)
+      const dlDepts = dl.depts?.length ? dl.depts : []
       const initDepts = isDept ? [me.department]
+        : dlDepts.length ? dlDepts
         : urlDepts.length ? urlDepts
-        : urlDept ? [urlDept]
-        : []
-      if (initDepts.length && !isDept) setSelDepts(initDepts)
+        : (sp.get('dept') ? [sp.get('dept')!] : [])
+      if (initDepts.length) setSelDepts(initDepts)
 
-      // Determine initial periods (URL params take priority over YTD default)
+      // Determine initial periods (sessionStorage > URL > YTD default)
+      const dlPeriods = dl.periods?.length ? dl.periods : []
       const validUrlPeriods = urlPeriods.filter(p => allPeriods.includes(p))
       const ytd2026 = allPeriods.filter(p => p.startsWith('2026') && p <= curMonth)
-      const initPeriods = validUrlPeriods.length > 0 ? validUrlPeriods
+      const initPeriods = dlPeriods.filter(p => allPeriods.includes(p)).length > 0
+        ? dlPeriods.filter(p => allPeriods.includes(p))
+        : validUrlPeriods.length > 0 ? validUrlPeriods
         : ytd2026.length > 0 ? ytd2026
         : allPeriods.filter(p => p.startsWith('2026'))
 
-      // Initial centros
-      const initCentros = urlCentros
-      if (initCentros.length) setSelCentros(initCentros)
+      // Centros: store in ref so centros effect applies them AFTER fetching the
+      // available list (avoids the race between init and the centros fetch effect)
+      const initCentros = dl.centros?.length ? dl.centros : urlCentros
+      if (initCentros.length) pendingCentrosRef.current = initCentros
 
       if (initPeriods.length > 0) {
         setSelPeriods(initPeriods)
@@ -321,7 +346,9 @@ export default function DREPage() {
       // Clear ref on success — job done
       expandTargetRef.current = null
       setTimeout(() => {
-        const el = document.querySelector(`[data-row="${CSS.escape(target)}"]`)
+        // CSS.escape is wrong for attribute *values* in selectors — scan manually
+        const el = Array.from(document.querySelectorAll('[data-row]'))
+          .find(e => e.getAttribute('data-row') === target) as HTMLElement | undefined
         el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       }, 250)
     }

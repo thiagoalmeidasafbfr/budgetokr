@@ -1,12 +1,12 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   MessageSquare, ExternalLink, Trash2, Building2, Clock,
   ChevronDown, ChevronUp, Reply, X, CheckCircle2, AlertCircle,
   RefreshCw, Send, Eye
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import Link from 'next/link'
 import { cn, getDeptColor } from '@/lib/utils'
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
@@ -70,20 +70,21 @@ function StatusBadge({ status }: { status?: string }) {
   )
 }
 
-function buildDRELink(comment: DREComment): string {
+// Stores full filter context in sessionStorage and navigates to DRE.
+// sessionStorage avoids URL encoding issues and works even when already on /dre.
+function navigateToDRE(comment: DREComment, router: ReturnType<typeof useRouter>) {
   try {
-    const fs = comment.filter_state ? JSON.parse(comment.filter_state) : {}
-    const p = new URLSearchParams()
-    const depts = fs.depts?.length ? fs.depts : (comment.departamento ? [comment.departamento] : [])
-    if (depts.length) p.set('depts', depts.join(','))
-    const periods = fs.periods?.length ? fs.periods : (comment.periodo ? [comment.periodo] : [])
-    if (periods.length) { p.set('periods', periods.join(',')); p.set('view', 'periodo') }
-    if (fs.centros?.length) p.set('centros', fs.centros.join(','))
-    if (comment.dre_linha) p.set('expand', comment.dre_linha)
-    return `/dre${p.toString() ? '?' + p.toString() : ''}`
-  } catch {
-    return '/dre'
-  }
+    const fs = comment.filter_state ? JSON.parse(comment.filter_state as string) : {}
+    const depts   = fs.depts?.length   ? fs.depts   : (comment.departamento ? [comment.departamento] : [])
+    const periods = fs.periods?.length ? fs.periods : (comment.periodo       ? [comment.periodo]       : [])
+    const centros = fs.centros?.length ? fs.centros : []
+    sessionStorage.setItem('dre_deeplink', JSON.stringify({
+      depts, periods, centros,
+      view:   periods.length ? 'periodo' : 'total',
+      expand: comment.dre_linha ?? null,
+    }))
+  } catch { /* ignore */ }
+  router.push('/dre')
 }
 
 // ─── Close Modal ─────────────────────────────────────────────────────────────────
@@ -145,12 +146,14 @@ function TicketCard({
   onClose,
   onDelete,
   onRefresh,
+  onView,
 }: {
   ticket: Ticket
   onReply: (id: number, text: string) => Promise<void>
   onClose: (ticket: Ticket) => void
   onDelete: (id: number) => Promise<void>
   onRefresh: () => void
+  onView: (ticket: Ticket) => void
 }) {
   const [expanded, setExpanded]   = useState(false)
   const [replying, setReplying]   = useState(false)
@@ -170,8 +173,6 @@ function TicketCard({
     setExpanded(true)
     onRefresh()
   }
-
-  const dreLink = buildDRELink(ticket)
 
   return (
     <div className={cn(
@@ -232,13 +233,13 @@ function TicketCard({
 
           {/* Action buttons */}
           <div className="flex items-center gap-1 flex-shrink-0">
-            <Link
-              href={dreLink}
-              title="Ver composição na DRE"
+            <button
+              onClick={() => onView(ticket)}
+              title="Ver na DRE com filtros aplicados"
               className="p-1.5 rounded-lg text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
             >
               <Eye size={13} />
-            </Link>
+            </button>
             {!isClosed && (
               <>
                 <button
@@ -341,6 +342,7 @@ function TicketCard({
 // ─── Main Page ────────────────────────────────────────────────────────────────────
 
 export default function CommentsLogPage() {
+  const router = useRouter()
   const [tickets, setTickets]     = useState<Ticket[]>([])
   const [loading, setLoading]     = useState(true)
   const [filter, setFilter]       = useState<'all' | 'open' | 'replied' | 'closed'>('open')
@@ -496,6 +498,7 @@ export default function CommentsLogPage() {
               onClose={t => setClosing(t)}
               onDelete={handleDelete}
               onRefresh={load}
+              onView={t => navigateToDRE(t, router)}
             />
           ))}
         </div>
