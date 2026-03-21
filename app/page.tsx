@@ -1,12 +1,35 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { BarChart3, TrendingDown, TrendingUp, Upload, Target, AlertCircle, Database, FileText } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { BarChart3, TrendingDown, TrendingUp, Upload, Target, AlertCircle, Database, FileText, Settings2, Eye, EyeOff, ChevronUp, ChevronDown } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatPct, formatPeriodo, cn } from '@/lib/utils'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { YearFilter } from '@/components/YearFilter'
+
+// Widget configuration
+type WidgetId = 'summary' | 'charts' | 'dept-table'
+interface WidgetConfig { id: WidgetId; label: string; visible: boolean; order: number }
+
+const DEFAULT_WIDGETS: WidgetConfig[] = [
+  { id: 'summary', label: 'Resumo (Cards)', visible: true, order: 0 },
+  { id: 'charts', label: 'Gráficos', visible: true, order: 1 },
+  { id: 'dept-table', label: 'Tabela por Departamento', visible: true, order: 2 },
+]
+
+function loadWidgetConfig(): WidgetConfig[] {
+  if (typeof window === 'undefined') return DEFAULT_WIDGETS
+  try {
+    const saved = localStorage.getItem('dashboard-widgets')
+    if (saved) return JSON.parse(saved)
+  } catch {}
+  return DEFAULT_WIDGETS
+}
+
+function saveWidgetConfig(cfg: WidgetConfig[]) {
+  localStorage.setItem('dashboard-widgets', JSON.stringify(cfg))
+}
 
 const DashboardCharts = dynamic(() => import('@/components/DashboardCharts'), {
   ssr: false,
@@ -37,6 +60,11 @@ export default function Dashboard() {
   const [empty,   setEmpty]   = useState(false)
   const [allPeriodos, setAllPeriodos] = useState<string[]>([])
   const [selYear,     setSelYear]     = useState<string | null>('2026')
+  const [widgets,     setWidgets]     = useState<WidgetConfig[]>(DEFAULT_WIDGETS)
+  const [showWidgetCfg, setShowWidgetCfg] = useState(false)
+
+  // Load widget config from localStorage on mount
+  useEffect(() => { setWidgets(loadWidgetConfig()) }, [])
 
   useEffect(() => {
     Promise.all([
@@ -164,6 +192,31 @@ export default function Dashboard() {
     .sort((a, b) => b.variacao - a.variacao)
     .slice(0, 10)
 
+  const toggleWidget = useCallback((id: WidgetId) => {
+    setWidgets(prev => {
+      const next = prev.map(w => w.id === id ? { ...w, visible: !w.visible } : w)
+      saveWidgetConfig(next)
+      return next
+    })
+  }, [])
+
+  const moveWidget = useCallback((id: WidgetId, direction: -1 | 1) => {
+    setWidgets(prev => {
+      const sorted = [...prev].sort((a, b) => a.order - b.order)
+      const idx = sorted.findIndex(w => w.id === id)
+      const swapIdx = idx + direction
+      if (swapIdx < 0 || swapIdx >= sorted.length) return prev
+      const temp = sorted[idx].order
+      sorted[idx] = { ...sorted[idx], order: sorted[swapIdx].order }
+      sorted[swapIdx] = { ...sorted[swapIdx], order: temp }
+      saveWidgetConfig(sorted)
+      return sorted
+    })
+  }, [])
+
+  const sortedWidgets = [...widgets].sort((a, b) => a.order - b.order)
+  const isWidgetVisible = (id: WidgetId) => widgets.find(w => w.id === id)?.visible ?? true
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -177,11 +230,39 @@ export default function Dashboard() {
             <Link href="/medidas"><Button variant="outline" size="sm"><Target size={13} /> {medidas.length} Medida{medidas.length !== 1 ? 's' : ''}</Button></Link>
           )}
           <Link href="/analise"><Button size="sm"><BarChart3 size={13} /> Análise</Button></Link>
+          <div className="relative">
+            <Button variant="outline" size="sm" onClick={() => setShowWidgetCfg(v => !v)}>
+              <Settings2 size={13} /> Widgets
+            </Button>
+            {showWidgetCfg && (
+              <div className="absolute right-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded-xl shadow-xl p-3 w-64 space-y-1">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1 mb-2">Personalizar Dashboard</p>
+                {sortedWidgets.map((w, i) => (
+                  <div key={w.id} className="flex items-center gap-2 hover:bg-gray-50 rounded-lg px-2 py-1.5">
+                    <button onClick={() => toggleWidget(w.id)} className="flex-shrink-0">
+                      {w.visible
+                        ? <Eye size={13} className="text-indigo-500" />
+                        : <EyeOff size={13} className="text-gray-300" />}
+                    </button>
+                    <span className={cn('text-xs flex-1', w.visible ? 'text-gray-700' : 'text-gray-400')}>{w.label}</span>
+                    <div className="flex flex-col gap-0.5 flex-shrink-0">
+                      <button onClick={() => moveWidget(w.id, -1)} disabled={i === 0}
+                        className="text-gray-400 hover:text-gray-600 disabled:opacity-20"><ChevronUp size={10} /></button>
+                      <button onClick={() => moveWidget(w.id, 1)} disabled={i === sortedWidgets.length - 1}
+                        className="text-gray-400 hover:text-gray-600 disabled:opacity-20"><ChevronDown size={10} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* Render widgets in custom order */}
+      {sortedWidgets.filter(w => w.visible).map(w => {
+        if (w.id === 'summary') return (
+      <div key="summary" className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <SCard
           title={selYear && hasYtdData ? 'Budget YTD' : 'Budget Total'}
           value={formatCurrency(displayBudget)}
@@ -201,11 +282,13 @@ export default function Dashboard() {
           icon={<Database size={16} className="text-purple-400" />} bg="bg-purple-50" />
       </div>
 
-      {/* Charts — lazy loaded */}
-      <DashboardCharts periodChartData={periodChartData} deptVariance={deptVariance} />
+        )
+        if (w.id === 'charts') return (
+      <div key="charts"><DashboardCharts periodChartData={periodChartData} deptVariance={deptVariance} /></div>
 
-      {/* Department table */}
-      <Card>
+        )
+        if (w.id === 'dept-table') return (
+      <Card key="dept-table">
         <CardHeader><CardTitle>Resumo por Departamento</CardTitle></CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -245,6 +328,9 @@ export default function Dashboard() {
           </div>
         </CardContent>
       </Card>
+        )
+        return null
+      })}
     </div>
   )
 }

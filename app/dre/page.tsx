@@ -1,6 +1,6 @@
 'use client'
-import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { ChevronRight, ChevronDown, Filter, X, Download, RefreshCw, ExternalLink } from 'lucide-react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { ChevronRight, ChevronDown, Filter, X, Download, RefreshCw, ExternalLink, MessageSquare, TrendingUp, Printer } from 'lucide-react'
 import { YearFilter } from '@/components/YearFilter'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -16,8 +16,12 @@ const WaterfallChart = dynamic(() => import('@/components/DreWaterfallChart'), {
   ssr: false,
   loading: () => <Card><CardContent className="p-5"><div className="h-[420px] bg-gray-50 rounded-lg animate-pulse" /></CardContent></Card>,
 })
+const TrendChartModal = dynamic(() => import('@/components/TrendChart'), { ssr: false })
 
-// DetalhamentoModal and WaterfallChart are dynamically imported above
+interface DREComment {
+  id: number; dre_linha: string; agrupamento?: string; conta?: string
+  periodo?: string; texto: string; usuario?: string; created_at: string
+}
 
 export default function DREPage() {
   const [rawData,       setRawData]       = useState<DRERow[]>([])
@@ -41,6 +45,10 @@ export default function DREPage() {
   const [ctxMenu,       setCtxMenu]       = useState<ContextMenuState | null>(null)
   const [detModal,      setDetModal]      = useState<ContextMenuState | null>(null)
   const [deptUser,      setDeptUser]      = useState<{ department: string } | null>(null)
+  const [comments,      setComments]      = useState<DREComment[]>([])
+  const [commentEdit,   setCommentEdit]   = useState<{ dre_linha: string; agrupamento?: string; conta?: string; periodo?: string } | null>(null)
+  const [commentText,   setCommentText]   = useState('')
+  const [trendTarget,   setTrendTarget]   = useState<{ title: string; conta?: string; agrupamento?: string; dre?: string } | null>(null)
   const ctxRef = useRef<HTMLDivElement>(null)
 
   // Fecha context menu ao clicar fora
@@ -124,6 +132,51 @@ export default function DREPage() {
     if (acctRes.ok) setAccountData(await acctRes.json())
     setLoading(false)
   }, [])
+
+  // Load comments for current periods
+  const loadComments = useCallback(async (prds: string[]) => {
+    const p = new URLSearchParams()
+    if (prds.length) p.set('periodos', prds.join(','))
+    const res = await fetch(`/api/dre/comments?${p}`)
+    if (res.ok) setComments(await res.json())
+  }, [])
+
+  useEffect(() => { if (selPeriods.length > 0) loadComments(selPeriods) }, [selPeriods, loadComments])
+
+  // Comment helpers
+  const commentKey = (dre_linha: string, periodo?: string) => `${dre_linha}||${periodo ?? ''}`
+  const commentMap = useMemo(() => {
+    const map = new Map<string, DREComment[]>()
+    for (const c of comments) {
+      const k = commentKey(c.dre_linha, c.periodo)
+      const arr = map.get(k) ?? []
+      arr.push(c)
+      map.set(k, arr)
+    }
+    return map
+  }, [comments])
+
+  const saveComment = async () => {
+    if (!commentEdit || !commentText.trim()) return
+    await fetch('/api/dre/comments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...commentEdit, texto: commentText.trim() }),
+    })
+    setCommentText('')
+    setCommentEdit(null)
+    loadComments(selPeriods)
+  }
+
+  const deleteComment = async (id: number) => {
+    await fetch(`/api/dre/comments?id=${id}`, { method: 'DELETE' })
+    loadComments(selPeriods)
+  }
+
+  // Print / PDF
+  const handlePrint = () => {
+    window.print()
+  }
 
   const applyFilters = () => loadData(selDepts, selPeriods, selCentros)
 
@@ -224,11 +277,81 @@ export default function DREPage() {
               <ExternalLink size={13} /> Detalhamento (Budget + Real)
             </button>
           )}
+          <button
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2"
+            onClick={() => {
+              setTrendTarget({
+                title: ctxMenu.node.name,
+                conta: ctxMenu.node.conta,
+                agrupamento: ctxMenu.node.agrupamento,
+                dre: ctxMenu.node.dre,
+              })
+              setCtxMenu(null)
+            }}>
+            <TrendingUp size={13} /> Gráfico de Tendência
+          </button>
+          <button
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-700 flex items-center gap-2"
+            onClick={() => {
+              setCommentEdit({
+                dre_linha: ctxMenu.node.name,
+                agrupamento: ctxMenu.node.agrupamento,
+                conta: ctxMenu.node.conta,
+                periodo: ctxMenu.periodo,
+              })
+              setCtxMenu(null)
+            }}>
+            <MessageSquare size={13} /> Comentar
+          </button>
         </div>
       )}
 
       {/* Modal de detalhamento */}
       {detModal && <DetalhamentoModal ctx={detModal} onClose={() => setDetModal(null)} />}
+
+      {/* Modal de tendência */}
+      {trendTarget && (
+        <TrendChartModal
+          title={trendTarget.title}
+          conta={trendTarget.conta}
+          agrupamento={trendTarget.agrupamento}
+          dre={trendTarget.dre}
+          departamentos={selDepts.length ? selDepts : undefined}
+          onClose={() => setTrendTarget(null)}
+        />
+      )}
+
+      {/* Modal de comentário */}
+      {commentEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" onClick={e => { if (e.target === e.currentTarget) setCommentEdit(null) }}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-5 space-y-3">
+            <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+              <MessageSquare size={14} className="text-indigo-500" /> Comentário
+            </h3>
+            <p className="text-xs text-gray-500">{commentEdit.dre_linha}{commentEdit.periodo ? ` · ${commentEdit.periodo}` : ''}</p>
+
+            {/* Existing comments */}
+            {(commentMap.get(commentKey(commentEdit.dre_linha, commentEdit.periodo)) ?? []).map(c => (
+              <div key={c.id} className="bg-gray-50 rounded-lg p-2.5 text-xs text-gray-700 flex items-start gap-2">
+                <div className="flex-1">
+                  <p>{c.texto}</p>
+                  <p className="text-[10px] text-gray-400 mt-1">{c.usuario} · {new Date(c.created_at).toLocaleString('pt-BR')}</p>
+                </div>
+                <button onClick={() => deleteComment(c.id)} className="text-red-400 hover:text-red-600 flex-shrink-0"><X size={12} /></button>
+              </div>
+            ))}
+
+            <textarea value={commentText} onChange={e => setCommentText(e.target.value)}
+              placeholder="Adicionar comentário…"
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 h-20 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400" autoFocus />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setCommentEdit(null)} className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5">Cancelar</button>
+              <button onClick={saveComment} disabled={!commentText.trim()}
+                className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 disabled:opacity-50">Salvar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -238,6 +361,7 @@ export default function DREPage() {
         <div className="flex items-center gap-3 flex-wrap">
           <YearFilter periodos={periodos} selYear={selYear} onChange={handleYearChange} />
           <Button variant="outline" size="sm" onClick={exportCSV}><Download size={13} /> CSV</Button>
+          <Button variant="outline" size="sm" onClick={handlePrint} className="no-print"><Printer size={13} /> PDF</Button>
         </div>
       </div>
 
@@ -394,6 +518,9 @@ export default function DREPage() {
                               <span className="w-5" />
                             )}
                             {row.name}
+                            {commentMap.has(commentKey(row.name)) && (
+                              <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0 ml-1" title="Tem comentário(s)" />
+                            )}
                           </div>
                         </td>
                         <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, undefined, 'budget') }}
@@ -756,6 +883,50 @@ export default function DREPage() {
                           <option value="">Período B</option>
                           {options.map(o => <option key={o} value={o}>{formatOption(o)}</option>)}
                         </select>
+                      </div>
+
+                      {/* Quick YoY / MoM buttons */}
+                      <div className="flex items-center gap-1 border-l border-gray-200 pl-3 ml-1">
+                        <span className="text-xs text-gray-400 mr-1">Rápido:</span>
+                        {compMode === 'mes' && monthOptions.length >= 2 && (
+                          <button onClick={() => {
+                            setCompA(monthOptions[monthOptions.length - 1])
+                            setCompB(monthOptions[monthOptions.length - 2])
+                          }} className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium">
+                            MoM
+                          </button>
+                        )}
+                        {compMode === 'mes' && (() => {
+                          const last = monthOptions[monthOptions.length - 1]
+                          if (!last) return null
+                          const [y, m] = last.split('-')
+                          const yoy = `${parseInt(y) - 1}-${m}`
+                          if (monthOptions.includes(yoy)) {
+                            return (
+                              <button onClick={() => { setCompA(last); setCompB(yoy) }}
+                                className="text-xs px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 font-medium">
+                                YoY
+                              </button>
+                            )
+                          }
+                          return null
+                        })()}
+                        {compMode === 'trimestre' && quarterOptions.length >= 2 && (
+                          <button onClick={() => {
+                            setCompA(quarterOptions[quarterOptions.length - 1])
+                            setCompB(quarterOptions[quarterOptions.length - 2])
+                          }} className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium">
+                            QoQ
+                          </button>
+                        )}
+                        {compMode === 'ano' && yearOptions.length >= 2 && (
+                          <button onClick={() => {
+                            setCompA(yearOptions[yearOptions.length - 1])
+                            setCompB(yearOptions[yearOptions.length - 2])
+                          }} className="text-xs px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 font-medium">
+                            YoY
+                          </button>
+                        )}
                       </div>
 
                       {hasSelection && (
