@@ -5,7 +5,7 @@ import { getSessionFromRequest, COOKIE_NAME } from '@/lib/session'
 const PUBLIC_PATHS = ['/login', '/logout', '/api/auth/login', '/api/auth/logout']
 
 // Rotas que usuários de dept podem acessar
-const DEPT_ALLOWED_PATHS = ['/dept', '/dre', '/analise', '/capex', '/api/dept-dashboard', '/api/dept-medidas', '/api/analise', '/api/dre', '/api/capex', '/api/kpis', '/api/kpis/valores', '/api/lancamentos', '/api/medidas', '/api/me', '/api/auth/logout', '/api/dimensoes']
+const DEPT_ALLOWED_PATHS = ['/dept', '/dre', '/analise', '/capex', '/api/dept-dashboard', '/api/dept-medidas', '/api/analise', '/api/dre', '/api/capex', '/api/kpis', '/api/kpis/valores', '/api/lancamentos', '/api/medidas', '/api/me', '/api/auth/logout', '/api/dimensoes', '/api/favorites']
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -31,8 +31,8 @@ export async function middleware(request: NextRequest) {
 
   // Usuário de departamento: restrições de acesso
   if (user.role === 'dept') {
-    // APIs onde dept pode escrever (comentários)
-    const DEPT_WRITE_ALLOWED = ['/api/dre/comments']
+    // APIs onde dept pode escrever (comentários e favoritos)
+    const DEPT_WRITE_ALLOWED = ['/api/dre/comments', '/api/favorites']
     // Bloqueia métodos de escrita para dept users (todas as APIs exceto as permitidas)
     if (
       ['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method) &&

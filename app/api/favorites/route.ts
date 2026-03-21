@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
 import { getUserFromHeaders } from '@/lib/session'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/favorites
 export async function GET(req: NextRequest) {
   try {

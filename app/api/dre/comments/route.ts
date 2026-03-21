@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
 import { getUserFromHeaders } from '@/lib/session'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/dre/comments?periodos=2026-01,2026-02
 export async function GET(req: NextRequest) {
   try {
@@ -9,14 +11,22 @@ export async function GET(req: NextRequest) {
     const periodos = sp.get('periodos')
     const dreLinha = sp.get('dre_linha')
 
+    const user = getUserFromHeaders(req)
     const db = getDb()
     const conditions: string[] = []
     const params: unknown[] = []
 
+    // Dept users only see their own comments + master comments
+    if (user?.role === 'dept') {
+      conditions.push(`(user_role = 'master' OR departamento = ?)`)
+      params.push(user.department ?? '')
+    }
+
     if (periodos) {
       const list = periodos.split(',').filter(Boolean)
       if (list.length) {
-        conditions.push(`periodo IN (${list.map(() => '?').join(',')})`)
+        // Include comments with no specific period (periodo IS NULL) alongside period-filtered ones
+        conditions.push(`(periodo IN (${list.map(() => '?').join(',')}) OR periodo IS NULL)`)
         params.push(...list)
       }
     }
@@ -40,9 +50,12 @@ export async function POST(req: NextRequest) {
 
     const db = getDb()
     const r = db.prepare(`
-      INSERT INTO dre_comments (dre_linha, agrupamento, conta, periodo, texto, usuario)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(dre_linha, agrupamento ?? null, conta ?? null, periodo ?? null, texto, user?.userId ?? null)
+      INSERT INTO dre_comments (dre_linha, agrupamento, conta, periodo, texto, usuario, user_role, departamento)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      dre_linha, agrupamento ?? null, conta ?? null, periodo ?? null, texto,
+      user?.userId ?? null, user?.role ?? 'master', user?.department ?? null
+    )
 
     const row = db.prepare('SELECT * FROM dre_comments WHERE id = ?').get(r.lastInsertRowid)
     return NextResponse.json(row)
@@ -69,9 +82,15 @@ export async function PUT(req: NextRequest) {
 // DELETE /api/dre/comments?id=X
 export async function DELETE(req: NextRequest) {
   try {
+    const user = getUserFromHeaders(req)
     const id = new URL(req.url).searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id obrigatório' }, { status: 400 })
-    getDb().prepare('DELETE FROM dre_comments WHERE id = ?').run(id)
+    // Dept users can only delete their own comments
+    if (user?.role === 'dept') {
+      getDb().prepare('DELETE FROM dre_comments WHERE id = ? AND departamento = ?').run(id, user.department ?? '')
+    } else {
+      getDb().prepare('DELETE FROM dre_comments WHERE id = ?').run(id)
+    }
     return NextResponse.json({ success: true })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })

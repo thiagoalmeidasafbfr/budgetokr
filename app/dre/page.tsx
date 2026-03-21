@@ -20,7 +20,8 @@ const TrendChartModal = dynamic(() => import('@/components/TrendChart'), { ssr: 
 
 interface DREComment {
   id: number; dre_linha: string; agrupamento?: string; conta?: string
-  periodo?: string; texto: string; usuario?: string; created_at: string
+  periodo?: string; texto: string; usuario?: string; user_role?: string
+  departamento?: string; created_at: string
 }
 
 export default function DREPage() {
@@ -87,6 +88,9 @@ export default function DREPage() {
       const isDept = me?.role === 'dept' && me.department
       if (isDept) { setDeptUser({ department: me.department }); setSelDepts([me.department]) }
 
+      // Support ?dept=X URL param (e.g. from comments log page)
+      const urlDept = new URLSearchParams(window.location.search).get('dept')
+
       const [hier, linhas, depts, dates] = await Promise.all([
         fetch('/api/dre?type=hierarchy').then(r => r.json()),
         fetch('/api/dre?type=linhas').then(r => r.json()),
@@ -100,10 +104,10 @@ export default function DREPage() {
         (Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean)
       )].sort() as string[])
       setPeriodos(allPeriods)
-      // Default to YTD: all 2026 periods up to and including the current month
       const now = new Date()
       const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-      const defaultDepts = isDept ? [me.department] : []
+      const defaultDepts = isDept ? [me.department] : urlDept ? [urlDept] : []
+      if (urlDept && !isDept) setSelDepts([urlDept])
       const ytd2026 = allPeriods.filter(p => p.startsWith('2026') && p <= curMonth)
       const defaultPeriods = ytd2026.length > 0 ? ytd2026 : allPeriods.filter(p => p.startsWith('2026'))
       if (defaultPeriods.length > 0) {
@@ -143,26 +147,30 @@ export default function DREPage() {
 
   useEffect(() => { if (selPeriods.length > 0) loadComments(selPeriods) }, [selPeriods, loadComments])
 
-  // Comment helpers
-  const commentKey = (dre_linha: string, periodo?: string) => `${dre_linha}||${periodo ?? ''}`
-  const commentMap = useMemo(() => {
-    const map = new Map<string, DREComment[]>()
+  // Comment helpers — track which roles have commented on each line
+  const commentKey = (dre_linha: string) => dre_linha
+  // commentRoleMap: key=dre_linha → { hasMaster, hasDept, comments }
+  const commentRoleMap = useMemo(() => {
+    const map = new Map<string, { hasMaster: boolean; hasDept: boolean; comments: DREComment[] }>()
     for (const c of comments) {
-      const k = commentKey(c.dre_linha, c.periodo)
-      const arr = map.get(k) ?? []
-      arr.push(c)
-      map.set(k, arr)
+      const k = c.dre_linha
+      const entry = map.get(k) ?? { hasMaster: false, hasDept: false, comments: [] }
+      if (c.user_role === 'master') entry.hasMaster = true
+      else entry.hasDept = true
+      entry.comments.push(c)
+      map.set(k, entry)
     }
     return map
   }, [comments])
 
   const saveComment = async () => {
     if (!commentEdit || !commentText.trim()) return
-    await fetch('/api/dre/comments', {
+    const res = await fetch('/api/dre/comments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...commentEdit, texto: commentText.trim() }),
     })
+    if (!res.ok) return // silently keep dialog open on error
     setCommentText('')
     setCommentEdit(null)
     loadComments(selPeriods)
@@ -215,25 +223,29 @@ export default function DREPage() {
   }
   const collapseAll = () => setExpanded(new Set())
 
-  // Build tree from raw data
-  // Se há estrutura dre_linhas cadastrada, usa ela para definir ordem, subtotais e sinais
-  const tree = dreLinhas.length > 0
+  // Build tree from raw data — memoized: only recomputes when data changes
+  const tree = useMemo(() => dreLinhas.length > 0
     ? buildTreeFromLinhas(rawData, hierarchy, dreLinhas, accountData)
-    : buildTree(rawData, hierarchy, accountData)
+    : buildTree(rawData, hierarchy, accountData),
+  [rawData, hierarchy, dreLinhas, accountData])
 
   // Get all periods from data
-  const dataPeriods = [...new Set(rawData.map(r => r.periodo).filter(Boolean))].sort()
+  const dataPeriods = useMemo(
+    () => [...new Set(rawData.map(r => r.periodo).filter(Boolean))].sort(),
+    [rawData]
+  )
 
-  // Flatten tree for table rendering
-  const flatRows = flattenTree(tree, expanded)
+  // Flatten tree for table rendering — recomputes only when tree or expanded changes
+  const flatRows = useMemo(() => flattenTree(tree, expanded), [tree, expanded])
 
   // Totals — only real groups (não subtotais calculados que já somam os grupos)
-  const totals = tree
+  const totals = useMemo(() => tree
     .filter(r => r.isGroup && !r.isSubtotal)
     .reduce((acc, r) => ({
       budget: acc.budget + r.budget,
       razao:  acc.razao  + r.razao,
-    }), { budget: 0, razao: 0 })
+    }), { budget: 0, razao: 0 }),
+  [tree])
 
   const exportCSV = () => {
     const header = viewMode === 'total'
@@ -331,11 +343,17 @@ export default function DREPage() {
             <p className="text-xs text-gray-500">{commentEdit.dre_linha}{commentEdit.periodo ? ` · ${commentEdit.periodo}` : ''}</p>
 
             {/* Existing comments */}
-            {(commentMap.get(commentKey(commentEdit.dre_linha, commentEdit.periodo)) ?? []).map(c => (
-              <div key={c.id} className="bg-gray-50 rounded-lg p-2.5 text-xs text-gray-700 flex items-start gap-2">
+            {(commentRoleMap.get(commentKey(commentEdit.dre_linha))?.comments ?? []).map(c => (
+              <div key={c.id} className={cn(
+                'rounded-lg p-2.5 text-xs text-gray-700 flex items-start gap-2',
+                c.user_role === 'dept' ? 'bg-orange-50 border border-orange-100' : 'bg-purple-50 border border-purple-100'
+              )}>
+                <span className={cn('w-2 h-2 rounded-full mt-0.5 flex-shrink-0', c.user_role === 'dept' ? 'bg-orange-400' : 'bg-purple-500')} />
                 <div className="flex-1">
                   <p>{c.texto}</p>
-                  <p className="text-[10px] text-gray-400 mt-1">{c.usuario} · {new Date(c.created_at).toLocaleString('pt-BR')}</p>
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    {c.usuario ?? (c.user_role === 'dept' ? c.departamento : 'master')} · {new Date(c.created_at).toLocaleString('pt-BR')}
+                  </p>
                 </div>
                 <button onClick={() => deleteComment(c.id)} className="text-red-400 hover:text-red-600 flex-shrink-0"><X size={12} /></button>
               </div>
@@ -518,9 +536,15 @@ export default function DREPage() {
                               <span className="w-5" />
                             )}
                             {row.name}
-                            {commentMap.has(commentKey(row.name)) && (
-                              <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0 ml-1" title="Tem comentário(s)" />
-                            )}
+                            {commentRoleMap.has(commentKey(row.name)) && (() => {
+                              const e = commentRoleMap.get(commentKey(row.name))!
+                              return (
+                                <span className="flex items-center gap-0.5 ml-1 flex-shrink-0">
+                                  {e.hasDept  && <span className="w-2 h-2 rounded-full bg-orange-400" title="Comentário do departamento" />}
+                                  {e.hasMaster && <span className="w-2 h-2 rounded-full bg-purple-500" title="Comentário do master" />}
+                                </span>
+                              )
+                            })()}
                           </div>
                         </td>
                         <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, undefined, 'budget') }}
