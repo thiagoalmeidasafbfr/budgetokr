@@ -6,6 +6,7 @@ export interface Lancamento {
   nome_conta_contabil: string
   numero_conta_contabil: string
   centro_custo: string
+  id_cc_cc: string
   nome_conta_contrapartida: string
   fonte: string
   observacao: string
@@ -15,6 +16,14 @@ export interface Lancamento {
 }
 
 // ─── Dimensões ────────────────────────────────────────────────────────────────
+export interface UnidadeNegocio {
+  id_cc_cc: string
+  management_report: string
+  conta: string
+  centros_custo: string
+  unidade: string
+}
+
 export interface CentroCusto {
   centro_custo: string
   nome_centro_custo: string
@@ -107,7 +116,7 @@ export interface AnaliseRow {
 }
 
 // ─── Upload ───────────────────────────────────────────────────────────────────
-export type UploadTipo = 'lancamentos_budget' | 'lancamentos_razao' | 'centros_custo' | 'contas_contabeis' | 'dre_linhas' | 'capex_budget' | 'capex_razao'
+export type UploadTipo = 'lancamentos_budget' | 'lancamentos_razao' | 'centros_custo' | 'contas_contabeis' | 'dre_linhas' | 'capex_budget' | 'capex_razao' | 'unidades_negocio'
 
 export const LANCAMENTO_COLUMNS = [
   { key: 'data_lancamento',           label: 'Data de Lançamento',         required: false },
@@ -116,6 +125,7 @@ export const LANCAMENTO_COLUMNS = [
   { key: 'nome_conta_contabil',       label: 'Nome Conta Contábil',         required: false },
   { key: 'numero_conta_contabil',     label: 'Número Conta Contábil',       required: true  },
   { key: 'centro_custo',              label: 'Centro de Custo',             required: true  },
+  { key: 'id_cc_cc',                  label: 'ID CC- CC (Unidade Negócio)', required: false },
   { key: 'nome_conta_contrapartida',  label: 'Nome Conta Contra Partida',   required: false },
   { key: 'fonte',                     label: 'Fonte',                       required: false },
   { key: 'observacao',                label: 'Observação',                  required: false },
@@ -151,6 +161,14 @@ export const CAPEX_COLUMNS = [
   { key: 'fonte',                     label: 'Fonte',                       required: false },
   { key: 'observacao',                label: 'Observação',                  required: false },
   { key: 'debito_credito',            label: 'Débito / Crédito (MC)',        required: true  },
+] as const
+
+export const UNIDADE_NEGOCIO_COLUMNS = [
+  { key: 'id_cc_cc',          label: 'ID CC- CC',          required: true  },
+  { key: 'management_report', label: 'Management Report',  required: false },
+  { key: 'conta',             label: 'Conta',              required: false },
+  { key: 'centros_custo',     label: 'Centros de Custos',  required: false },
+  { key: 'unidade',           label: 'Unidade',            required: false },
 ] as const
 
 export const DRE_LINHAS_COLUMNS = [
