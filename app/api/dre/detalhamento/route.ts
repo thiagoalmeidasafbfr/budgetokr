@@ -29,7 +29,6 @@ export async function GET(req: NextRequest) {
       p_periodos:     periodosRaw ? periodosRaw.split(',').filter(Boolean) : [],
       p_departamentos: departamentosRaw ? departamentosRaw.split(',').filter(Boolean) : [],
       p_centros:      centrosRaw ? centrosRaw.split(',').filter(Boolean) : [],
-      p_unidades:     unidadesRaw ? unidadesRaw.split(',').filter(Boolean) : [],
     })
     if (error) throw new Error(error.message)
 
