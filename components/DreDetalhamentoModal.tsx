@@ -161,6 +161,7 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
   const [commentingRow,  setCommentingRow]  = useState<DetalhamentoLinha | null>(null)
   const [commentText,    setCommentText]    = useState('')
   const [commentSaving,  setCommentSaving]  = useState(false)
+  const [commentError,   setCommentError]   = useState<string | null>(null)
 
   const deferredText = useDeferredValue(textInput)
 
@@ -299,36 +300,49 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
   const saveRowComment = async () => {
     if (!commentingRow || !commentText.trim()) return
     setCommentSaving(true)
-    const periodo = commentingRow.data_lancamento?.substring(0, 7) ?? null
-    await fetch('/api/dre/comments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        lancamento_id: commentingRow.id,
-        dre_linha:    commentingRow.dre || ctx.node.dre || ctx.node.name,
-        agrupamento:  commentingRow.agrupamento_arvore || ctx.node.agrupamento,
-        conta:        commentingRow.numero_conta_contabil,
-        periodo,
-        tipo_valor:   commentingRow.tipo === 'budget' ? 'budget' : 'realizado',
-        texto:        commentText.trim(),
-        filter_state: {
-          depts:   ctx.departamentos ?? [],
-          periods: ctx.periodos     ?? [],
-          centros: ctx.centros      ?? [],
-          openDetalhamento:      true,
-          detNode: {
-            dre:         commentingRow.dre,
-            agrupamento: commentingRow.agrupamento_arvore,
-            conta:       commentingRow.numero_conta_contabil,
+    setCommentError(null)
+    const periodo   = commentingRow.data_lancamento?.substring(0, 7) ?? null
+    const dreLinhaVal = commentingRow.dre || ctx.node.dre || ctx.node.name || commentingRow.agrupamento_arvore || 'Sem classificação'
+    try {
+      const res = await fetch('/api/dre/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lancamento_id: commentingRow.id,
+          dre_linha:    dreLinhaVal,
+          agrupamento:  commentingRow.agrupamento_arvore || ctx.node.agrupamento,
+          conta:        commentingRow.numero_conta_contabil,
+          periodo,
+          tipo_valor:   commentingRow.tipo === 'budget' ? 'budget' : 'realizado',
+          texto:        commentText.trim(),
+          filter_state: {
+            depts:   ctx.departamentos ?? [],
+            periods: ctx.periodos     ?? [],
+            centros: ctx.centros      ?? [],
+            openDetalhamento:      true,
+            detNode: {
+              dre:         commentingRow.dre,
+              agrupamento: commentingRow.agrupamento_arvore,
+              conta:       commentingRow.numero_conta_contabil,
+            },
+            highlightLancamentoId: commentingRow.id,
           },
-          highlightLancamentoId: commentingRow.id,
-        },
-      }),
-    })
-    setCommentText('')
-    setCommentingRow(null)
-    setCommentSaving(false)
-    onCommentSaved?.()
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setCommentError(json?.error ?? `Erro ${res.status}`)
+        setCommentSaving(false)
+        return
+      }
+      setCommentText('')
+      setCommentingRow(null)
+      onCommentSaved?.()
+    } catch (e) {
+      setCommentError(String(e))
+    } finally {
+      setCommentSaving(false)
+    }
   }
 
   const activeFiltersCount = (ctx.departamentos?.length ?? 0) + (ctx.periodos?.length ?? 0) + (ctx.centros?.length ?? 0)
@@ -586,13 +600,18 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
                   {commentSaving ? '…' : 'Salvar'}
                 </button>
                 <button
-                  onClick={() => { setCommentingRow(null); setCommentText('') }}
+                  onClick={() => { setCommentingRow(null); setCommentText(''); setCommentError(null) }}
                   className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
                 >
                   Cancelar
                 </button>
               </div>
             </div>
+            {commentError && (
+              <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-1.5">
+                Erro ao salvar: {commentError}
+              </p>
+            )}
           </div>
         )}
       </div>
