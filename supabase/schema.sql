@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS lancamentos (
   nome_conta_contabil       TEXT,
   numero_conta_contabil     TEXT,
   centro_custo              TEXT,
+  id_cc_cc                  TEXT,
   nome_conta_contrapartida  TEXT,
   fonte                     TEXT,
   observacao                TEXT,
@@ -25,6 +26,17 @@ CREATE INDEX IF NOT EXISTS idx_lanc_data       ON lancamentos(data_lancamento);
 CREATE INDEX IF NOT EXISTS idx_lanc_tipo_cc    ON lancamentos(tipo, centro_custo);
 CREATE INDEX IF NOT EXISTS idx_lanc_tipo_conta ON lancamentos(tipo, numero_conta_contabil);
 ALTER TABLE lancamentos DISABLE ROW LEVEL SECURITY;
+
+-- ─── Dimensão: Unidades de Negócio ───────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS unidades_negocio (
+  id_cc_cc          TEXT PRIMARY KEY,
+  management_report TEXT,
+  conta             TEXT,
+  centros_custo     TEXT,
+  unidade           TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_un_unidade ON unidades_negocio(unidade);
+ALTER TABLE unidades_negocio DISABLE ROW LEVEL SECURITY;
 
 -- ─── Dimensão: Centros de Custo ──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS centros_custo (

@@ -188,6 +188,7 @@ export async function POST(req: NextRequest) {
           nome_conta_contabil:      String(get(row, 'nome_conta_contabil')      ?? ''),
           numero_conta_contabil:    String(get(row, 'numero_conta_contabil')    ?? ''),
           centro_custo:             String(get(row, 'centro_custo')             ?? ''),
+          id_cc_cc:                 String(get(row, 'id_cc_cc')                 ?? '') || null,
           nome_conta_contrapartida: String(get(row, 'nome_conta_contrapartida') ?? ''),
           fonte:                    String(get(row, 'fonte')                    ?? ''),
           observacao:               String(get(row, 'observacao')               ?? ''),
@@ -340,6 +341,32 @@ export async function POST(req: NextRequest) {
         const { error } = await supabase
           .from('dre_linhas')
           .upsert(chunk, { onConflict: 'nome' })
+        if (error) throw new Error(error.message)
+      }
+      return NextResponse.json({ success: true, rowCount: deduped.length, tipo })
+    }
+
+    // ── Unidades de Negócio ──────────────────────────────────────────────────
+    if (tipo === 'unidades_negocio') {
+      const rows = raw
+        .map(row => ({
+          id_cc_cc:          String(get(row, 'id_cc_cc')          ?? '').trim(),
+          management_report: String(get(row, 'management_report') ?? ''),
+          conta:             String(get(row, 'conta')             ?? ''),
+          centros_custo:     String(get(row, 'centros_custo')     ?? ''),
+          unidade:           String(get(row, 'unidade')           ?? ''),
+        }))
+        .filter(r => r.id_cc_cc)
+
+      const deduped = Object.values(
+        Object.fromEntries(rows.map(r => [r.id_cc_cc, r]))
+      )
+
+      for (let i = 0; i < deduped.length; i += CHUNK_SIZE) {
+        const chunk = deduped.slice(i, i + CHUNK_SIZE)
+        const { error } = await supabase
+          .from('unidades_negocio')
+          .upsert(chunk, { onConflict: 'id_cc_cc' })
         if (error) throw new Error(error.message)
       }
       return NextResponse.json({ success: true, rowCount: deduped.length, tipo })

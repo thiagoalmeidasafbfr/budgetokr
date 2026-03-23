@@ -135,6 +135,7 @@ export default function PlanoContasPage() {
 
   // Flatten tree for rendering
   const flattenTree = (nodes: TreeNode[], depth: number = 0, parentMatch: boolean = false): Array<TreeNode & { depth: number; hasChildren: boolean; isExpanded: boolean; visible: boolean }> => {
+    if (!Array.isArray(nodes)) return []
     const result: Array<TreeNode & { depth: number; hasChildren: boolean; isExpanded: boolean; visible: boolean }> = []
     for (const node of nodes) {
       const hasChildren = node.children.length > 0
