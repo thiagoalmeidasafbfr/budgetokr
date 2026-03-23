@@ -1,16 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getDb } from '@/lib/db'
+import { getSupabase } from '@/lib/supabase'
 import { getUserFromHeaders } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Visibility rules:
-//  • Dept in DRE  → own tickets (parent_id IS NULL) + master replies to their dept
-//  • Master in DRE → only master's own private notes (user_role='master', parent_id IS NULL, departamento IS NULL)
-//  • Log pages (context=log) → ALL rows (master only)
-//  • Dept log (context=dept-log) → dept's tickets + master replies to that dept
-// ──────────────────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
   try {
@@ -18,48 +10,42 @@ export async function GET(req: NextRequest) {
     const context  = sp.get('context') ?? 'dre'
     const periodos = sp.get('periodos')
 
-    const user = getUserFromHeaders(req)
-    const db   = getDb()
+    const user     = getUserFromHeaders(req)
+    const supabase = getSupabase()
 
-    const conditions: string[] = []
-    const params: unknown[]    = []
+    let query = supabase.from('dre_comments').select('*').order('created_at', { ascending: false })
 
     if (context === 'log') {
       if (user?.role !== 'master') return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
-      // return all — no extra conditions
+      // no extra conditions
     } else if (context === 'dept-log') {
       const dept = user?.role === 'dept' ? user.department : sp.get('dept')
       if (!dept) return NextResponse.json([])
-      conditions.push(`departamento = ?`)
-      params.push(dept)
+      query = query.eq('departamento', dept)
     } else {
-      // 'dre' context: role-based DRE page visibility
+      // 'dre' context
       if (user?.role === 'dept') {
-        conditions.push(`departamento = ?`)
-        params.push(user.department ?? '')
+        query = query.eq('departamento', user.department ?? '')
       } else {
-        // Master sees ONLY their own private notes in the DRE
-        conditions.push(`(user_role = 'master' AND parent_id IS NULL AND departamento IS NULL)`)
+        query = query.eq('user_role', 'master').is('parent_id', null).is('departamento', null)
       }
     }
 
     if (periodos) {
       const list = periodos.split(',').filter(Boolean)
       if (list.length) {
-        conditions.push(`(periodo IN (${list.map(() => '?').join(',')}) OR periodo IS NULL)`)
-        params.push(...list)
+        query = query.or(`periodo.in.(${list.join(',')}),periodo.is.null`)
       }
     }
 
-    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
-    const rows  = db.prepare(`SELECT * FROM dre_comments ${where} ORDER BY created_at DESC`).all(...params)
-    return NextResponse.json(rows)
+    const { data, error } = await query
+    if (error) throw new Error(error.message)
+    return NextResponse.json(data ?? [])
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
 }
 
-// POST — create new ticket or master reply
 export async function POST(req: NextRequest) {
   try {
     const user = getUserFromHeaders(req)
@@ -67,80 +53,93 @@ export async function POST(req: NextRequest) {
     const { dre_linha, agrupamento, conta, periodo, tipo_valor, texto, parent_id, filter_state } = body
     if (!dre_linha || !texto) return NextResponse.json({ error: 'dre_linha e texto obrigatórios' }, { status: 400 })
 
-    const db = getDb()
+    const supabase = getSupabase()
 
     let departamento = user?.department ?? null
     if (parent_id) {
-      // Reply: inherit parent's departamento and update parent status
-      const parent = db.prepare('SELECT departamento FROM dre_comments WHERE id = ?').get(parent_id) as { departamento: string | null } | undefined
+      const { data: parent } = await supabase
+        .from('dre_comments').select('departamento').eq('id', parent_id).single()
       if (parent) departamento = parent.departamento
-      db.prepare(`UPDATE dre_comments SET status = 'replied', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(parent_id)
+      await supabase
+        .from('dre_comments')
+        .update({ status: 'replied' })
+        .eq('id', parent_id)
     }
 
-    const r = db.prepare(`
-      INSERT INTO dre_comments
-        (dre_linha, agrupamento, conta, periodo, tipo_valor, texto, usuario, user_role, departamento, parent_id, status, filter_state)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)
-    `).run(
-      dre_linha,
-      agrupamento ?? null,
-      conta       ?? null,
-      periodo     ?? null,
-      tipo_valor  ?? 'realizado',
-      texto,
-      user?.userId ?? null,
-      user?.role   ?? 'master',
-      departamento,
-      parent_id   ?? null,
-      JSON.stringify(filter_state ?? {})
-    )
-
-    const row = db.prepare('SELECT * FROM dre_comments WHERE id = ?').get(r.lastInsertRowid)
-    return NextResponse.json(row)
+    const { data, error } = await supabase
+      .from('dre_comments')
+      .insert({
+        dre_linha,
+        agrupamento:  agrupamento  ?? null,
+        conta:        conta        ?? null,
+        periodo:      periodo      ?? null,
+        tipo_valor:   tipo_valor   ?? 'realizado',
+        texto,
+        usuario:      user?.userId ?? null,
+        user_role:    user?.role   ?? 'master',
+        departamento,
+        parent_id:    parent_id   ?? null,
+        status:       'open',
+        filter_state: filter_state ?? {},
+      })
+      .select()
+      .single()
+    if (error) throw new Error(error.message)
+    return NextResponse.json(data)
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
 }
 
-// PUT — edit text OR close ticket
 export async function PUT(req: NextRequest) {
   try {
     const user = getUserFromHeaders(req)
     const { id, action, texto, motivo } = await req.json()
     if (!id) return NextResponse.json({ error: 'id obrigatório' }, { status: 400 })
 
-    const db = getDb()
+    const supabase = getSupabase()
     if (action === 'close') {
-      db.prepare(`
-        UPDATE dre_comments
-        SET status = 'closed', resolved_at = CURRENT_TIMESTAMP,
-            resolved_by = ?, resolved_motivo = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).run(user?.userId ?? 'master', motivo ?? '', id)
+      await supabase.from('dre_comments').update({
+        status: 'closed',
+        resolved_at: new Date().toISOString(),
+        resolved_by: user?.userId ?? 'master',
+        resolved_motivo: motivo ?? '',
+      }).eq('id', id)
     } else {
       if (!texto) return NextResponse.json({ error: 'texto obrigatório' }, { status: 400 })
-      db.prepare('UPDATE dre_comments SET texto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(texto, id)
+      await supabase.from('dre_comments').update({ texto }).eq('id', id)
     }
-    return NextResponse.json(db.prepare('SELECT * FROM dre_comments WHERE id = ?').get(id))
+    const { data } = await supabase.from('dre_comments').select('*').eq('id', id).single()
+    return NextResponse.json(data)
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
 }
 
-// DELETE
 export async function DELETE(req: NextRequest) {
   try {
     const user = getUserFromHeaders(req)
     const id   = new URL(req.url).searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id obrigatório' }, { status: 400 })
+
+    const supabase = getSupabase()
     if (user?.role === 'dept') {
-      // Dept can only delete own tickets with no replies yet
-      getDb().prepare(`
-        DELETE FROM dre_comments WHERE id = ? AND departamento = ? AND parent_id IS NULL
-        AND id NOT IN (SELECT DISTINCT parent_id FROM dre_comments WHERE parent_id IS NOT NULL)
-      `).run(id, user.department ?? '')
+      // Get IDs of comments that have replies
+      const { data: replies } = await supabase
+        .from('dre_comments')
+        .select('parent_id')
+        .not('parent_id', 'is', null)
+      const parentIds = new Set((replies ?? []).map((r: { parent_id: number }) => r.parent_id))
+      if (parentIds.has(parseInt(id))) {
+        return NextResponse.json({ error: 'Não pode excluir ticket com respostas' }, { status: 400 })
+      }
+      await supabase.from('dre_comments')
+        .delete()
+        .eq('id', id)
+        .eq('departamento', user.department ?? '')
+        .is('parent_id', null)
     } else {
-      getDb().prepare('DELETE FROM dre_comments WHERE id = ?').run(id)
+      await supabase.from('dre_comments').delete().eq('id', id)
     }
     return NextResponse.json({ success: true })
   } catch (e) {

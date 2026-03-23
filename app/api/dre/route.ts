@@ -14,22 +14,22 @@ export async function GET(req: NextRequest) {
     const forcedDept = user?.role === 'dept' ? user.department : undefined
 
     if (type === 'hierarchy') {
-      return NextResponse.json(getDREHierarchy())
+      return NextResponse.json(await getDREHierarchy())
     }
 
     if (type === 'linhas') {
-      return NextResponse.json(getDRELinhas())
+      return NextResponse.json(await getDRELinhas())
     }
 
     if (type === 'distinct') {
       const col = sp.get('col') as FilterColumn
       if (!col) return NextResponse.json({ error: 'col required' }, { status: 400 })
-      return NextResponse.json(getDistinctValues(col))
+      return NextResponse.json(await getDistinctValues(col))
     }
 
     if (type === 'centros') {
       const depts = sp.get('departamentos')?.split(',').filter(Boolean) ?? []
-      return NextResponse.json(getCentrosByDepartamentos(depts))
+      return NextResponse.json(await getCentrosByDepartamentos(depts))
     }
 
     const periodos      = sp.get('periodos')?.split(',').filter(Boolean)
@@ -39,11 +39,11 @@ export async function GET(req: NextRequest) {
     const centros       = sp.get('centros')?.split(',').filter(Boolean)
 
     if (type === 'accounts') {
-      const data = getDREByAccount(periodos, departamentos, centros)
+      const data = await getDREByAccount(periodos, departamentos, centros)
       return NextResponse.json(data)
     }
 
-    const data = getDRE(periodos, departamentos, centros)
+    const data = await getDRE(periodos, departamentos, centros)
     return NextResponse.json(data)
   } catch (e) {
     console.error(e)

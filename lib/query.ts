@@ -1,132 +1,90 @@
-import { getDb } from './db'
+import { getSupabase } from './supabase'
 import type { FilterCondition, FilterColumn, FilterLogic, MedidaResultado, Medida } from './types'
 
-// Mapeia coluna filtro → tabela correta no star schema
-const COL_SOURCE: Record<FilterColumn, string> = {
-  tipo:                    'l.tipo',
-  numero_conta_contabil:   'l.numero_conta_contabil',
-  nome_conta_contabil:     'COALESCE(ca.nome_conta_contabil, l.nome_conta_contabil)',
-  agrupamento_arvore:      'ca.agrupamento_arvore',
-  dre:                     'ca.dre',
-  centro_custo:            'l.centro_custo',
-  departamento:            'cc.departamento',
-  nome_departamento:       'cc.nome_departamento',
-  area:                    'cc.area',
-  fonte:                   'l.fonte',
-  data_lancamento:         'l.data_lancamento',
-}
-
-const STAR_SCHEMA_JOIN = `
-  FROM lancamentos l
-  LEFT JOIN centros_custo  cc ON l.centro_custo          = cc.centro_custo
-  LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil
-`
-
+// ─── buildFilterSQL kept for reference / client-side use (not used server-side) ─
 export function buildFilterSQL(filters: FilterCondition[], defaultLogic: FilterLogic = 'AND'): { where: string; params: unknown[] } {
   if (!filters?.length) return { where: '', params: [] }
-
   const params: unknown[] = []
   const sqlParts: string[] = []
-
+  const COL_SOURCE: Record<FilterColumn, string> = {
+    tipo:                    'l.tipo',
+    numero_conta_contabil:   'l.numero_conta_contabil',
+    nome_conta_contabil:     'COALESCE(ca.nome_conta_contabil, l.nome_conta_contabil)',
+    agrupamento_arvore:      'ca.agrupamento_arvore',
+    dre:                     'ca.dre',
+    centro_custo:            'l.centro_custo',
+    departamento:            'cc.departamento',
+    nome_departamento:       'cc.nome_departamento',
+    area:                    'cc.area',
+    fonte:                   'l.fonte',
+    data_lancamento:         'l.data_lancamento',
+  }
   for (const f of filters) {
     const col = COL_SOURCE[f.column] ?? `l.${f.column}`
     let part = ''
     switch (f.operator) {
-      case '=':
-        part = `LOWER(${col}) = LOWER(?)`
-        params.push(f.value)
-        break
-      case '!=':
-        part = `LOWER(${col}) != LOWER(?)`
-        params.push(f.value)
-        break
-      case 'contains':
-        part = `LOWER(${col}) LIKE LOWER(?)`
-        params.push(`%${f.value}%`)
-        break
-      case 'not_contains':
-        part = `LOWER(${col}) NOT LIKE LOWER(?)`
-        params.push(`%${f.value}%`)
-        break
-      case 'starts_with':
-        part = `LOWER(${col}) LIKE LOWER(?)`
-        params.push(`${f.value}%`)
-        break
+      case '=':           part = `LOWER(${col}) = LOWER(?)`; params.push(f.value); break
+      case '!=':          part = `LOWER(${col}) != LOWER(?)`; params.push(f.value); break
+      case 'contains':    part = `LOWER(${col}) LIKE LOWER(?)`; params.push(`%${f.value}%`); break
+      case 'not_contains':part = `LOWER(${col}) NOT LIKE LOWER(?)`; params.push(`%${f.value}%`); break
+      case 'starts_with': part = `LOWER(${col}) LIKE LOWER(?)`; params.push(`${f.value}%`); break
       case 'in': {
-        const vals = f.value.split(',').map(v => v.trim()).filter(Boolean)
-        if (vals.length) {
-          part = `LOWER(${col}) IN (${vals.map(() => 'LOWER(?)').join(',')})`
-          params.push(...vals)
-        }
+        const vals = f.value.split(',').map((v: string) => v.trim()).filter(Boolean)
+        if (vals.length) { part = `LOWER(${col}) IN (${vals.map(() => 'LOWER(?)').join(',')})`; params.push(...vals) }
         break
       }
     }
     if (part) sqlParts.push(part)
   }
-
-  if (sqlParts.length === 0) return { where: '', params: [] }
-  if (sqlParts.length === 1) return { where: sqlParts[0], params }
-
-  // Build expression using per-filter logic connectors
-  // First filter has no connector; subsequent filters use their logic field (or defaultLogic)
+  if (!sqlParts.length) return { where: '', params: [] }
   let result = sqlParts[0]
   for (let i = 1; i < sqlParts.length; i++) {
-    const connector = filters[i].logic || defaultLogic
-    result += ` ${connector} ${sqlParts[i]}`
+    result += ` ${filters[i].logic || defaultLogic} ${sqlParts[i]}`
   }
-
-  // If there's a mix of AND and OR, we need proper SQL precedence.
-  // AND has higher precedence than OR in SQL, which is correct behavior:
-  //   A OR B AND C  =>  A OR (B AND C)
-  // But users might expect left-to-right evaluation.
-  // Wrap in parens to be safe when there's any OR.
   const hasOr = filters.some((f, i) => i > 0 && (f.logic || defaultLogic) === 'OR')
   if (hasOr) result = `(${result})`
-
   return { where: result, params }
 }
 
-// ─── Star schema query ────────────────────────────────────────────────────────
-// Remove "AS alias" suffix from GROUP BY / ORDER BY expressions (keep only in SELECT)
-const stripAlias = (expr: string) => expr.replace(/\s+as\s+\w+\s*$/i, '').trim()
+// ─── Async star schema query via Supabase RPC ─────────────────────────────────
 
-function runStarQuery(
+async function runStarQuery(
   tipo: 'budget' | 'razao',
   filters: FilterCondition[],
-  groupBy: string[],
-  logic: FilterLogic = 'AND'
-): Array<Record<string, unknown>> {
-  const db = getDb()
-  const { where, params } = buildFilterSQL(filters, logic)
-  const allConditions = [`l.tipo = '${tipo}'`, where].filter(Boolean).join(' AND ')
-  const selectCols  = groupBy.join(', ')
-  const groupExprs  = groupBy.map(stripAlias).join(', ')
-  const groupClause = groupBy.length ? `GROUP BY ${groupExprs}` : ''
-
-  const sql = `
-    SELECT
-      ${groupBy.length ? selectCols + ',' : ''}
-      SUM(l.debito_credito) as valor
-    ${STAR_SCHEMA_JOIN}
-    WHERE ${allConditions}
-    ${groupClause}
-    ORDER BY ${groupBy.length ? groupExprs : '1'}
-  `
-  return db.prepare(sql).all(...(params as unknown[])) as Array<Record<string, unknown>>
+  logic: FilterLogic = 'AND',
+  extraFilters: FilterCondition[] = [],
+  periodos: string[] = [],
+  groupDept = false,
+  groupPeriod = false,
+  groupCc = false,
+): Promise<Array<Record<string, unknown>>> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase.rpc('run_star_query', {
+    p_tipo:          tipo,
+    p_filters:       filters,
+    p_logic:         logic,
+    p_extra_filters: extraFilters,
+    p_periodos:      periodos,
+    p_group_dept:    groupDept,
+    p_group_period:  groupPeriod,
+    p_group_cc:      groupCc,
+  })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as Array<Record<string, unknown>>
 }
 
 export interface MedidaQueryOptions {
   groupByDept?: boolean
   groupByPeriod?: boolean
   groupByCentroCusto?: boolean
-  periodos?: string[]        // filtro de período: ['2024-01', '2024-02', ...]
-  extraFiltros?: import('./types').FilterCondition[]  // filtros adicionais (AND com filtros da medida)
+  periodos?: string[]
+  extraFiltros?: FilterCondition[]
 }
 
-export function getMedidaResultados(
+export async function getMedidaResultados(
   medidaId: number,
   options: MedidaQueryOptions = {}
-): MedidaResultado[] {
+): Promise<MedidaResultado[]> {
   const {
     groupByDept = true,
     groupByPeriod = true,
@@ -135,46 +93,33 @@ export function getMedidaResultados(
     extraFiltros = [],
   } = options
 
-  const db = getDb()
-  const raw = db.prepare('SELECT * FROM medidas WHERE id = ?').get(medidaId) as {
-    id: number; nome: string; descricao: string; unidade: string; cor: string
-    tipo_fonte: string; tipo_medida: string; filtros: string
-    denominador_filtros: string; denominador_tipo_fonte: string
-    created_at: string; updated_at: string
-  } | undefined
-  if (!raw) return []
+  const supabase = getSupabase()
+  const { data: raw, error } = await supabase
+    .from('medidas')
+    .select('*')
+    .eq('id', medidaId)
+    .single()
+  if (error || !raw) return []
 
-  const rawAny = raw as unknown as Record<string, string>
   const baseMedida: Medida = {
     ...raw,
     unidade:                        raw.unidade ?? '',
     tipo_fonte:                     raw.tipo_fonte as 'budget' | 'razao' | 'ambos',
     tipo_medida:                    (raw.tipo_medida || 'simples') as 'simples' | 'ratio',
-    filtros:                        JSON.parse(raw.filtros || '[]'),
-    filtros_operador:               (rawAny.filtros_operador || 'AND') as 'AND' | 'OR',
-    denominador_filtros:            JSON.parse(raw.denominador_filtros || '[]'),
-    denominador_filtros_operador:   (rawAny.denominador_filtros_operador || 'AND') as 'AND' | 'OR',
+    filtros:                        Array.isArray(raw.filtros) ? raw.filtros : JSON.parse(raw.filtros || '[]'),
+    filtros_operador:               (raw.filtros_operador || 'AND') as 'AND' | 'OR',
+    denominador_filtros:            Array.isArray(raw.denominador_filtros) ? raw.denominador_filtros : JSON.parse(raw.denominador_filtros || '[]'),
+    denominador_filtros_operador:   (raw.denominador_filtros_operador || 'AND') as 'AND' | 'OR',
     denominador_tipo_fonte:         (raw.denominador_tipo_fonte || 'ambos') as 'budget' | 'razao' | 'ambos',
-    departamentos:                  JSON.parse(rawAny.departamentos || '[]'),
+    departamentos:                  Array.isArray(raw.departamentos) ? raw.departamentos : JSON.parse(raw.departamentos || '[]'),
   }
 
-  // Extra filters (e.g. department filter from dept dashboard) are always ANDed
-  const medida = baseMedida
-
-  const groupBy: string[] = []
-  if (groupByDept)        groupBy.push('cc.departamento', 'cc.nome_departamento')
-  if (groupByCentroCusto) groupBy.push('l.centro_custo', 'cc.nome_centro_custo')
-  if (groupByPeriod)      groupBy.push("strftime('%Y-%m', l.data_lancamento) as periodo")
-
-  const periodoClause = periodos.length ? buildPeriodoWhere(periodos) : null
-
-  if (medida.tipo_medida === 'ratio') {
-    return computeRatioMedida(medida, groupBy, periodoClause, extraFiltros)
+  if (baseMedida.tipo_medida === 'ratio') {
+    return computeRatioMedida(baseMedida, groupByDept, groupByPeriod, groupByCentroCusto, periodos, extraFiltros)
   }
 
-  // ── Medida simples ────────────────────────────────────────────────────────
   const tiposToRun: Array<'budget' | 'razao'> =
-    medida.tipo_fonte === 'ambos' ? ['budget', 'razao'] : [medida.tipo_fonte]
+    baseMedida.tipo_fonte === 'ambos' ? ['budget', 'razao'] : [baseMedida.tipo_fonte]
 
   const byKey: Record<string, {
     budget: number; razao: number
@@ -182,11 +127,14 @@ export function getMedidaResultados(
   }> = {}
 
   for (const tipo of tiposToRun) {
-    const rows = runStarQueryWithPeriodo(tipo, medida.filtros, groupBy, periodoClause, medida.filtros_operador, extraFiltros)
+    const rows = await runStarQuery(
+      tipo, baseMedida.filtros, baseMedida.filtros_operador,
+      extraFiltros, periodos, groupByDept, groupByPeriod, groupByCentroCusto
+    )
     for (const r of rows) {
-      const dept     = (r['departamento']     ?? '') as string
+      const dept     = (r['departamento']      ?? '') as string
       const nomeDept = (r['nome_departamento'] ?? '') as string
-      const cc       = (r['centro_custo']     ?? '') as string
+      const cc       = (r['centro_custo']      ?? '') as string
       const nomeCc   = (r['nome_centro_custo'] ?? '') as string
       const periodo  = (r['periodo'] ?? '') as string
       const key      = `${dept}||${cc}||${periodo}`
@@ -200,7 +148,7 @@ export function getMedidaResultados(
     const [departamento, centro_custo, periodo] = key.split('||')
     const variacao = vals.razao - vals.budget
     return {
-      medida,
+      medida: baseMedida,
       departamento,
       nome_departamento: vals.nome_dept,
       centro_custo,
@@ -214,25 +162,26 @@ export function getMedidaResultados(
   })
 }
 
-// ── Ratio medida: numerador / denominador ────────────────────────────────────
-function computeRatioMedida(
+async function computeRatioMedida(
   medida: Medida,
-  groupBy: string[],
-  periodoClause: { where: string; params: unknown[] } | null,
+  groupByDept: boolean,
+  groupByPeriod: boolean,
+  groupByCentroCusto: boolean,
+  periodos: string[],
   extraAndFilters: FilterCondition[] = []
-): MedidaResultado[] {
+): Promise<MedidaResultado[]> {
   type RawBucket = { num_budget: number; num_razao: number; den_budget: number; den_razao: number; nome_dept: string; nome_cc: string }
   const byKey: Record<string, RawBucket> = {}
 
-  const runAndAccumulate = (
+  const runAndAccumulate = async (
     filtros: FilterCondition[],
     tipo_fonte: 'budget' | 'razao' | 'ambos',
     isNumerator: boolean,
     logic: FilterLogic = 'AND'
   ) => {
-    const tipos: Array<'budget'|'razao'> = tipo_fonte === 'ambos' ? ['budget','razao'] : [tipo_fonte]
+    const tipos: Array<'budget' | 'razao'> = tipo_fonte === 'ambos' ? ['budget', 'razao'] : [tipo_fonte]
     for (const tipo of tipos) {
-      const rows = runStarQueryWithPeriodo(tipo, filtros, groupBy, periodoClause, logic, extraAndFilters)
+      const rows = await runStarQuery(tipo, filtros, logic, extraAndFilters, periodos, groupByDept, groupByPeriod, groupByCentroCusto)
       for (const r of rows) {
         const dept     = (r['departamento']      ?? '') as string
         const nomeDept = (r['nome_departamento'] ?? '') as string
@@ -253,12 +202,11 @@ function computeRatioMedida(
     }
   }
 
-  runAndAccumulate(medida.filtros,             medida.tipo_fonte,             true,  medida.filtros_operador)
-  runAndAccumulate(medida.denominador_filtros, medida.denominador_tipo_fonte, false, medida.denominador_filtros_operador)
+  await runAndAccumulate(medida.filtros, medida.tipo_fonte, true, medida.filtros_operador)
+  await runAndAccumulate(medida.denominador_filtros, medida.denominador_tipo_fonte, false, medida.denominador_filtros_operador)
 
   return Object.entries(byKey).map(([key, v]) => {
     const [departamento, centro_custo, periodo] = key.split('||')
-    // ratio in %, e.g. 5.2 means 5.2%
     const budget = v.den_budget ? (v.num_budget / Math.abs(v.den_budget)) * 100 : 0
     const razao  = v.den_razao  ? (v.num_razao  / Math.abs(v.den_razao))  * 100 : 0
     const variacao = razao - budget
@@ -282,153 +230,68 @@ function computeRatioMedida(
   })
 }
 
-// Versão interna que aceita cláusula de período extra já montada
-function buildPeriodoWhere(periodos: string[]): { where: string; params: unknown[] } | null {
-  if (!periodos.length) return null
-  const placeholders = periodos.map(() => '?').join(',')
-  return {
-    where: `strftime('%Y-%m', l.data_lancamento) IN (${placeholders})`,
-    params: periodos,
-  }
-}
-
-function runStarQueryWithPeriodo(
-  tipo: 'budget' | 'razao',
-  filters: FilterCondition[],
-  groupBy: string[],
-  periodoClause: { where: string; params: unknown[] } | null,
-  logic: FilterLogic = 'AND',
-  extraAndFilters: FilterCondition[] = []
-): Array<Record<string, unknown>> {
-  const db = getDb()
-  const { where, params } = buildFilterSQL(filters, logic)
-  const { where: extraWhere, params: extraParams } = buildFilterSQL(extraAndFilters, 'AND')
-  const periodoPart = periodoClause?.where ?? ''
-  const allConditions = [`l.tipo = '${tipo}'`, where, extraWhere, periodoPart].filter(Boolean).join(' AND ')
-  const allParams    = [...(params as unknown[]), ...(extraParams as unknown[]), ...(periodoClause?.params ?? [])]
-  const selectCols  = groupBy.join(', ')
-  const groupExprs  = groupBy.map(stripAlias).join(', ')
-  const groupClause = groupBy.length ? `GROUP BY ${groupExprs}` : ''
-
-  const sql = `
-    SELECT
-      ${groupBy.length ? selectCols + ',' : ''}
-      SUM(l.debito_credito) as valor
-    ${STAR_SCHEMA_JOIN}
-    WHERE ${allConditions}
-    ${groupClause}
-    ORDER BY ${groupBy.length ? groupExprs : '1'}
-  `
-  return db.prepare(sql).all(...allParams) as Array<Record<string, unknown>>
-}
-
-// ─── Análise geral (sem medida específica) ───────────────────────────────────
-export function getAnalise(
+// ─── Análise geral ────────────────────────────────────────────────────────────
+export async function getAnalise(
   filters: FilterCondition[],
   departamentos?: string[],
   periodos?: string[],
   groupByCentro = false
 ) {
-  const db = getDb()
-  const { where, params } = buildFilterSQL(filters)
-  const extraConditions: string[] = []
-  const extraParams: unknown[] = []
-
-  if (departamentos?.length) {
-    extraConditions.push(`cc.nome_departamento IN (${departamentos.map(() => '?').join(',')})`)
-    extraParams.push(...departamentos)
-  }
-  if (periodos?.length) {
-    extraConditions.push(`strftime('%Y-%m', l.data_lancamento) IN (${periodos.map(() => '?').join(',')})`)
-    extraParams.push(...periodos)
-  }
-
-  const allExtra = [...(where ? [where] : []), ...extraConditions].join(' AND ')
-  const whereClause = allExtra ? `AND ${allExtra}` : ''
-
-  const sql = groupByCentro ? `
-    SELECT
-      cc.departamento,
-      cc.nome_departamento,
-      l.centro_custo,
-      cc.nome_centro_custo,
-      strftime('%Y-%m', l.data_lancamento) as periodo,
-      SUM(CASE WHEN l.tipo = 'budget' THEN l.debito_credito ELSE 0 END) as budget,
-      SUM(CASE WHEN l.tipo = 'razao'  THEN l.debito_credito ELSE 0 END) as razao
-    ${STAR_SCHEMA_JOIN}
-    WHERE 1=1 ${whereClause}
-    GROUP BY l.centro_custo, cc.nome_centro_custo, cc.departamento, cc.nome_departamento, periodo
-    ORDER BY cc.nome_departamento, l.centro_custo, periodo
-  ` : `
-    SELECT
-      cc.departamento,
-      cc.nome_departamento,
-      strftime('%Y-%m', l.data_lancamento) as periodo,
-      SUM(CASE WHEN l.tipo = 'budget' THEN l.debito_credito ELSE 0 END) as budget,
-      SUM(CASE WHEN l.tipo = 'razao'  THEN l.debito_credito ELSE 0 END) as razao
-    ${STAR_SCHEMA_JOIN}
-    WHERE 1=1 ${whereClause}
-    GROUP BY cc.departamento, cc.nome_departamento, periodo
-    ORDER BY cc.departamento, periodo
-  `
-
-  const rows = db.prepare(sql).all(...(params as unknown[]), ...extraParams) as Array<{
-    departamento: string; nome_departamento: string
-    centro_custo?: string; nome_centro_custo?: string
-    periodo: string; budget: number; razao: number
-  }>
-
-  return rows.map(r => ({
+  const supabase = getSupabase()
+  const { data, error } = await supabase.rpc('get_analise', {
+    p_filters:       filters ?? [],
+    p_departamentos: departamentos ?? [],
+    p_periodos:      periodos ?? [],
+    p_group_by_cc:   groupByCentro,
+  })
+  if (error) throw new Error(error.message)
+  return ((data ?? []) as Array<Record<string, unknown>>).map(r => ({
     ...r,
-    budget: r.budget ?? 0,
-    razao:  r.razao  ?? 0,
-    variacao: (r.razao ?? 0) - (r.budget ?? 0),
-    variacao_pct: r.budget ? (((r.razao ?? 0) - r.budget) / Math.abs(r.budget)) * 100 : 0,
+    budget:    (r['budget']  as number) ?? 0,
+    razao:     (r['razao']   as number) ?? 0,
+    variacao:  ((r['razao'] as number ?? 0) - (r['budget'] as number ?? 0)),
+    variacao_pct: r['budget'] ? (((r['razao'] as number ?? 0) - (r['budget'] as number)) / Math.abs(r['budget'] as number)) * 100 : 0,
   }))
 }
 
 // ─── Periods that have actual Razão data (for YTD default) ────────────────────
-export function getRazaoPeriods(): string[] {
-  const db = getDb()
-  const rows = db.prepare(`
-    SELECT DISTINCT strftime('%Y-%m', l.data_lancamento) AS periodo
-    FROM lancamentos l
-    WHERE l.tipo = 'razao' AND l.data_lancamento IS NOT NULL
-    ORDER BY periodo
-  `).all() as Array<{ periodo: string }>
-  return rows.map(r => r.periodo).filter(Boolean)
+export async function getRazaoPeriods(): Promise<string[]> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('lancamentos')
+    .select('data_lancamento')
+    .eq('tipo', 'razao')
+    .not('data_lancamento', 'is', null)
+  if (error) throw new Error(error.message)
+  const set = new Set<string>()
+  for (const row of data ?? []) {
+    if (row.data_lancamento) {
+      const d = new Date(row.data_lancamento)
+      if (!isNaN(d.getTime())) {
+        set.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+      }
+    }
+  }
+  return [...set].sort()
 }
 
 // ─── Distinct values para autocomplete ───────────────────────────────────────
-export function getDistinctValues(column: FilterColumn, limit = 500): string[] {
-  const db = getDb()
-  const col = COL_SOURCE[column] ?? `l.${column}`
-  const sql = `
-    SELECT DISTINCT ${col} as val
-    ${STAR_SCHEMA_JOIN}
-    WHERE ${col} IS NOT NULL AND ${col} != ''
-    ORDER BY val
-    LIMIT ${limit}
-  `
-  const rows = db.prepare(sql).all() as Array<{ val: string }>
-  return rows.map(r => r.val).filter(Boolean)
+export async function getDistinctValues(column: FilterColumn, limit = 500): Promise<string[]> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase.rpc('get_distinct_values', {
+    p_column: column,
+    p_limit: limit,
+  })
+  if (error) throw new Error(error.message)
+  return ((data ?? []) as Array<{ val: string }>).map(r => r.val).filter(Boolean)
 }
 
 // ─── Summary ──────────────────────────────────────────────────────────────────
-export function getSummary() {
-  const db = getDb()
-  return db.prepare(`
-    SELECT
-      COUNT(DISTINCT cc.departamento)                                        AS departamentos,
-      COUNT(DISTINCT strftime('%Y-%m', l.data_lancamento))                  AS periodos,
-      SUM(CASE WHEN l.tipo='budget' THEN l.debito_credito ELSE 0 END)       AS total_budget,
-      SUM(CASE WHEN l.tipo='razao'  THEN l.debito_credito ELSE 0 END)       AS total_razao,
-      COUNT(CASE WHEN l.tipo='budget' THEN 1 END)                           AS linhas_budget,
-      COUNT(CASE WHEN l.tipo='razao'  THEN 1 END)                           AS linhas_razao,
-      (SELECT COUNT(*) FROM centros_custo)                                  AS qtd_centros,
-      (SELECT COUNT(*) FROM contas_contabeis)                               AS qtd_contas
-    ${STAR_SCHEMA_JOIN}
-  `).get() as {
+export async function getSummary() {
+  const supabase = getSupabase()
+  const { data, error } = await supabase.rpc('get_summary')
+  if (error) throw new Error(error.message)
+  return data as {
     departamentos: number; periodos: number
     total_budget: number; total_razao: number
     linhas_budget: number; linhas_razao: number
@@ -446,58 +309,29 @@ export interface DRERow {
   razao: number
 }
 
-export function getCentrosByDepartamentos(departamentos: string[]): Array<{ cc: string; nome: string }> {
-  const db = getDb()
+export async function getCentrosByDepartamentos(departamentos: string[]): Promise<Array<{ cc: string; nome: string }>> {
   if (!departamentos.length) return []
-  const rows = db.prepare(`
-    SELECT DISTINCT l.centro_custo as cc, COALESCE(cc2.nome_centro_custo, l.centro_custo) as nome
-    FROM lancamentos l
-    LEFT JOIN centros_custo cc2 ON l.centro_custo = cc2.centro_custo
-    WHERE cc2.nome_departamento IN (${departamentos.map(() => '?').join(',')})
-    ORDER BY nome
-  `).all(...departamentos) as Array<{ cc: string; nome: string }>
-  return rows
+  const supabase = getSupabase()
+  const { data, error } = await supabase.rpc('get_centros_by_departamentos', {
+    p_departamentos: departamentos,
+  })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as Array<{ cc: string; nome: string }>
 }
 
-export function getDRE(
+export async function getDRE(
   periodos?: string[],
   departamentos?: string[],
   centros?: string[]
-): DRERow[] {
-  const db = getDb()
-  const conditions: string[] = []
-  const params: unknown[] = []
-
-  if (periodos?.length) {
-    conditions.push(`strftime('%Y-%m', l.data_lancamento) IN (${periodos.map(() => '?').join(',')})`)
-    params.push(...periodos)
-  }
-  if (departamentos?.length) {
-    conditions.push(`cc.nome_departamento IN (${departamentos.map(() => '?').join(',')})`)
-    params.push(...departamentos)
-  }
-  if (centros?.length) {
-    conditions.push(`l.centro_custo IN (${centros.map(() => '?').join(',')})`)
-    params.push(...centros)
-  }
-
-  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
-
-  const sql = `
-    SELECT
-      COALESCE(ca.dre, 'Sem classificação') as dre,
-      COALESCE(ca.agrupamento_arvore, '') as agrupamento_arvore,
-      COALESCE(MIN(ca.ordem_dre), 999) as ordem_dre,
-      strftime('%Y-%m', l.data_lancamento) as periodo,
-      SUM(CASE WHEN l.tipo = 'budget' THEN l.debito_credito ELSE 0 END) as budget,
-      SUM(CASE WHEN l.tipo = 'razao'  THEN l.debito_credito ELSE 0 END) as razao
-    ${STAR_SCHEMA_JOIN}
-    ${whereClause}
-    GROUP BY ca.dre, ca.agrupamento_arvore, periodo
-    ORDER BY COALESCE(MIN(ca.ordem_dre), 999), ca.dre, ca.agrupamento_arvore, periodo
-  `
-
-  return db.prepare(sql).all(...params) as DRERow[]
+): Promise<DRERow[]> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase.rpc('get_dre', {
+    p_periodos:      periodos ?? [],
+    p_departamentos: departamentos ?? [],
+    p_centros:       centros ?? [],
+  })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as DRERow[]
 }
 
 export interface DREAccountRow {
@@ -510,57 +344,36 @@ export interface DREAccountRow {
   razao: number
 }
 
-export function getDREByAccount(
+export async function getDREByAccount(
   periodos?: string[],
   departamentos?: string[],
   centros?: string[]
-): DREAccountRow[] {
-  const db = getDb()
-  const conditions: string[] = []
-  const params: unknown[] = []
-
-  if (periodos?.length) {
-    conditions.push(`strftime('%Y-%m', l.data_lancamento) IN (${periodos.map(() => '?').join(',')})`)
-    params.push(...periodos)
-  }
-  if (departamentos?.length) {
-    conditions.push(`cc.nome_departamento IN (${departamentos.map(() => '?').join(',')})`)
-    params.push(...departamentos)
-  }
-  if (centros?.length) {
-    conditions.push(`l.centro_custo IN (${centros.map(() => '?').join(',')})`)
-    params.push(...centros)
-  }
-
-  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
-
-  const sql = `
-    SELECT
-      COALESCE(ca.dre, 'Sem classificação') as dre,
-      COALESCE(ca.agrupamento_arvore, '') as agrupamento_arvore,
-      l.numero_conta_contabil,
-      COALESCE(ca.nome_conta_contabil, l.nome_conta_contabil, '') as nome_conta_contabil,
-      strftime('%Y-%m', l.data_lancamento) as periodo,
-      SUM(CASE WHEN l.tipo = 'budget' THEN l.debito_credito ELSE 0 END) as budget,
-      SUM(CASE WHEN l.tipo = 'razao'  THEN l.debito_credito ELSE 0 END) as razao
-    ${STAR_SCHEMA_JOIN}
-    ${whereClause}
-    GROUP BY ca.dre, ca.agrupamento_arvore, l.numero_conta_contabil, periodo
-    ORDER BY ca.dre, ca.agrupamento_arvore, l.numero_conta_contabil, periodo
-  `
-
-  return db.prepare(sql).all(...params) as DREAccountRow[]
+): Promise<DREAccountRow[]> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase.rpc('get_dre_by_account', {
+    p_periodos:      periodos ?? [],
+    p_departamentos: departamentos ?? [],
+    p_centros:       centros ?? [],
+  })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as DREAccountRow[]
 }
 
-export function getDREHierarchy(): Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }> {
-  const db = getDb()
-  return db.prepare(`
-    SELECT DISTINCT agrupamento_arvore, dre, MIN(ordem_dre) as ordem_dre
-    FROM contas_contabeis
-    WHERE dre IS NOT NULL AND dre != ''
-    GROUP BY dre, agrupamento_arvore
-    ORDER BY MIN(ordem_dre), dre, agrupamento_arvore
-  `).all() as Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }>
+export async function getDREHierarchy(): Promise<Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }>> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('contas_contabeis')
+    .select('agrupamento_arvore, dre, ordem_dre')
+    .not('dre', 'is', null)
+    .neq('dre', '')
+  if (error) throw new Error(error.message)
+  const map = new Map<string, { agrupamento_arvore: string; dre: string; ordem_dre: number }>()
+  for (const r of data ?? []) {
+    const key = `${r.dre}||${r.agrupamento_arvore}`
+    if (!map.has(key)) map.set(key, { agrupamento_arvore: r.agrupamento_arvore ?? '', dre: r.dre ?? '', ordem_dre: r.ordem_dre ?? 999 })
+    else if ((r.ordem_dre ?? 999) < map.get(key)!.ordem_dre) map.get(key)!.ordem_dre = r.ordem_dre ?? 999
+  }
+  return [...map.values()].sort((a, b) => a.ordem_dre - b.ordem_dre || a.dre.localeCompare(b.dre))
 }
 
 export interface DRELinha {
@@ -569,19 +382,24 @@ export interface DRELinha {
   nome: string
   tipo: 'grupo' | 'subtotal'
   sinal: number
-  formula_grupos: string   // JSON array
-  formula_sinais: string   // JSON array
+  formula_grupos: string
+  formula_sinais: string
   negrito: number
   separador: number
 }
 
-export function getDRELinhas(): DRELinha[] {
-  const db = getDb()
-  return db.prepare(`
-    SELECT id, ordem, nome, tipo, sinal, formula_grupos, formula_sinais, negrito, separador
-    FROM dre_linhas
-    ORDER BY ordem
-  `).all() as DRELinha[]
+export async function getDRELinhas(): Promise<DRELinha[]> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('dre_linhas')
+    .select('id, ordem, nome, tipo, sinal, formula_grupos, formula_sinais, negrito, separador')
+    .order('ordem')
+  if (error) throw new Error(error.message)
+  return (data ?? []).map(r => ({
+    ...r,
+    formula_grupos: Array.isArray(r.formula_grupos) ? JSON.stringify(r.formula_grupos) : (r.formula_grupos ?? '[]'),
+    formula_sinais: Array.isArray(r.formula_sinais) ? JSON.stringify(r.formula_sinais) : (r.formula_sinais ?? '[]'),
+  })) as DRELinha[]
 }
 
 // ─── KPIs Manuais ─────────────────────────────────────────────────────────────
@@ -605,87 +423,78 @@ export interface KpiValor {
   meta: number | null
 }
 
-export function getKpisManuais(departamento?: string): KpiManual[] {
-  const db = getDb()
+export async function getKpisManuais(departamento?: string): Promise<KpiManual[]> {
+  const supabase = getSupabase()
+  let query = supabase
+    .from('kpis_manuais')
+    .select('id, nome, unidade, descricao, departamento, cor, ordem, tem_budget')
+    .order('ordem')
+    .order('nome')
   if (departamento !== undefined && departamento !== '') {
-    return db.prepare(`
-      SELECT id, nome, unidade, descricao, departamento, cor, ordem, tem_budget
-      FROM kpis_manuais
-      WHERE departamento = '' OR departamento = ?
-      ORDER BY ordem, nome
-    `).all(departamento) as KpiManual[]
+    query = query.or(`departamento.eq.,departamento.eq.${departamento}`)
   }
-  return db.prepare(`
-    SELECT id, nome, unidade, descricao, departamento, cor, ordem, tem_budget
-    FROM kpis_manuais
-    ORDER BY ordem, nome
-  `).all() as KpiManual[]
+  const { data, error } = await query
+  if (error) throw new Error(error.message)
+  return (data ?? []) as KpiManual[]
 }
 
-export function upsertKpiManual(data: Omit<KpiManual, 'id'>): KpiManual {
-  const db = getDb()
-  const stmt = db.prepare(`
-    INSERT INTO kpis_manuais (nome, unidade, descricao, departamento, cor, ordem, tem_budget)
-    VALUES (@nome, @unidade, @descricao, @departamento, @cor, @ordem, @tem_budget)
-  `)
-  const result = stmt.run(data)
-  return db.prepare('SELECT id, nome, unidade, descricao, departamento, cor, ordem, tem_budget FROM kpis_manuais WHERE id = ?').get(result.lastInsertRowid) as KpiManual
+export async function upsertKpiManual(data: Omit<KpiManual, 'id'>): Promise<KpiManual> {
+  const supabase = getSupabase()
+  const { data: result, error } = await supabase
+    .from('kpis_manuais')
+    .insert(data)
+    .select('id, nome, unidade, descricao, departamento, cor, ordem, tem_budget')
+    .single()
+  if (error) throw new Error(error.message)
+  return result as KpiManual
 }
 
-export function updateKpiManual(id: number, data: Omit<KpiManual, 'id'>): KpiManual {
-  const db = getDb()
-  db.prepare(`
-    UPDATE kpis_manuais
-    SET nome = @nome, unidade = @unidade, descricao = @descricao,
-        departamento = @departamento, cor = @cor, ordem = @ordem, tem_budget = @tem_budget
-    WHERE id = @id
-  `).run({ ...data, id })
-  return db.prepare('SELECT id, nome, unidade, descricao, departamento, cor, ordem, tem_budget FROM kpis_manuais WHERE id = ?').get(id) as KpiManual
+export async function updateKpiManual(id: number, data: Omit<KpiManual, 'id'>): Promise<KpiManual> {
+  const supabase = getSupabase()
+  const { data: result, error } = await supabase
+    .from('kpis_manuais')
+    .update(data)
+    .eq('id', id)
+    .select('id, nome, unidade, descricao, departamento, cor, ordem, tem_budget')
+    .single()
+  if (error) throw new Error(error.message)
+  return result as KpiManual
 }
 
-export function deleteKpiManual(id: number): void {
-  const db = getDb()
-  db.prepare('DELETE FROM kpis_manuais WHERE id = ?').run(id)
+export async function deleteKpiManual(id: number): Promise<void> {
+  const supabase = getSupabase()
+  const { error } = await supabase.from('kpis_manuais').delete().eq('id', id)
+  if (error) throw new Error(error.message)
 }
 
-export function getKpiValores(kpiId: number, periodos?: string[]): KpiValor[] {
-  const db = getDb()
+export async function getKpiValores(kpiId: number, periodos?: string[]): Promise<KpiValor[]> {
+  const supabase = getSupabase()
+  let query = supabase
+    .from('kpi_valores')
+    .select('id, kpi_id, periodo, valor, meta')
+    .eq('kpi_id', kpiId)
+    .order('periodo')
   if (periodos?.length) {
-    const placeholders = periodos.map(() => '?').join(',')
-    return db.prepare(`
-      SELECT id, kpi_id, periodo, valor, meta
-      FROM kpi_valores
-      WHERE kpi_id = ? AND periodo IN (${placeholders})
-      ORDER BY periodo
-    `).all(kpiId, ...periodos) as KpiValor[]
+    query = query.in('periodo', periodos)
   }
-  return db.prepare(`
-    SELECT id, kpi_id, periodo, valor, meta
-    FROM kpi_valores
-    WHERE kpi_id = ?
-    ORDER BY periodo
-  `).all(kpiId) as KpiValor[]
+  const { data, error } = await query
+  if (error) throw new Error(error.message)
+  return (data ?? []) as KpiValor[]
 }
 
-export function upsertKpiValores(
+export async function upsertKpiValores(
   kpiId: number,
   valores: Array<{ periodo: string; valor: number; meta?: number | null }>
-): void {
-  const db = getDb()
-  const stmt = db.prepare(`
-    INSERT INTO kpi_valores (kpi_id, periodo, valor, meta)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(kpi_id, periodo) DO UPDATE SET valor = excluded.valor, meta = excluded.meta
-  `)
-  const runAll = db.transaction(() => {
-    for (const v of valores) {
-      stmt.run(kpiId, v.periodo, v.valor, v.meta ?? null)
-    }
-  })
-  runAll()
+): Promise<void> {
+  const supabase = getSupabase()
+  const rows = valores.map(v => ({ kpi_id: kpiId, periodo: v.periodo, valor: v.valor, meta: v.meta ?? null }))
+  const { error } = await supabase
+    .from('kpi_valores')
+    .upsert(rows, { onConflict: 'kpi_id,periodo' })
+  if (error) throw new Error(error.message)
 }
 
-// ─── Dept Medidas (medidas fixadas ao dashboard de um departamento) ────────────
+// ─── Dept Medidas ──────────────────────────────────────────────────────────────
 
 export interface DeptMedida {
   id: number
@@ -694,34 +503,41 @@ export interface DeptMedida {
   ordem: number
 }
 
-export function getDeptMedidas(departamento: string): DeptMedida[] {
-  const db = getDb()
-  return db.prepare(`
-    SELECT id, departamento, medida_id, ordem
-    FROM dept_medidas
-    WHERE departamento = ?
-    ORDER BY ordem, id
-  `).all(departamento) as DeptMedida[]
+export async function getDeptMedidas(departamento: string): Promise<DeptMedida[]> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('dept_medidas')
+    .select('id, departamento, medida_id, ordem')
+    .eq('departamento', departamento)
+    .order('ordem')
+    .order('id')
+  if (error) throw new Error(error.message)
+  return (data ?? []) as DeptMedida[]
 }
 
-export function upsertDeptMedida(departamento: string, medidaId: number): void {
-  const db = getDb()
-  db.prepare(`
-    INSERT OR IGNORE INTO dept_medidas (departamento, medida_id) VALUES (?, ?)
-  `).run(departamento, medidaId)
+export async function upsertDeptMedida(departamento: string, medidaId: number): Promise<void> {
+  const supabase = getSupabase()
+  const { error } = await supabase
+    .from('dept_medidas')
+    .upsert({ departamento, medida_id: medidaId }, { onConflict: 'departamento,medida_id', ignoreDuplicates: true })
+  if (error) throw new Error(error.message)
 }
 
-export function deleteDeptMedida(departamento: string, medidaId: number): void {
-  const db = getDb()
-  db.prepare(`
-    DELETE FROM dept_medidas WHERE departamento = ? AND medida_id = ?
-  `).run(departamento, medidaId)
+export async function deleteDeptMedida(departamento: string, medidaId: number): Promise<void> {
+  const supabase = getSupabase()
+  const { error } = await supabase
+    .from('dept_medidas')
+    .delete()
+    .eq('departamento', departamento)
+    .eq('medida_id', medidaId)
+  if (error) throw new Error(error.message)
 }
 
-export function getMedidas(): import('./types').Medida[] {
-  const db = getDb()
-  const rows = db.prepare('SELECT * FROM medidas ORDER BY nome').all() as Array<Record<string, unknown>>
-  return rows.map(raw => ({
+export async function getMedidas(): Promise<import('./types').Medida[]> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase.from('medidas').select('*').order('nome')
+  if (error) throw new Error(error.message)
+  return (data ?? []).map(raw => ({
     id:                             raw.id as number,
     nome:                           raw.nome as string,
     descricao:                      (raw.descricao ?? '') as string,
@@ -729,12 +545,12 @@ export function getMedidas(): import('./types').Medida[] {
     cor:                            (raw.cor ?? '#6366f1') as string,
     tipo_fonte:                     (raw.tipo_fonte ?? 'ambos') as 'budget' | 'razao' | 'ambos',
     tipo_medida:                    ((raw.tipo_medida as string) || 'simples') as 'simples' | 'ratio',
-    filtros:                        JSON.parse((raw.filtros as string) || '[]'),
+    filtros:                        Array.isArray(raw.filtros) ? raw.filtros : JSON.parse((raw.filtros as string) || '[]'),
     filtros_operador:               ((raw.filtros_operador as string) || 'AND') as 'AND' | 'OR',
-    denominador_filtros:            JSON.parse((raw.denominador_filtros as string) || '[]'),
+    denominador_filtros:            Array.isArray(raw.denominador_filtros) ? raw.denominador_filtros : JSON.parse((raw.denominador_filtros as string) || '[]'),
     denominador_filtros_operador:   ((raw.denominador_filtros_operador as string) || 'AND') as 'AND' | 'OR',
     denominador_tipo_fonte:         ((raw.denominador_tipo_fonte as string) || 'ambos') as 'budget' | 'razao' | 'ambos',
-    departamentos:                  JSON.parse((raw.departamentos as string) || '[]'),
+    departamentos:                  Array.isArray(raw.departamentos) ? raw.departamentos : JSON.parse((raw.departamentos as string) || '[]'),
     created_at:                     raw.created_at as string,
     updated_at:                     raw.updated_at as string,
   }))

@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   try {
     const sp = new URL(req.url).searchParams
     const departamento = sp.get('departamento') ?? undefined
-    const kpis = getKpisManuais(departamento)
+    const kpis = await getKpisManuais(departamento)
     return NextResponse.json(kpis)
   } catch (e) {
     console.error(e)
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const { nome, unidade, descricao, departamento, cor, ordem, tem_budget } = body
-    const kpi = upsertKpiManual({
+    const kpi = await upsertKpiManual({
       nome: nome ?? '',
       unidade: unidade ?? '',
       descricao: descricao ?? '',
@@ -40,7 +40,7 @@ export async function PUT(req: NextRequest) {
     const body = await req.json()
     const { id, nome, unidade, descricao, departamento, cor, ordem, tem_budget } = body
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
-    const kpi = updateKpiManual(Number(id), {
+    const kpi = await updateKpiManual(Number(id), {
       nome: nome ?? '',
       unidade: unidade ?? '',
       descricao: descricao ?? '',
@@ -61,7 +61,7 @@ export async function DELETE(req: NextRequest) {
     const sp = new URL(req.url).searchParams
     const id = sp.get('id')
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
-    deleteKpiManual(Number(id))
+    await deleteKpiManual(Number(id))
     return NextResponse.json({ ok: true })
   } catch (e) {
     console.error(e)

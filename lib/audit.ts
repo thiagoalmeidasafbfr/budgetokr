@@ -1,6 +1,6 @@
-import { getDb } from './db'
+import { getSupabase } from './supabase'
 
-export function logAudit(
+export async function logAudit(
   tabela: string,
   registroId: number | null,
   acao: 'INSERT' | 'UPDATE' | 'DELETE',
@@ -9,29 +9,38 @@ export function logAudit(
   valorNovo: string | null,
   usuario: string | null,
 ) {
-  const db = getDb()
-  db.prepare(`
-    INSERT INTO audit_log (tabela, registro_id, acao, campo, valor_anterior, valor_novo, usuario)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(tabela, registroId, acao, campo, valorAnterior, valorNovo, usuario)
+  try {
+    const supabase = getSupabase()
+    await supabase.from('audit_log').insert({
+      tabela,
+      registro_id: registroId,
+      acao,
+      campo,
+      valor_anterior: valorAnterior,
+      valor_novo: valorNovo,
+      usuario,
+    })
+  } catch { /* non-blocking */ }
 }
 
-export function logBulkAudit(
+export async function logBulkAudit(
   tabela: string,
   registroId: number | null,
   acao: 'INSERT' | 'UPDATE' | 'DELETE',
   changes: Record<string, { old: unknown; new: unknown }>,
   usuario: string | null,
 ) {
-  const db = getDb()
-  const stmt = db.prepare(`
-    INSERT INTO audit_log (tabela, registro_id, acao, campo, valor_anterior, valor_novo, usuario)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `)
-  const tx = db.transaction(() => {
-    for (const [campo, vals] of Object.entries(changes)) {
-      stmt.run(tabela, registroId, acao, campo, String(vals.old ?? ''), String(vals.new ?? ''), usuario)
-    }
-  })
-  tx()
+  try {
+    const supabase = getSupabase()
+    const rows = Object.entries(changes).map(([campo, vals]) => ({
+      tabela,
+      registro_id: registroId,
+      acao,
+      campo,
+      valor_anterior: String(vals.old ?? ''),
+      valor_novo: String(vals.new ?? ''),
+      usuario,
+    }))
+    if (rows.length) await supabase.from('audit_log').insert(rows)
+  } catch { /* non-blocking */ }
 }

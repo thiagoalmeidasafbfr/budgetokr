@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getDb } from '@/lib/db'
+import { getSupabase } from '@/lib/supabase'
 import { getUserFromHeaders } from '@/lib/session'
 
 export async function GET(req: NextRequest) {
@@ -15,22 +15,22 @@ export async function GET(req: NextRequest) {
     const limit  = 50
     const offset = (page - 1) * limit
 
-    const db = getDb()
-    const conditions: string[] = []
-    const params: unknown[] = []
-    if (tabela) { conditions.push('tabela = ?'); params.push(tabela) }
-    if (regId)  { conditions.push('registro_id = ?'); params.push(parseInt(regId)) }
-    if (acao)   { conditions.push('acao = ?'); params.push(acao) }
-    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+    const supabase = getSupabase()
+    let query = supabase
+      .from('audit_log')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1)
 
-    const { total } = db.prepare(`SELECT COUNT(*) as total FROM audit_log ${where}`).get(...params) as { total: number }
-    const rows = db.prepare(`
-      SELECT * FROM audit_log ${where}
-      ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
-    `).all(...params, limit, offset)
+    if (tabela) query = query.eq('tabela', tabela)
+    if (regId)  query = query.eq('registro_id', parseInt(regId))
+    if (acao)   query = query.eq('acao', acao)
 
-    return NextResponse.json({ rows, total, page, pages: Math.ceil(total / limit) })
+    const { data: rows, count, error } = await query
+    if (error) throw new Error(error.message)
+
+    const total = count ?? 0
+    return NextResponse.json({ rows: rows ?? [], total, page, pages: Math.ceil(total / limit) })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }

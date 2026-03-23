@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getDb } from '@/lib/db'
+import { getSupabase } from '@/lib/supabase'
 import { getUserFromHeaders } from '@/lib/session'
 import { logAudit, logBulkAudit } from '@/lib/audit'
 
@@ -9,60 +9,32 @@ const PAGE_SIZE = 100
 export async function GET(req: NextRequest) {
   try {
     const sp    = new URL(req.url).searchParams
-    const tipo  = sp.get('tipo')          // 'budget' | 'razao' | null (ambos)
+    const tipo  = sp.get('tipo')
     const page  = Math.max(1, parseInt(sp.get('page') ?? '1'))
     const q     = sp.get('q') ?? ''
     const per   = sp.get('periodo')
     const ano   = sp.get('ano')
 
-    // Força departamento para usuários de dept
     const user = getUserFromHeaders(req)
     const dept = user?.role === 'dept' ? (user.department ?? null) : sp.get('departamento')
-    const db    = getDb()
 
-    const conditions: string[] = []
-    const params: unknown[] = []
+    const supabase = getSupabase()
 
-    if (tipo) { conditions.push(`l.tipo = ?`); params.push(tipo) }
-    if (dept) { conditions.push(`cc.departamento = ?`); params.push(dept) }
-    if (per)  { conditions.push(`strftime('%Y-%m', l.data_lancamento) = ?`); params.push(per) }
-    if (ano)  { conditions.push(`strftime('%Y', l.data_lancamento) = ?`); params.push(ano) }
-    if (q)    {
-      conditions.push(`(
-        LOWER(l.numero_conta_contabil) LIKE LOWER(?) OR
-        LOWER(l.nome_conta_contabil)   LIKE LOWER(?) OR
-        LOWER(l.centro_custo)          LIKE LOWER(?) OR
-        LOWER(l.fonte)                 LIKE LOWER(?) OR
-        LOWER(l.observacao)            LIKE LOWER(?)
-      )`)
-      const like = `%${q}%`
-      params.push(like, like, like, like, like)
-    }
+    // We use a PostgreSQL function to handle complex joins and filtering
+    const { data, error } = await supabase.rpc('get_lancamentos_paged', {
+      p_tipo:        tipo ?? null,
+      p_departamento: dept ?? null,
+      p_periodo:     per ?? null,
+      p_ano:         ano ?? null,
+      p_q:           q || null,
+      p_page:        page,
+      p_page_size:   PAGE_SIZE,
+    })
+    if (error) throw new Error(error.message)
 
-    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
-
-    const countSQL = `
-      SELECT COUNT(*) as total
-      FROM lancamentos l
-      LEFT JOIN centros_custo cc ON l.centro_custo = cc.centro_custo
-      ${where}
-    `
-    const { total } = db.prepare(countSQL).get(...params) as { total: number }
-
-    const offset = (page - 1) * PAGE_SIZE
-    const dataSQL = `
-      SELECT
-        l.*,
-        cc.nome_centro_custo, cc.departamento, cc.nome_departamento, cc.area, cc.nome_area,
-        ca.agrupamento_arvore, ca.dre
-      FROM lancamentos l
-      LEFT JOIN centros_custo    cc ON l.centro_custo          = cc.centro_custo
-      LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil
-      ${where}
-      ORDER BY l.data_lancamento DESC, l.id DESC
-      LIMIT ${PAGE_SIZE} OFFSET ${offset}
-    `
-    const rows = db.prepare(dataSQL).all(...params)
+    const result = data as { rows: unknown[]; total: number } | null
+    const rows  = result?.rows ?? []
+    const total = result?.total ?? 0
 
     return NextResponse.json({ rows, total, page, pageSize: PAGE_SIZE, pages: Math.ceil(total / PAGE_SIZE) })
   } catch (e) {
@@ -74,25 +46,24 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const db = getDb()
-    const r = db.prepare(`
-      INSERT INTO lancamentos
-        (tipo, data_lancamento, nome_conta_contabil, numero_conta_contabil,
-         centro_custo, nome_conta_contrapartida, fonte, observacao, debito_credito)
-      VALUES (?,?,?,?,?,?,?,?,?)
-    `).run(
-      body.tipo ?? 'budget',
-      body.data_lancamento ?? '',
-      body.nome_conta_contabil ?? '',
-      body.numero_conta_contabil ?? '',
-      body.centro_custo ?? '',
-      body.nome_conta_contrapartida ?? '',
-      body.fonte ?? '',
-      body.observacao ?? '',
-      parseFloat(body.debito_credito) || 0,
-    )
-    const row = db.prepare('SELECT * FROM lancamentos WHERE id = ?').get(r.lastInsertRowid)
-    return NextResponse.json(row)
+    const supabase = getSupabase()
+    const { data, error } = await supabase
+      .from('lancamentos')
+      .insert({
+        tipo:                     body.tipo ?? 'budget',
+        data_lancamento:          body.data_lancamento ?? null,
+        nome_conta_contabil:      body.nome_conta_contabil ?? '',
+        numero_conta_contabil:    body.numero_conta_contabil ?? '',
+        centro_custo:             body.centro_custo ?? '',
+        nome_conta_contrapartida: body.nome_conta_contrapartida ?? '',
+        fonte:                    body.fonte ?? '',
+        observacao:               body.observacao ?? '',
+        debito_credito:           parseFloat(body.debito_credito) || 0,
+      })
+      .select()
+      .single()
+    if (error) throw new Error(error.message)
+    return NextResponse.json(data)
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
@@ -112,30 +83,32 @@ export async function PATCH(req: NextRequest) {
     const keys = Object.keys(fields).filter(k => allowed.includes(k))
     if (!keys.length) return NextResponse.json({ error: 'No valid fields' }, { status: 400 })
 
-    const db = getDb()
+    const supabase = getSupabase()
 
     // Capture old values for audit
-    const oldRow = db.prepare('SELECT * FROM lancamentos WHERE id = ?').get(id) as Record<string, unknown> | undefined
-    if (!oldRow) return NextResponse.json({ error: 'Registro não encontrado' }, { status: 404 })
+    const { data: oldRow, error: fetchError } = await supabase
+      .from('lancamentos').select('*').eq('id', id).single()
+    if (fetchError || !oldRow) return NextResponse.json({ error: 'Registro não encontrado' }, { status: 404 })
 
-    const setClauses = keys.map(k => `${k} = ?`).join(', ')
-    const values = keys.map(k => fields[k])
+    const updateData: Record<string, unknown> = {}
+    for (const k of keys) updateData[k] = fields[k]
 
-    db.prepare(`UPDATE lancamentos SET ${setClauses}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(...values, id)
+    const { data: updated, error: updateError } = await supabase
+      .from('lancamentos').update(updateData).eq('id', id).select().single()
+    if (updateError) throw new Error(updateError.message)
 
     // Log changes
     const changes: Record<string, { old: unknown; new: unknown }> = {}
     for (const k of keys) {
-      if (String(oldRow[k] ?? '') !== String(fields[k] ?? '')) {
-        changes[k] = { old: oldRow[k], new: fields[k] }
+      if (String((oldRow as Record<string, unknown>)[k] ?? '') !== String(fields[k] ?? '')) {
+        changes[k] = { old: (oldRow as Record<string, unknown>)[k], new: fields[k] }
       }
     }
     if (Object.keys(changes).length > 0) {
-      logBulkAudit('lancamentos', id, 'UPDATE', changes, user?.userId ?? null)
+      await logBulkAudit('lancamentos', id, 'UPDATE', changes, user?.userId ?? null)
     }
 
-    const row = db.prepare('SELECT * FROM lancamentos WHERE id = ?').get(id)
-    return NextResponse.json(row)
+    return NextResponse.json(updated)
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
@@ -148,13 +121,14 @@ export async function DELETE(req: NextRequest) {
     const id = new URL(req.url).searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
-    const db = getDb()
-    const oldRow = db.prepare('SELECT * FROM lancamentos WHERE id = ?').get(id) as Record<string, unknown> | undefined
+    const supabase = getSupabase()
+    const { data: oldRow } = await supabase.from('lancamentos').select('*').eq('id', id).single()
 
-    db.prepare('DELETE FROM lancamentos WHERE id = ?').run(id)
+    const { error } = await supabase.from('lancamentos').delete().eq('id', id)
+    if (error) throw new Error(error.message)
 
     if (oldRow) {
-      logAudit('lancamentos', parseInt(id), 'DELETE', null,
+      await logAudit('lancamentos', parseInt(id), 'DELETE', null,
         JSON.stringify(oldRow), null, user?.userId ?? null)
     }
 

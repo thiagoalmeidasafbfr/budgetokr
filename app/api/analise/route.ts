@@ -11,22 +11,21 @@ export async function GET(req: NextRequest) {
     const type     = sp.get('type') ?? 'analise'
     const medidaId = sp.get('medidaId')
 
-    // Lê o usuário injetado pelo middleware
     const user = getUserFromHeaders(req)
     const forcedDept = user?.role === 'dept' ? user.department : undefined
 
     if (type === 'summary') {
-      return NextResponse.json(getSummary())
+      return NextResponse.json(await getSummary())
     }
 
     if (type === 'razao-periods') {
-      return NextResponse.json(getRazaoPeriods())
+      return NextResponse.json(await getRazaoPeriods())
     }
 
     if (type === 'distinct') {
       const col = sp.get('col') as FilterColumn
       if (!col) return NextResponse.json({ error: 'col required' }, { status: 400 })
-      return NextResponse.json(getDistinctValues(col))
+      return NextResponse.json(await getDistinctValues(col))
     }
 
     if (type === 'medida' && medidaId) {
@@ -40,7 +39,7 @@ export async function GET(req: NextRequest) {
         ? [{ column: 'nome_departamento' as FilterColumn, operator: '=' as const, value: forcedDept }]
         : []
 
-      const results = getMedidaResultados(parseInt(medidaId), {
+      const results = await getMedidaResultados(parseInt(medidaId), {
         groupByDept,
         groupByPeriod,
         groupByCentroCusto,
@@ -50,8 +49,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(results)
     }
 
-    // Default: full comparison
-    // Se dept user, força o departamento dele; ignora o que vier na query string
     const departamentos = forcedDept
       ? [forcedDept]
       : sp.get('departamentos')?.split(',').filter(Boolean)
@@ -60,7 +57,7 @@ export async function GET(req: NextRequest) {
     const filtros: FilterCondition[] = filtersRaw ? JSON.parse(filtersRaw) : []
     const groupByCentro  = sp.get('groupByCentro') === 'true'
 
-    const data = getAnalise(filtros, departamentos, periodos, groupByCentro)
+    const data = await getAnalise(filtros, departamentos, periodos, groupByCentro)
     return NextResponse.json(data)
   } catch (e) {
     console.error(e)
