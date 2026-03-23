@@ -189,6 +189,7 @@ export async function POST(req: NextRequest) {
           numero_conta_contabil:    String(get(row, 'numero_conta_contabil')    ?? ''),
           centro_custo:             String(get(row, 'centro_custo')             ?? ''),
           id_cc_cc:                 String(get(row, 'id_cc_cc')                 ?? '') || null,
+          num_transacao:            String(get(row, 'num_transacao')            ?? '') || null,
           nome_conta_contrapartida: String(get(row, 'nome_conta_contrapartida') ?? ''),
           fonte:                    String(get(row, 'fonte')                    ?? ''),
           observacao:               String(get(row, 'observacao')               ?? ''),

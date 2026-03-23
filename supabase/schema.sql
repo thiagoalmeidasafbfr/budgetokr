@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS lancamentos (
   numero_conta_contabil     TEXT,
   centro_custo              TEXT,
   id_cc_cc                  TEXT,
+  num_transacao             TEXT,
   nome_conta_contrapartida  TEXT,
   fonte                     TEXT,
   observacao                TEXT,

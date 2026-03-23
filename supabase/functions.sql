@@ -330,7 +330,7 @@ BEGIN
   v_sql := 'SELECT l.id, l.tipo, l.data_lancamento, l.numero_conta_contabil,
       l.nome_conta_contabil, l.centro_custo, cc.nome_centro_custo,
       ca.agrupamento_arvore, ca.dre, l.nome_conta_contrapartida,
-      l.debito_credito, l.observacao, l.fonte
+      l.debito_credito, l.observacao, l.fonte, l.num_transacao
     FROM lancamentos l
     LEFT JOIN centros_custo    cc ON l.centro_custo          = cc.centro_custo
     LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil' ||
