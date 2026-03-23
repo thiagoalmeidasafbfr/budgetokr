@@ -2,7 +2,7 @@
 import React, {
   useState, useEffect, useRef, useMemo, useCallback, useDeferredValue
 } from 'react'
-import { X, Download, ArrowUpDown, Columns3, Filter, ChevronDown } from 'lucide-react'
+import { X, Download, ArrowUpDown, Columns3, Filter, ChevronDown, MessageSquare } from 'lucide-react'
 import { formatCurrency, formatPeriodo, cn } from '@/lib/utils'
 import type { TreeNode } from '@/lib/dre-utils'
 
@@ -137,7 +137,12 @@ const ROW_H   = 28
 const OVERSCAN = 8
 
 // ── Main modal ────────────────────────────────────────────────────────────────
-export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuState; onClose: () => void }) {
+export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId, onCommentSaved }: {
+  ctx: ContextMenuState
+  onClose: () => void
+  highlightLancamentoId?: number
+  onCommentSaved?: () => void
+}) {
   const [rows,          setRows]          = useState<DetalhamentoLinha[]>([])
   const [truncated,     setTruncated]     = useState(false)
   const [loading,       setLoading]       = useState(true)
@@ -152,6 +157,10 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
   const [showCols,      setShowCols]      = useState(false)
   const [scrollTop,     setScrollTop]     = useState(0)
   const [containerH,    setContainerH]    = useState(600)
+
+  const [commentingRow,  setCommentingRow]  = useState<DetalhamentoLinha | null>(null)
+  const [commentText,    setCommentText]    = useState('')
+  const [commentSaving,  setCommentSaving]  = useState(false)
 
   const deferredText = useDeferredValue(textInput)
 
@@ -261,6 +270,17 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
     setScrollTop(0)
   }, [filterTipo, filterPeriodo, colFilters, deferredText, sortCol, sortDir])
 
+  // Auto-scroll to highlighted lancamento once data loads
+  useEffect(() => {
+    if (!highlightLancamentoId || loading || !scrollRef.current) return
+    const idx = displayed.findIndex(r => r.id === highlightLancamentoId)
+    if (idx === -1) return
+    const pos = Math.max(0, idx * ROW_H - containerH / 2)
+    setTimeout(() => scrollRef.current?.scrollTo({ top: pos, behavior: 'smooth' }), 150)
+  // Run only once after initial load
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading])
+
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     setScrollTop((e.target as HTMLDivElement).scrollTop)
   }, [])
@@ -274,6 +294,41 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
   const toggleSort = (key: DetColKey) => {
     if (sortCol === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortCol(key); setSortDir('asc') }
+  }
+
+  const saveRowComment = async () => {
+    if (!commentingRow || !commentText.trim()) return
+    setCommentSaving(true)
+    const periodo = commentingRow.data_lancamento?.substring(0, 7) ?? null
+    await fetch('/api/dre/comments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        lancamento_id: commentingRow.id,
+        dre_linha:    commentingRow.dre || ctx.node.dre || ctx.node.name,
+        agrupamento:  commentingRow.agrupamento_arvore || ctx.node.agrupamento,
+        conta:        commentingRow.numero_conta_contabil,
+        periodo,
+        tipo_valor:   commentingRow.tipo === 'budget' ? 'budget' : 'realizado',
+        texto:        commentText.trim(),
+        filter_state: {
+          depts:   ctx.departamentos ?? [],
+          periods: ctx.periodos     ?? [],
+          centros: ctx.centros      ?? [],
+          openDetalhamento:      true,
+          detNode: {
+            dre:         commentingRow.dre,
+            agrupamento: commentingRow.agrupamento_arvore,
+            conta:       commentingRow.numero_conta_contabil,
+          },
+          highlightLancamentoId: commentingRow.id,
+        },
+      }),
+    })
+    setCommentText('')
+    setCommentingRow(null)
+    setCommentSaving(false)
+    onCommentSaved?.()
   }
 
   const activeFiltersCount = (ctx.departamentos?.length ?? 0) + (ctx.periodos?.length ?? 0) + (ctx.centros?.length ?? 0)
@@ -422,6 +477,7 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
             <table className="w-full text-xs" style={{ tableLayout: 'fixed', borderCollapse: 'collapse' }}>
               <thead className="sticky top-0 bg-gray-700 text-white z-10">
                 <tr style={{ height: ROW_H }}>
+                  <th style={{ width: 28, minWidth: 28 }} />
                   {visibleDefs.map(c => (
                     <th key={c.key} onClick={() => toggleSort(c.key)}
                       className={cn('px-3 font-medium whitespace-nowrap cursor-pointer select-none hover:bg-gray-600 transition-colors overflow-hidden text-ellipsis',
@@ -436,14 +492,30 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
                 </tr>
               </thead>
               <tbody>
-                {paddingTop > 0 && <tr style={{ height: paddingTop }}><td colSpan={visibleDefs.length} /></tr>}
+                {paddingTop > 0 && <tr style={{ height: paddingTop }}><td colSpan={visibleDefs.length + 1} /></tr>}
 
                 {visibleRows.map((r, li) => {
                   const ccLabel = `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}`
                   const contaLabel = `${r.numero_conta_contabil} — ${r.nome_conta_contabil}`
+                  const isHighlighted = highlightLancamentoId === r.id
                   return (
                     <tr key={r.id} style={{ height: ROW_H }}
-                      className={cn('border-b border-gray-100', (startIdx + li) % 2 === 0 ? 'bg-white' : 'bg-gray-50/60')}>
+                      className={cn('border-b border-gray-100',
+                        isHighlighted ? 'bg-amber-50 ring-1 ring-inset ring-amber-300'
+                        : (startIdx + li) % 2 === 0 ? 'bg-white' : 'bg-gray-50/60'
+                      )}>
+                      <td style={{ width: 28, minWidth: 28 }} className="px-1 text-center">
+                        <button
+                          onClick={() => { setCommentingRow(r); setCommentText('') }}
+                          title="Comentar neste lançamento"
+                          className={cn('p-0.5 rounded transition-colors',
+                            commentingRow?.id === r.id
+                              ? 'text-indigo-600 bg-indigo-100'
+                              : 'text-gray-300 hover:text-indigo-500 hover:bg-indigo-50'
+                          )}>
+                          <MessageSquare size={11} />
+                        </button>
+                      </td>
                       {visibleCols.has('data')          && <td className={cellCls} title={r.data_lancamento} style={{ fontVariantNumeric: 'tabular-nums' }}>{r.data_lancamento}</td>}
                       {visibleCols.has('tipo')          && <td className={cellCls}>
                         <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium',
@@ -464,11 +536,12 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
                   )
                 })}
 
-                {paddingBottom > 0 && <tr style={{ height: paddingBottom }}><td colSpan={visibleDefs.length} /></tr>}
+                {paddingBottom > 0 && <tr style={{ height: paddingBottom }}><td colSpan={visibleDefs.length + 1} /></tr>}
               </tbody>
               <tfoot className="sticky bottom-0 bg-gray-800 text-white font-bold z-10">
                 <tr style={{ height: ROW_H }}>
-                  <td colSpan={visibleDefs.filter(c => c.key !== 'valor').length} className="px-3 text-right whitespace-nowrap">
+                  {/* +1 for the action column */}
+                  <td colSpan={visibleDefs.filter(c => c.key !== 'valor').length + 1} className="px-3 text-right whitespace-nowrap">
                     Total ({displayed.length} lançamentos)
                   </td>
                   <td className={cn('px-3 text-right whitespace-nowrap', total < 0 ? 'text-red-300' : 'text-emerald-300')}>
@@ -477,6 +550,49 @@ export default function DetalhamentoModal({ ctx, onClose }: { ctx: ContextMenuSt
                 </tr>
               </tfoot>
             </table>
+          </div>
+        )}
+
+        {/* ── Painel de comentário de lançamento ─────────────────────────── */}
+        {commentingRow && (
+          <div className="border-t bg-indigo-50 px-5 py-3 flex-shrink-0">
+            <p className="text-xs font-semibold text-indigo-700 mb-2">
+              Comentar lançamento:&nbsp;
+              <span className="font-normal">{commentingRow.numero_conta_contabil} — {commentingRow.nome_conta_contabil}</span>
+              <span className="ml-2 px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-600 font-medium">
+                {commentingRow.data_lancamento?.substring(0, 7)}
+              </span>
+              <span className={cn('ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium',
+                commentingRow.tipo === 'budget' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700')}>
+                {commentingRow.tipo === 'budget' ? 'Budget' : 'Realizado'}
+              </span>
+            </p>
+            <div className="flex gap-2">
+              <textarea
+                value={commentText}
+                onChange={e => setCommentText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) saveRowComment() }}
+                placeholder="Seu comentário sobre este lançamento… (Ctrl+Enter para salvar)"
+                rows={2}
+                autoFocus
+                className="flex-1 text-xs border border-indigo-200 rounded-lg px-3 py-1.5 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+              />
+              <div className="flex flex-col gap-1">
+                <button
+                  onClick={saveRowComment}
+                  disabled={!commentText.trim() || commentSaving}
+                  className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 whitespace-nowrap"
+                >
+                  {commentSaving ? '…' : 'Salvar'}
+                </button>
+                <button
+                  onClick={() => { setCommentingRow(null); setCommentText('') }}
+                  className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

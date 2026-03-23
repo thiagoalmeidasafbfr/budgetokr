@@ -204,6 +204,7 @@ CREATE TABLE IF NOT EXISTS dre_comments (
   resolved_by     TEXT,
   resolved_motivo TEXT,
   filter_state    JSONB       DEFAULT '{}',
+  lancamento_id   BIGINT,
   created_at      TIMESTAMPTZ DEFAULT NOW(),
   updated_at      TIMESTAMPTZ DEFAULT NOW()
 );

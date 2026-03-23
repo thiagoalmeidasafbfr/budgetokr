@@ -22,7 +22,9 @@ interface DREComment {
   id: number; dre_linha: string; agrupamento?: string; conta?: string
   periodo?: string; tipo_valor?: string; texto: string; usuario?: string
   user_role?: string; departamento?: string; parent_id?: number
-  status?: string; filter_state?: string; created_at: string
+  status?: string; resolved_motivo?: string; resolved_by?: string
+  filter_state?: string; created_at: string
+  lancamento_id?: number
 }
 
 export default function DREPage() {
@@ -51,8 +53,14 @@ export default function DREPage() {
   const [commentEdit,   setCommentEdit]   = useState<{ dre_linha: string; agrupamento?: string; conta?: string; periodo?: string; tipo_valor?: string } | null>(null)
   const [commentText,   setCommentText]   = useState('')
   const [trendTarget,   setTrendTarget]   = useState<{ title: string; conta?: string; agrupamento?: string; dre?: string } | null>(null)
+  const [highlightLancId, setHighlightLancId] = useState<number | null>(null)
   const ctxRef = useRef<HTMLDivElement>(null)
   const expandTargetRef   = useRef<string | null>(null)
+  const pendingDetalhamentoRef = useRef<{
+    detNode: { dre?: string; agrupamento?: string; conta?: string }
+    highlightLancamentoId?: number
+    depts: string[]; periods: string[]; centros: string[]
+  } | null>(null)
   // Scroll target is stored separately so the scroll fires AFTER loading=false
   // (when the table is actually in the DOM). The expand effect sets expanded
   // immediately but can't scroll because the table is still hidden while loading.
@@ -109,7 +117,7 @@ export default function DREPage() {
       // The eye button in comment pages stores state here before navigating.
       // This avoids race conditions and works even when already on /dre (same-
       // route soft navigation doesn't re-run useEffect([]).
-      let dl: { depts?: string[]; periods?: string[]; centros?: string[]; view?: string; expand?: string; expandAgrup?: string } = {}
+      let dl: { depts?: string[]; periods?: string[]; centros?: string[]; view?: string; expand?: string; expandAgrup?: string; openDetalhamento?: boolean; detNode?: { dre?: string; agrupamento?: string; conta?: string }; highlightLancamentoId?: number } = {}
       try {
         const raw = sessionStorage.getItem('dre_deeplink')
         if (raw) { sessionStorage.removeItem('dre_deeplink'); dl = JSON.parse(raw) }
@@ -126,6 +134,17 @@ export default function DREPage() {
       // Scroll target stored for later (after data loads)
       expandTargetRef.current = dl.expand ?? sp.get('expand') ?? null
       if (urlExpanded.length) setExpanded(new Set(urlExpanded))
+
+      // Pending detalhamento deep-link (lancamento comment eye button)
+      if (dl.openDetalhamento && dl.detNode) {
+        pendingDetalhamentoRef.current = {
+          detNode: dl.detNode,
+          highlightLancamentoId: dl.highlightLancamentoId,
+          depts:   dl.depts   ?? [],
+          periods: dl.periods ?? [],
+          centros: dl.centros ?? [],
+        }
+      }
 
       const [hier, linhas, depts, dates] = await Promise.all([
         fetch('/api/dre?type=hierarchy').then(r => r.json()),
@@ -266,6 +285,24 @@ export default function DREPage() {
       }
       e.comments.push(c)
       map.set(ck, e)
+    }
+    return map
+  }, [comments, deptUser])
+
+  // commentRowMap: bolinha on the row NAME cell for conta-level rows
+  // keyed by conta (numero_conta_contabil) — aggregated across all loaded comments
+  const commentRowMap = useMemo(() => {
+    const map = new Map<string, { hasOwn: boolean; hasReply: boolean }>()
+    for (const c of comments) {
+      if (!c.conta) continue
+      const e = map.get(c.conta) ?? { hasOwn: false, hasReply: false }
+      if (deptUser) {
+        if (c.parent_id) e.hasReply = true
+        else             e.hasOwn  = true
+      } else {
+        e.hasOwn = true
+      }
+      map.set(c.conta, e)
     }
     return map
   }, [comments, deptUser])
@@ -411,6 +448,31 @@ export default function DREPage() {
     })
   }, [flatRows, loading])
 
+  // Open detalhamento modal from deep-link (lancamento comment eye button)
+  useEffect(() => {
+    const pending = pendingDetalhamentoRef.current
+    if (!pending || tree.length === 0) return
+    pendingDetalhamentoRef.current = null
+    const { detNode, highlightLancamentoId, depts, periods, centros } = pending
+    const node = {
+      name:       detNode.conta || detNode.agrupamento || detNode.dre || '',
+      dre:        detNode.dre,
+      agrupamento: detNode.agrupamento,
+      conta:      detNode.conta,
+      budget: 0, razao: 0, variacao: 0, variacao_pct: 0,
+      depth: 2, isGroup: false, isAccount: true,
+      children: [], byPeriod: {}, ordem: 0,
+    }
+    setDetModal({
+      x: 0, y: 0, node, tipo: 'ambos',
+      departamentos: depts.length   ? depts   : undefined,
+      periodos:      periods.length ? periods : undefined,
+      centros:       centros.length ? centros : undefined,
+    })
+    if (highlightLancamentoId) setHighlightLancId(highlightLancamentoId)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tree])
+
   // Totals — only real groups (não subtotais calculados que já somam os grupos)
   const totals = useMemo(() => tree
     .filter(r => r.isGroup && !r.isSubtotal)
@@ -440,6 +502,19 @@ export default function DREPage() {
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a'); a.href = url; a.download = 'dre.csv'; a.click()
+  }
+
+  // Inline helper: bolinha(s) on row name cell for conta-level rows
+  const rowNameDots = (row: ReturnType<typeof flattenTree>[number]) => {
+    if (!row.isAccount || !row.conta) return null
+    const d = commentRowMap.get(row.conta)
+    if (!d) return null
+    return (
+      <span className="ml-1 inline-flex gap-0.5 items-center flex-shrink-0 align-middle">
+        {d.hasOwn   && <span className={cn('w-1.5 h-1.5 rounded-full shadow-sm inline-block', ownDotColor)} />}
+        {d.hasReply && <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-sm inline-block" />}
+      </span>
+    )
   }
 
   return (
@@ -479,7 +554,14 @@ export default function DREPage() {
       )}
 
       {/* Modal de detalhamento */}
-      {detModal && <DetalhamentoModal ctx={detModal} onClose={() => setDetModal(null)} />}
+      {detModal && (
+        <DetalhamentoModal
+          ctx={detModal}
+          onClose={() => { setDetModal(null); setHighlightLancId(null) }}
+          highlightLancamentoId={highlightLancId ?? undefined}
+          onCommentSaved={() => loadComments(selPeriods)}
+        />
+      )}
 
       {/* Modal de tendência */}
       {trendTarget && (
@@ -710,7 +792,7 @@ export default function DREPage() {
                             ) : (
                               <span className="w-5" />
                             )}
-                            {row.name}
+                            {row.name}{rowNameDots(row)}
                           </div>
                         </td>
                         {/* Budget cell — clickable to comment, dot top-right of the number */}
@@ -835,7 +917,7 @@ export default function DREPage() {
                                       : <ChevronRight size={13} className="text-gray-400" />}
                                   </button>
                                 ) : <span className="w-4" />}
-                                <span className="truncate">{row.name}</span>
+                                <span className="truncate">{row.name}</span>{rowNameDots(row)}
                               </div>
                             </td>
                             {dataPeriods.map(p => {
@@ -1052,7 +1134,7 @@ export default function DREPage() {
                                       : <ChevronRight size={13} className="text-gray-400" />}
                                   </button>
                                 ) : <span className="w-4" />}
-                                <span className="truncate">{row.name}</span>
+                                <span className="truncate">{row.name}</span>{rowNameDots(row)}
                               </div>
                             </td>
                             {allQuarters.map(q => {
@@ -1257,7 +1339,7 @@ export default function DREPage() {
                                           : <ChevronRight size={13} className="text-gray-400" />}
                                       </button>
                                     ) : <span className="w-4" />}
-                                    <span className="truncate">{row.name}</span>
+                                    <span className="truncate">{row.name}</span>{rowNameDots(row)}
                                   </div>
                                 </td>
                                 {/* Period A */}
