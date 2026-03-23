@@ -1,10 +1,15 @@
 'use client'
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { ChevronRight, ChevronDown, Filter, X, Download, RefreshCw } from 'lucide-react'
+import dynamic from 'next/dynamic'
+import { ChevronRight, ChevronDown, Filter, X, Download, RefreshCw, ExternalLink } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
 import { YearFilter } from '@/components/YearFilter'
+import type { ContextMenuState } from '@/components/DreDetalhamentoModal'
+import type { TreeNode } from '@/lib/dre-utils'
+
+const DetalhamentoModal = dynamic(() => import('@/components/DreDetalhamentoModal'), { ssr: false })
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -52,7 +57,7 @@ type ViewMode = 'total' | 'periodo'
 
 // ── Tree builder ──────────────────────────────────────────────────────────────
 
-function buildTree(data: DreRow[]): UnidadeNode[] {
+function buildTree(data: DreRow[], dreLineOrder: Map<string, number>): UnidadeNode[] {
   const unMap = new Map<string, UnidadeNode>()
 
   for (const r of data) {
@@ -102,8 +107,12 @@ function buildTree(data: DreRow[]): UnidadeNode[] {
   }
 
   for (const un of unMap.values()) {
-    // Sort DRE groups by ordem_dre
-    un.dre_groups.sort((a, b) => a.ordemDre - b.ordemDre || a.dre.localeCompare(b.dre))
+    // Sort DRE groups using dre_linhas order (same as DRE page), fallback to ordem_dre
+    un.dre_groups.sort((a, b) => {
+      const oa = dreLineOrder.get(a.dre) ?? (a.ordemDre * 1000)
+      const ob = dreLineOrder.get(b.dre) ?? (b.ordemDre * 1000)
+      return oa - ob || a.dre.localeCompare(b.dre)
+    })
 
     for (const dreNode of un.dre_groups) {
       // Sort agrupamentos alphabetically within each DRE
@@ -138,15 +147,19 @@ function buildTree(data: DreRow[]): UnidadeNode[] {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function UnidadesNegocioPage() {
-  const [data,        setData]        = useState<DreRow[]>([])
-  const [unidades,    setUnidades]    = useState<string[]>([])
-  const [periodos,    setPeriodos]    = useState<string[]>([])
-  const [selUnidades, setSelUnidades] = useState<string[]>([])
-  const [selPeriods,  setSelPeriods]  = useState<string[]>([])
-  const [selYear,     setSelYear]     = useState<string | null>(null)
-  const [viewMode,    setViewMode]    = useState<ViewMode>('total')
-  const [expanded,    setExpanded]    = useState<Set<string>>(new Set())
-  const [loading,     setLoading]     = useState(false)
+  const [data,          setData]          = useState<DreRow[]>([])
+  const [unidades,      setUnidades]      = useState<string[]>([])
+  const [periodos,      setPeriodos]      = useState<string[]>([])
+  const [selUnidades,   setSelUnidades]   = useState<string[]>([])
+  const [selPeriods,    setSelPeriods]    = useState<string[]>([])
+  const [selYear,       setSelYear]       = useState<string | null>(null)
+  const [viewMode,      setViewMode]      = useState<ViewMode>('total')
+  const [expanded,      setExpanded]      = useState<Set<string>>(new Set())
+  const [loading,       setLoading]       = useState(false)
+  const [dreLineOrder,  setDreLineOrder]  = useState<Map<string, number>>(new Map())
+  const [ctxMenu,       setCtxMenu]       = useState<ContextMenuState | null>(null)
+  const [detModal,      setDetModal]      = useState<ContextMenuState | null>(null)
+  const ctxRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(async (uns: string[], pers: string[]) => {
     setLoading(true)
@@ -159,19 +172,36 @@ export default function UnidadesNegocioPage() {
     setLoading(false)
   }, [])
 
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!ctxMenu) return
+    const handler = () => setCtxMenu(null)
+    window.addEventListener('click', handler)
+    return () => window.removeEventListener('click', handler)
+  }, [ctxMenu])
+
   useEffect(() => {
     async function init() {
       // Use dedicated lightweight RPCs (few rows each) to populate sidebar filters
-      const [unRes, perRes] = await Promise.all([
+      const [unRes, perRes, linhasRes] = await Promise.all([
         fetch('/api/unidades-negocio?type=distinct_unidades'),
         fetch('/api/unidades-negocio?type=distinct_periodos'),
+        fetch('/api/dre?type=linhas'),
       ])
-      const uns  = unRes.ok  ? await unRes.json()  : []
-      const pers = perRes.ok ? await perRes.json() : []
+      const uns    = unRes.ok    ? await unRes.json()    : []
+      const pers   = perRes.ok   ? await perRes.json()   : []
+      const linhas = linhasRes.ok ? await linhasRes.json() : []
       const allUnidades = Array.isArray(uns)  ? (uns  as string[]).filter(Boolean) : []
       const allPeriodos = Array.isArray(pers) ? (pers as string[]).filter(Boolean) : []
       setUnidades(allUnidades)
       setPeriodos(allPeriodos)
+
+      // Build DRE line order map (tipo=grupo, ordem from dre_linhas)
+      const orderMap = new Map<string, number>()
+      for (const l of (linhas as Array<{ nome: string; tipo: string; ordem: number }>)) {
+        if (l.tipo === 'grupo') orderMap.set(l.nome, l.ordem)
+      }
+      setDreLineOrder(orderMap)
 
       // Auto-select current year YTD so initial tree load is filtered (avoids row limit)
       const now      = new Date()
@@ -203,7 +233,7 @@ export default function UnidadesNegocioPage() {
   }
 
   const filteredPeriods = selYear ? periodos.filter(p => p.startsWith(selYear)) : periodos
-  const tree            = useMemo(() => buildTree(data), [data])
+  const tree            = useMemo(() => buildTree(data, dreLineOrder), [data, dreLineOrder])
   const dataPeriods     = useMemo(() => [...new Set(data.map(r => r.periodo).filter(Boolean))].sort(), [data])
 
   const totals = useMemo(() => tree.reduce(
@@ -217,6 +247,29 @@ export default function UnidadesNegocioPage() {
     next.has(key) ? next.delete(key) : next.add(key)
     return next
   })
+
+  const openCtxMenu = (
+    e: React.MouseEvent,
+    name: string,
+    unidade: string,
+    dre?: string,
+    agrupamento?: string,
+    conta?: string,
+  ) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const node = {
+      name, dre, agrupamento, conta,
+      isGroup: false, depth: 0, ordem: 0,
+      budget: 0, razao: 0, variacao: 0, variacao_pct: 0,
+      children: [], byPeriod: {},
+    } as TreeNode
+    setCtxMenu({
+      x: e.clientX, y: e.clientY, node, tipo: 'ambos',
+      periodos:  selPeriods.length ? selPeriods : undefined,
+      unidades:  [unidade],
+    })
+  }
 
   const expandAll = () => {
     const keys = new Set<string>()
@@ -288,10 +341,32 @@ export default function UnidadesNegocioPage() {
 
   return (
     <div className="space-y-4">
+      {/* Context menu (botão direito) */}
+      {ctxMenu && (
+        <div ref={ctxRef}
+          className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-xl py-1 min-w-[180px]"
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+          onClick={e => e.stopPropagation()}>
+          <button
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2"
+            onClick={() => { setDetModal(ctxMenu); setCtxMenu(null) }}>
+            <ExternalLink size={13} /> Abrir detalhamento
+          </button>
+        </div>
+      )}
+
+      {/* Modal de detalhamento */}
+      {detModal && (
+        <DetalhamentoModal
+          ctx={detModal}
+          onClose={() => setDetModal(null)}
+        />
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Por Unidade de Negócio</h1>
-          <p className="text-gray-500 text-sm mt-0.5">Budget vs Realizado · Expansível por DRE → Agrupamento → Conta</p>
+          <p className="text-gray-500 text-sm mt-0.5">Budget vs Realizado · Expansível por DRE → Agrupamento → Conta · Clique direito para detalhamento</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => load(selUnidades, selPeriods)}>
@@ -423,8 +498,9 @@ export default function UnidadesNegocioPage() {
                       return (
                         <React.Fragment key={unKey}>
                           {/* Level 1: Unidade */}
-                          <tr className="border-b bg-gray-100/70 hover:bg-gray-100 cursor-pointer"
-                            onClick={() => toggle(unKey)}>
+                          <tr className="border-b bg-gray-100/70 hover:bg-gray-100 cursor-pointer cursor-context-menu"
+                            onClick={() => toggle(unKey)}
+                            onContextMenu={e => openCtxMenu(e, un.unidade, un.unidade)}>
                             <td className="px-5 py-2.5 font-bold text-gray-900">
                               <div className="flex items-center gap-1.5">
                                 <span className="flex-shrink-0">
@@ -442,8 +518,9 @@ export default function UnidadesNegocioPage() {
                             return (
                               <React.Fragment key={dreKey}>
                                 {/* Level 2: DRE */}
-                                <tr className="border-b border-gray-100 bg-gray-50/50 hover:bg-gray-50 cursor-pointer"
-                                  onClick={() => toggle(dreKey)}>
+                                <tr className="border-b border-gray-100 bg-gray-50/50 hover:bg-gray-50 cursor-pointer cursor-context-menu"
+                                  onClick={() => toggle(dreKey)}
+                                  onContextMenu={e => openCtxMenu(e, dreNode.dre, un.unidade, dreNode.dre)}>
                                   <td className="py-2 font-semibold text-gray-800" style={{ paddingLeft: 40 }}>
                                     <div className="flex items-center gap-1.5">
                                       <span className="flex-shrink-0">
@@ -461,8 +538,9 @@ export default function UnidadesNegocioPage() {
                                   return (
                                     <React.Fragment key={agKey}>
                                       {/* Level 3: Agrupamento */}
-                                      <tr className="border-b border-gray-50 hover:bg-indigo-50/20 cursor-pointer"
-                                        onClick={() => toggle(agKey)}>
+                                      <tr className="border-b border-gray-50 hover:bg-indigo-50/20 cursor-pointer cursor-context-menu"
+                                        onClick={() => toggle(agKey)}
+                                        onContextMenu={e => openCtxMenu(e, ag.agrupamento, un.unidade, dreNode.dre, ag.agrupamento)}>
                                         <td className="py-2 font-medium text-gray-600 text-xs" style={{ paddingLeft: 64 }}>
                                           <div className="flex items-center gap-1.5">
                                             <span className="flex-shrink-0">
@@ -477,7 +555,8 @@ export default function UnidadesNegocioPage() {
                                       {/* Level 4: Conta contábil */}
                                       {agExpanded && ag.contas.map(ct => (
                                         <tr key={`${agKey}::${ct.numero}`}
-                                          className="border-b border-gray-50/60 hover:bg-indigo-50/30">
+                                          className="border-b border-gray-50/60 hover:bg-indigo-50/30 cursor-context-menu"
+                                          onContextMenu={e => openCtxMenu(e, ct.nome, un.unidade, dreNode.dre, ag.agrupamento, ct.numero)}>
                                           <td className="py-1.5 text-gray-400 text-xs" style={{ paddingLeft: 88 }}>
                                             <span className="pl-2 border-l-2 border-indigo-100">
                                               <span className="text-gray-500 font-mono mr-1.5">{ct.numero}</span>

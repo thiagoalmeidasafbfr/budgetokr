@@ -302,7 +302,8 @@ CREATE OR REPLACE FUNCTION get_dre_detalhamento(
   p_departamento  TEXT     DEFAULT NULL,
   p_periodos      TEXT[]   DEFAULT '{}',
   p_departamentos TEXT[]   DEFAULT '{}',
-  p_centros       TEXT[]   DEFAULT '{}'
+  p_centros       TEXT[]   DEFAULT '{}',
+  p_unidades      TEXT[]   DEFAULT '{}'
 ) RETURNS JSONB LANGUAGE plpgsql AS $$
 DECLARE
   v_cond   TEXT[] := '{}';
@@ -325,6 +326,9 @@ BEGIN
   END IF;
   IF array_length(p_centros, 1) > 0 THEN
     v_cond := array_append(v_cond, format('l.centro_custo = ANY(%s)', quote_literal(p_centros::TEXT)));
+  END IF;
+  IF array_length(p_unidades, 1) > 0 THEN
+    v_cond := array_append(v_cond, format('COALESCE(un.unidade, ''Sem Unidade'') = ANY(%s)', quote_literal(p_unidades::TEXT)));
   END IF;
 
   v_sql := 'SELECT l.id, l.tipo, l.data_lancamento, l.numero_transacao,

@@ -14,6 +14,7 @@ export interface ContextMenuState {
   departamentos?: string[]
   periodos?: string[]
   centros?: string[]
+  unidades?: string[]
 }
 
 interface DetalhamentoLinha {
@@ -203,6 +204,7 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
     if (ctx.departamentos?.length) p.set('departamentos', ctx.departamentos.join(','))
     if (ctx.periodos?.length && !ctx.periodo) p.set('periodos', ctx.periodos.join(','))
     if (ctx.centros?.length)       p.set('centros',       ctx.centros.join(','))
+    if (ctx.unidades?.length)      p.set('unidades',      ctx.unidades.join(','))
     fetch(`/api/dre/detalhamento?${p}`)
       .then(r => r.json())
       .then(data => { setRows(data.rows ?? data); setTruncated(data.truncated ?? false); setLoading(false) })
