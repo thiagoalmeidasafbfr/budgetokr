@@ -6,7 +6,7 @@ import {
   LayoutDashboard, TrendingUp, LineChart, GitCompare,
   Target, Layers, FileText, Database, Upload,
   ChevronRight, Building2, BookOpen, LayoutList, Gauge,
-  LogOut, User, ListTree, Shield, Landmark, Moon, Sun, History, MessageSquare,
+  LogOut, User, ListTree, Shield, Landmark, Moon, Sun, History, MessageSquare, BarChart2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/components/ThemeProvider'
@@ -44,6 +44,12 @@ const nav: NavItem[] = [
     icon: GitCompare,
     label: 'Análise',
     sublabel: 'Budget vs Realizado',
+  },
+  {
+    type: 'link', href: '/por-unidade',
+    icon: BarChart2,
+    label: 'Por Unidade de Negócio',
+    sublabel: 'Budget vs Realizado por área',
   },
   {
     type: 'link', href: '/dept',
