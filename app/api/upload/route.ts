@@ -27,11 +27,17 @@ function parseNumber(v: unknown): number {
 
   let result: number
 
-  if (s.includes(',')) {
+  const lastDot   = s.lastIndexOf('.')
+  const lastComma = s.lastIndexOf(',')
+
+  if (lastComma > lastDot) {
+    // Vírgula é decimal (BR: "1.234,56" ou "1234,56")
     result = parseFloat(s.replace(/\./g, '').replace(',', '.'))
-  } else if (s.includes(',') === false && s.includes('.')) {
+  } else if (lastDot > lastComma) {
+    // Ponto é decimal (US: "1,234.56" ou "1234.56")
     result = parseFloat(s.replace(/,/g, ''))
   } else {
+    // Sem separador
     result = parseFloat(s) || 0
   }
 
