@@ -135,6 +135,7 @@ export default function PlanoContasPage() {
 
   // Flatten tree for rendering
   const flattenTree = (nodes: TreeNode[], depth: number = 0, parentMatch: boolean = false): Array<TreeNode & { depth: number; hasChildren: boolean; isExpanded: boolean; visible: boolean }> => {
+    if (!Array.isArray(nodes)) return []
     const result: Array<TreeNode & { depth: number; hasChildren: boolean; isExpanded: boolean; visible: boolean }> = []
     for (const node of nodes) {
       const hasChildren = node.children.length > 0
@@ -158,7 +159,7 @@ export default function PlanoContasPage() {
   const rows = data ? flattenTree(data.tree).filter(r => r.visible) : []
 
   // Totals (sum of root nodes only)
-  const totals = data?.tree.reduce(
+  const totals = data?.tree?.reduce(
     (acc, n) => ({ budget: acc.budget + n.budget, razao: acc.razao + n.razao }),
     { budget: 0, razao: 0 }
   ) ?? { budget: 0, razao: 0 }

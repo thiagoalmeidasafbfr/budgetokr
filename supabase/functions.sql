@@ -331,10 +331,12 @@ BEGIN
       l.numero_conta_contabil, l.nome_conta_contabil,
       l.centro_custo, cc.nome_centro_custo, cc.nome_area,
       ca.agrupamento_arvore, ca.dre, l.nome_conta_contrapartida,
-      l.debito_credito, l.observacao, l.fonte
+      l.debito_credito, l.observacao, l.fonte, l.num_transacao,
+      l.id_cc_cc, un.unidade
     FROM lancamentos l
     LEFT JOIN centros_custo    cc ON l.centro_custo          = cc.centro_custo
-    LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil' ||
+    LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil
+    LEFT JOIN unidades_negocio un ON l.id_cc_cc              = un.id_cc_cc' ||
     CASE WHEN array_length(v_cond, 1) > 0 THEN ' WHERE ' || array_to_string(v_cond, ' AND ') ELSE '' END ||
     ' ORDER BY l.data_lancamento, l.numero_conta_contabil
       LIMIT 50000';
@@ -562,5 +564,31 @@ BEGIN
     LIMIT ' || p_page_size || ' OFFSET ' || v_offset || ') t' INTO v_rows;
 
   RETURN jsonb_build_object('rows', COALESCE(v_rows, '[]'::JSONB), 'total', v_total);
+END;
+$$;
+
+-- ─── Unidades de Negócio: análise Budget vs Razão por unidade ─────────────────
+CREATE OR REPLACE FUNCTION get_unidades_negocio_analise(
+  p_periodos  TEXT[]  DEFAULT '{}',
+  p_unidades  TEXT[]  DEFAULT '{}'
+) RETURNS TABLE(
+  unidade   TEXT,
+  periodo   TEXT,
+  budget    NUMERIC,
+  razao     NUMERIC
+) LANGUAGE plpgsql AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    u.unidade,
+    TO_CHAR(l.data_lancamento, 'YYYY-MM') AS periodo,
+    SUM(CASE WHEN l.tipo = 'budget' THEN l.debito_credito ELSE 0 END) AS budget,
+    SUM(CASE WHEN l.tipo = 'razao'  THEN l.debito_credito ELSE 0 END) AS razao
+  FROM lancamentos l
+  JOIN unidades_negocio u ON l.id_cc_cc = u.id_cc_cc
+  WHERE (array_length(p_periodos, 1) IS NULL OR TO_CHAR(l.data_lancamento, 'YYYY-MM') = ANY(p_periodos))
+    AND (array_length(p_unidades, 1) IS NULL OR u.unidade = ANY(p_unidades))
+  GROUP BY u.unidade, TO_CHAR(l.data_lancamento, 'YYYY-MM')
+  ORDER BY u.unidade, TO_CHAR(l.data_lancamento, 'YYYY-MM');
 END;
 $$;

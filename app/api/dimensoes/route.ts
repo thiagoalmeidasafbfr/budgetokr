@@ -29,6 +29,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(data ?? [])
     }
 
+    if (tipo === 'unidades_negocio') {
+      let query = supabase.from('unidades_negocio').select('*').order('id_cc_cc').limit(500)
+      if (q) {
+        query = query.or(`id_cc_cc.ilike.%${q}%,unidade.ilike.%${q}%,management_report.ilike.%${q}%,centros_custo.ilike.%${q}%`)
+      }
+      const { data, error } = await query
+      if (error) throw new Error(error.message)
+      return NextResponse.json(data ?? [])
+    }
+
     return NextResponse.json({ error: 'tipo inválido' }, { status: 400 })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
@@ -73,6 +83,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(data)
     }
 
+    if (tipo === 'unidades_negocio') {
+      const { data, error } = await supabase
+        .from('unidades_negocio')
+        .upsert({
+          id_cc_cc:          body.id_cc_cc ?? '',
+          management_report: body.management_report ?? '',
+          conta:             body.conta ?? '',
+          centros_custo:     body.centros_custo ?? '',
+          unidade:           body.unidade ?? '',
+        }, { onConflict: 'id_cc_cc' })
+        .select()
+        .single()
+      if (error) throw new Error(error.message)
+      return NextResponse.json(data)
+    }
+
     return NextResponse.json({ error: 'tipo inválido' }, { status: 400 })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
@@ -89,6 +115,7 @@ export async function DELETE(req: NextRequest) {
 
     if (tipo === 'centros_custo')    await supabase.from('centros_custo').delete().eq('centro_custo', key!)
     if (tipo === 'contas_contabeis') await supabase.from('contas_contabeis').delete().eq('numero_conta_contabil', key!)
+    if (tipo === 'unidades_negocio') await supabase.from('unidades_negocio').delete().eq('id_cc_cc', key!)
 
     return NextResponse.json({ success: true })
   } catch (e) {
