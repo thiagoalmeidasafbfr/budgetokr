@@ -11,7 +11,10 @@ import { YearFilter } from '@/components/YearFilter'
 interface DreRow {
   unidade: string
   dre: string
+  ordem_dre: number
   agrupamento_arvore: string
+  numero_conta_contabil: string
+  nome_conta_contabil: string
   periodo: string
   budget: number
   razao: number
@@ -19,13 +22,21 @@ interface DreRow {
 
 interface PeriodoVal { budget: number; razao: number; variacao: number }
 
+interface ContaNode {
+  numero: string
+  nome: string
+  budget: number; razao: number; variacao: number; variacao_pct: number
+  periodos: Record<string, PeriodoVal>
+}
 interface AgrupNode {
   agrupamento: string
   budget: number; razao: number; variacao: number; variacao_pct: number
   periodos: Record<string, PeriodoVal>
+  contas: ContaNode[]
 }
 interface DreNode {
   dre: string
+  ordemDre: number
   budget: number; razao: number; variacao: number; variacao_pct: number
   periodos: Record<string, PeriodoVal>
   agrupamentos: AgrupNode[]
@@ -52,55 +63,73 @@ function buildTree(data: DreRow[]): UnidadeNode[] {
 
     let dreNode = un.dre_groups.find(d => d.dre === r.dre)
     if (!dreNode) {
-      dreNode = { dre: r.dre, budget: 0, razao: 0, variacao: 0, variacao_pct: 0, periodos: {}, agrupamentos: [] }
+      dreNode = { dre: r.dre, ordemDre: r.ordem_dre ?? 999, budget: 0, razao: 0, variacao: 0, variacao_pct: 0, periodos: {}, agrupamentos: [] }
       un.dre_groups.push(dreNode)
     }
 
     let ag = dreNode.agrupamentos.find(a => a.agrupamento === r.agrupamento_arvore)
     if (!ag) {
-      ag = { agrupamento: r.agrupamento_arvore, budget: 0, razao: 0, variacao: 0, variacao_pct: 0, periodos: {} }
+      ag = { agrupamento: r.agrupamento_arvore, budget: 0, razao: 0, variacao: 0, variacao_pct: 0, periodos: {}, contas: [] }
       dreNode.agrupamentos.push(ag)
     }
 
-    ag.budget += r.budget
-    ag.razao  += r.razao
+    let conta = ag.contas.find(c => c.numero === r.numero_conta_contabil)
+    if (!conta) {
+      conta = { numero: r.numero_conta_contabil, nome: r.nome_conta_contabil, budget: 0, razao: 0, variacao: 0, variacao_pct: 0, periodos: {} }
+      ag.contas.push(conta)
+    }
+
+    conta.budget += r.budget
+    conta.razao  += r.razao
     if (r.periodo) {
-      if (!ag.periodos[r.periodo]) ag.periodos[r.periodo] = { budget: 0, razao: 0, variacao: 0 }
-      ag.periodos[r.periodo].budget += r.budget
-      ag.periodos[r.periodo].razao  += r.razao
+      if (!conta.periodos[r.periodo]) conta.periodos[r.periodo] = { budget: 0, razao: 0, variacao: 0 }
+      conta.periodos[r.periodo].budget += r.budget
+      conta.periodos[r.periodo].razao  += r.razao
     }
   }
 
-  for (const un of unMap.values()) {
-    for (const dreNode of un.dre_groups) {
-      for (const ag of dreNode.agrupamentos) {
-        ag.variacao     = ag.razao - ag.budget
-        ag.variacao_pct = ag.budget ? ag.variacao / Math.abs(ag.budget) * 100 : 0
-        for (const pv of Object.values(ag.periodos)) pv.variacao = pv.razao - pv.budget
+  const addPeriodo = (target: Record<string, PeriodoVal>, src: Record<string, PeriodoVal>) => {
+    for (const [p, pv] of Object.entries(src)) {
+      if (!target[p]) target[p] = { budget: 0, razao: 0, variacao: 0 }
+      target[p].budget += pv.budget
+      target[p].razao  += pv.razao
+    }
+  }
+  const calcVariance = (n: { budget: number; razao: number; variacao: number; variacao_pct: number; periodos: Record<string, PeriodoVal> }) => {
+    n.variacao     = n.razao - n.budget
+    n.variacao_pct = n.budget ? n.variacao / Math.abs(n.budget) * 100 : 0
+    for (const pv of Object.values(n.periodos)) pv.variacao = pv.razao - pv.budget
+  }
 
+  for (const un of unMap.values()) {
+    // Sort DRE groups by ordem_dre
+    un.dre_groups.sort((a, b) => a.ordemDre - b.ordemDre || a.dre.localeCompare(b.dre))
+
+    for (const dreNode of un.dre_groups) {
+      // Sort agrupamentos alphabetically within each DRE
+      dreNode.agrupamentos.sort((a, b) => a.agrupamento.localeCompare(b.agrupamento))
+
+      for (const ag of dreNode.agrupamentos) {
+        // Sort contas by numero
+        ag.contas.sort((a, b) => a.numero.localeCompare(b.numero))
+
+        for (const conta of ag.contas) {
+          calcVariance(conta)
+          ag.budget += conta.budget
+          ag.razao  += conta.razao
+          addPeriodo(ag.periodos, conta.periodos)
+        }
+        calcVariance(ag)
         dreNode.budget += ag.budget
         dreNode.razao  += ag.razao
-        for (const [p, pv] of Object.entries(ag.periodos)) {
-          if (!dreNode.periodos[p]) dreNode.periodos[p] = { budget: 0, razao: 0, variacao: 0 }
-          dreNode.periodos[p].budget += pv.budget
-          dreNode.periodos[p].razao  += pv.razao
-        }
+        addPeriodo(dreNode.periodos, ag.periodos)
       }
-      dreNode.variacao     = dreNode.razao - dreNode.budget
-      dreNode.variacao_pct = dreNode.budget ? dreNode.variacao / Math.abs(dreNode.budget) * 100 : 0
-      for (const pv of Object.values(dreNode.periodos)) pv.variacao = pv.razao - pv.budget
-
+      calcVariance(dreNode)
       un.budget += dreNode.budget
       un.razao  += dreNode.razao
-      for (const [p, pv] of Object.entries(dreNode.periodos)) {
-        if (!un.periodos[p]) un.periodos[p] = { budget: 0, razao: 0, variacao: 0 }
-        un.periodos[p].budget += pv.budget
-        un.periodos[p].razao  += pv.razao
-      }
+      addPeriodo(un.periodos, dreNode.periodos)
     }
-    un.variacao     = un.razao - un.budget
-    un.variacao_pct = un.budget ? un.variacao / Math.abs(un.budget) * 100 : 0
-    for (const pv of Object.values(un.periodos)) pv.variacao = pv.razao - pv.budget
+    calcVariance(un)
   }
 
   return [...unMap.values()].sort((a, b) => a.unidade.localeCompare(b.unidade))
@@ -130,7 +159,6 @@ export default function UnidadesNegocioPage() {
     setLoading(false)
   }, [])
 
-  // Initial load
   useEffect(() => {
     async function init() {
       const [uns, rows] = await Promise.all([
@@ -146,7 +174,6 @@ export default function UnidadesNegocioPage() {
     init()
   }, [])
 
-  // Reactive reload when filters change (skip first render — init handles it)
   const isFirst = useRef(true)
   useEffect(() => {
     if (isFirst.current) { isFirst.current = false; return }
@@ -163,13 +190,8 @@ export default function UnidadesNegocioPage() {
   }
 
   const filteredPeriods = selYear ? periodos.filter(p => p.startsWith(selYear)) : periodos
-
-  const tree = useMemo(() => buildTree(data), [data])
-
-  const dataPeriods = useMemo(
-    () => [...new Set(data.map(r => r.periodo).filter(Boolean))].sort(),
-    [data]
-  )
+  const tree            = useMemo(() => buildTree(data), [data])
+  const dataPeriods     = useMemo(() => [...new Set(data.map(r => r.periodo).filter(Boolean))].sort(), [data])
 
   const totals = useMemo(() => tree.reduce(
     (acc, u) => ({ budget: acc.budget + u.budget, razao: acc.razao + u.razao, variacao: acc.variacao + u.variacao }),
@@ -187,18 +209,23 @@ export default function UnidadesNegocioPage() {
     const keys = new Set<string>()
     for (const un of tree) {
       keys.add(un.unidade)
-      for (const d of un.dre_groups) keys.add(`${un.unidade}::${d.dre}`)
+      for (const d of un.dre_groups) {
+        keys.add(`${un.unidade}::${d.dre}`)
+        for (const ag of d.agrupamentos) keys.add(`${un.unidade}::${d.dre}::${ag.agrupamento}`)
+      }
     }
     setExpanded(keys)
   }
 
   const exportCSV = () => {
-    const rows: string[][] = [['Unidade', 'DRE', 'Agrupamento', 'Budget', 'Razão', 'Variação', '%']]
+    const rows: string[][] = [['Unidade', 'DRE', 'Agrupamento', 'Conta', 'Budget', 'Razão', 'Variação', '%']]
     for (const un of tree) {
       for (const dre of un.dre_groups) {
         for (const ag of dre.agrupamentos) {
-          rows.push([un.unidade, dre.dre, ag.agrupamento,
-            String(ag.budget), String(ag.razao), String(ag.variacao), ag.variacao_pct.toFixed(2)])
+          for (const ct of ag.contas) {
+            rows.push([un.unidade, dre.dre, ag.agrupamento, `${ct.numero} — ${ct.nome}`,
+              String(ct.budget), String(ct.razao), String(ct.variacao), ct.variacao_pct.toFixed(2)])
+          }
         }
       }
     }
@@ -210,15 +237,15 @@ export default function UnidadesNegocioPage() {
   }
 
   // ── Value cell components ─────────────────────────────────────────────────
-  const TotalCells = ({ n }: { n: { budget: number; razao: number; variacao: number; variacao_pct: number } }) => (
+  const TotalCells = ({ n, bold }: { n: { budget: number; razao: number; variacao: number; variacao_pct: number }; bold?: boolean }) => (
     <>
-      <td className="px-5 py-2.5 text-right tabular-nums text-gray-600">
+      <td className={cn('px-5 py-2.5 text-right tabular-nums', bold ? 'font-semibold text-gray-800' : 'text-gray-600')}>
         {n.budget !== 0 ? formatCurrency(n.budget) : <span className="text-gray-300">—</span>}
       </td>
-      <td className="px-5 py-2.5 text-right tabular-nums text-gray-600">
+      <td className={cn('px-5 py-2.5 text-right tabular-nums', bold ? 'font-semibold text-gray-800' : 'text-gray-600')}>
         {n.razao !== 0 ? formatCurrency(n.razao) : <span className="text-gray-300">—</span>}
       </td>
-      <td className={cn('px-5 py-2.5 text-right tabular-nums', n.variacao !== 0 ? colorForVariance(n.variacao_pct) : 'text-gray-300')}>
+      <td className={cn('px-5 py-2.5 text-right tabular-nums', bold ? 'font-semibold' : '', n.variacao !== 0 ? colorForVariance(n.variacao_pct) : 'text-gray-300')}>
         {n.variacao !== 0 ? formatCurrency(n.variacao) : '—'}
       </td>
       <td className="px-5 py-2.5 text-right">
@@ -251,7 +278,7 @@ export default function UnidadesNegocioPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Por Unidade de Negócio</h1>
-          <p className="text-gray-500 text-sm mt-0.5">Budget vs Realizado · Expansível por DRE e Agrupamento</p>
+          <p className="text-gray-500 text-sm mt-0.5">Budget vs Realizado · Expansível por DRE → Agrupamento → Conta</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => load(selUnidades, selPeriods)}>
@@ -362,7 +389,7 @@ export default function UnidadesNegocioPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
-                      <th className="text-left px-5 py-3 font-medium" style={{ minWidth: 260 }}>Unidade / DRE / Agrupamento</th>
+                      <th className="text-left px-5 py-3 font-medium" style={{ minWidth: 280 }}>Unidade / DRE / Agrupamento / Conta</th>
                       {isTotalView ? (
                         <>
                           <th className="text-right px-5 py-3 font-medium w-36">Vlr. Orçado</th>
@@ -378,24 +405,22 @@ export default function UnidadesNegocioPage() {
 
                   <tbody>
                     {tree.map(un => {
-                      const unKey     = un.unidade
+                      const unKey      = un.unidade
                       const unExpanded = expanded.has(unKey)
                       return (
                         <React.Fragment key={unKey}>
                           {/* Level 1: Unidade */}
-                          <tr className="border-b bg-gray-50/80 hover:bg-gray-100/60 cursor-pointer"
+                          <tr className="border-b bg-gray-100/70 hover:bg-gray-100 cursor-pointer"
                             onClick={() => toggle(unKey)}>
-                            <td className="px-5 py-2.5 font-semibold text-gray-800">
+                            <td className="px-5 py-2.5 font-bold text-gray-900">
                               <div className="flex items-center gap-1.5">
-                                <span className="p-0.5 flex-shrink-0">
-                                  {unExpanded
-                                    ? <ChevronDown size={14} className="text-gray-500" />
-                                    : <ChevronRight size={14} className="text-gray-500" />}
+                                <span className="flex-shrink-0">
+                                  {unExpanded ? <ChevronDown size={15} className="text-gray-600" /> : <ChevronRight size={15} className="text-gray-600" />}
                                 </span>
                                 {un.unidade || <span className="italic text-gray-400">sem unidade</span>}
                               </div>
                             </td>
-                            {isTotalView ? <TotalCells n={un} /> : <PeriodCells periodos={un.periodos} />}
+                            {isTotalView ? <TotalCells n={un} bold /> : <PeriodCells periodos={un.periodos} />}
                           </tr>
 
                           {unExpanded && un.dre_groups.map(dreNode => {
@@ -404,31 +429,54 @@ export default function UnidadesNegocioPage() {
                             return (
                               <React.Fragment key={dreKey}>
                                 {/* Level 2: DRE */}
-                                <tr className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                                <tr className="border-b border-gray-100 bg-gray-50/50 hover:bg-gray-50 cursor-pointer"
                                   onClick={() => toggle(dreKey)}>
-                                  <td className="py-2 font-medium text-gray-700" style={{ paddingLeft: 44 }}>
+                                  <td className="py-2 font-semibold text-gray-800" style={{ paddingLeft: 40 }}>
                                     <div className="flex items-center gap-1.5">
-                                      <span className="p-0.5 flex-shrink-0">
-                                        {dreExpanded
-                                          ? <ChevronDown size={13} className="text-gray-400" />
-                                          : <ChevronRight size={13} className="text-gray-400" />}
+                                      <span className="flex-shrink-0">
+                                        {dreExpanded ? <ChevronDown size={13} className="text-gray-500" /> : <ChevronRight size={13} className="text-gray-500" />}
                                       </span>
-                                      <span className="text-sm">{dreNode.dre}</span>
+                                      {dreNode.dre}
                                     </div>
                                   </td>
                                   {isTotalView ? <TotalCells n={dreNode} /> : <PeriodCells periodos={dreNode.periodos} />}
                                 </tr>
 
-                                {/* Level 3: Agrupamento */}
-                                {dreExpanded && dreNode.agrupamentos.map(ag => (
-                                  <tr key={`${dreKey}::${ag.agrupamento}`}
-                                    className="border-b border-gray-50 hover:bg-indigo-50/30">
-                                    <td className="py-2 text-gray-500 text-xs" style={{ paddingLeft: 68 }}>
-                                      <span className="pl-2 border-l-2 border-gray-200">{ag.agrupamento}</span>
-                                    </td>
-                                    {isTotalView ? <TotalCells n={ag} /> : <PeriodCells periodos={ag.periodos} />}
-                                  </tr>
-                                ))}
+                                {dreExpanded && dreNode.agrupamentos.map(ag => {
+                                  const agKey      = `${dreKey}::${ag.agrupamento}`
+                                  const agExpanded = expanded.has(agKey)
+                                  return (
+                                    <React.Fragment key={agKey}>
+                                      {/* Level 3: Agrupamento */}
+                                      <tr className="border-b border-gray-50 hover:bg-indigo-50/20 cursor-pointer"
+                                        onClick={() => toggle(agKey)}>
+                                        <td className="py-2 font-medium text-gray-600 text-xs" style={{ paddingLeft: 64 }}>
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="flex-shrink-0">
+                                              {agExpanded ? <ChevronDown size={12} className="text-gray-400" /> : <ChevronRight size={12} className="text-gray-400" />}
+                                            </span>
+                                            {ag.agrupamento}
+                                          </div>
+                                        </td>
+                                        {isTotalView ? <TotalCells n={ag} /> : <PeriodCells periodos={ag.periodos} />}
+                                      </tr>
+
+                                      {/* Level 4: Conta contábil */}
+                                      {agExpanded && ag.contas.map(ct => (
+                                        <tr key={`${agKey}::${ct.numero}`}
+                                          className="border-b border-gray-50/60 hover:bg-indigo-50/30">
+                                          <td className="py-1.5 text-gray-400 text-xs" style={{ paddingLeft: 88 }}>
+                                            <span className="pl-2 border-l-2 border-indigo-100">
+                                              <span className="text-gray-500 font-mono mr-1.5">{ct.numero}</span>
+                                              {ct.nome}
+                                            </span>
+                                          </td>
+                                          {isTotalView ? <TotalCells n={ct} /> : <PeriodCells periodos={ct.periodos} />}
+                                        </tr>
+                                      ))}
+                                    </React.Fragment>
+                                  )
+                                })}
                               </React.Fragment>
                             )
                           })}
@@ -461,7 +509,6 @@ export default function UnidadesNegocioPage() {
                           const pp = un.periodos[p]
                           return pp ? { budget: acc.budget + pp.budget, razao: acc.razao + pp.razao, variacao: acc.variacao + pp.variacao } : acc
                         }, { budget: 0, razao: 0, variacao: 0 })
-                        const pct = pv.budget ? pv.variacao / Math.abs(pv.budget) * 100 : 0
                         return (
                           <td key={p} className={cn('px-3 py-3 text-right tabular-nums text-xs',
                             pv.variacao > 0 ? 'text-emerald-300' : pv.variacao < 0 ? 'text-red-300' : 'text-gray-400')}>
