@@ -207,7 +207,13 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
     if (ctx.unidades?.length)      p.set('unidades',      ctx.unidades.join(','))
     fetch(`/api/dre/detalhamento?${p}`)
       .then(r => r.json())
-      .then(data => { setRows(data.rows ?? data); setTruncated(data.truncated ?? false); setLoading(false) })
+      .then(data => {
+        const r = data.rows ?? data
+        setRows(Array.isArray(r) ? r : [])
+        setTruncated(data.truncated ?? false)
+        setLoading(false)
+      })
+      .catch(() => { setRows([]); setLoading(false) })
   }, [ctx])
 
   // Pre-compute search strings (once per fetch)
