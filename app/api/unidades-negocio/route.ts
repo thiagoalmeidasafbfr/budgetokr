@@ -6,12 +6,13 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
   try {
     const sp       = new URL(req.url).searchParams
+    const type     = sp.get('type')
     const periodos = sp.get('periodos')?.split(',').filter(Boolean) ?? []
     const unidades = sp.get('unidades')?.split(',').filter(Boolean) ?? []
     const supabase = getSupabase()
 
     // Distinct unidades for filter options
-    if (sp.get('type') === 'distinct_unidades') {
+    if (type === 'distinct_unidades') {
       const { data, error } = await supabase
         .from('unidades_negocio')
         .select('unidade')
@@ -23,6 +24,25 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(unique)
     }
 
+    // DRE breakdown: unidade > dre > agrupamento > periodo
+    if (type === 'dre') {
+      const { data, error } = await supabase.rpc('get_unidades_negocio_dre', {
+        p_periodos: periodos,
+        p_unidades: unidades,
+      })
+      if (error) throw new Error(error.message)
+      const rows = (data ?? []) as Array<{
+        unidade: string; dre: string; agrupamento_arvore: string
+        periodo: string; budget: number; razao: number
+      }>
+      return NextResponse.json(rows.map(r => ({
+        ...r,
+        budget: r.budget ?? 0,
+        razao:  r.razao  ?? 0,
+      })))
+    }
+
+    // Default: flat unidade + periodo totals (kept for compatibility)
     const { data, error } = await supabase.rpc('get_unidades_negocio_analise', {
       p_periodos: periodos,
       p_unidades: unidades,
