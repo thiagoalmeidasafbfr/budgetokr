@@ -23,14 +23,16 @@ interface DetalhamentoLinha {
   agrupamento_arvore: string; dre: string
   nome_conta_contrapartida: string; debito_credito: number
   observacao: string; fonte: string; num_transacao: string
+  id_cc_cc: string; unidade: string
 }
 
-type DetColKey = 'data' | 'tipo' | 'num_transacao' | 'centro' | 'dre' | 'agrupamento' | 'conta' | 'valor' | 'contrapartida' | 'obs'
+type DetColKey = 'data' | 'tipo' | 'num_transacao' | 'centro' | 'unidade' | 'dre' | 'agrupamento' | 'conta' | 'valor' | 'contrapartida' | 'obs'
 const DET_COLS: { key: DetColKey; label: string; align?: 'right' }[] = [
   { key: 'data',          label: 'Data Lançamento' },
   { key: 'tipo',          label: 'Tipo' },
   { key: 'num_transacao', label: 'Nº Transação' },
   { key: 'centro',        label: 'Centro de Custo' },
+  { key: 'unidade',       label: 'Unidade de Negócio' },
   { key: 'dre',           label: 'DRE Gerencial' },
   { key: 'agrupamento',   label: 'Agrupamento' },
   { key: 'conta',         label: 'Conta Contábil' },
@@ -45,6 +47,7 @@ function colValue(r: DetalhamentoLinha, key: DetColKey): string | number {
     case 'tipo':          return r.tipo
     case 'num_transacao': return r.num_transacao ?? ''
     case 'centro':        return `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}`
+    case 'unidade':       return r.unidade ?? ''
     case 'dre':           return r.dre
     case 'agrupamento':   return r.agrupamento_arvore
     case 'conta':         return `${r.numero_conta_contabil} — ${r.nome_conta_contabil}`
@@ -55,10 +58,11 @@ function colValue(r: DetalhamentoLinha, key: DetColKey): string | number {
 }
 
 function exportDetalhamento(rows: DetalhamentoLinha[], title: string) {
-  const header = ['Data', 'Tipo', 'Nº Transação', 'Centro de Custo', 'DRE', 'Agrupamento', 'Conta Contábil', 'Valor', 'Conta Contrapartida', 'Observação']
+  const header = ['Data', 'Tipo', 'Nº Transação', 'Centro de Custo', 'Unidade de Negócio', 'DRE', 'Agrupamento', 'Conta Contábil', 'Valor', 'Conta Contrapartida', 'Observação']
   const csvRows = rows.map(r => [
     r.data_lancamento, r.tipo, r.num_transacao ?? '',
     `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}`,
+    r.unidade ?? '',
     r.dre, r.agrupamento_arvore,
     `${r.numero_conta_contabil} — ${r.nome_conta_contabil}`,
     r.debito_credito, r.nome_conta_contrapartida, r.observacao,
