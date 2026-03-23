@@ -182,18 +182,20 @@ export async function POST(req: NextRequest) {
         } else {
           dataFinal = parseDate(get(row, 'data_lancamento'))
         }
+        const idCcCc      = String(get(row, 'id_cc_cc')      ?? '').trim() || null
+        const numTransacao = String(get(row, 'num_transacao') ?? '').trim() || null
         return {
           tipo:                     tipoVal,
           data_lancamento:          dataFinal || null,
           nome_conta_contabil:      String(get(row, 'nome_conta_contabil')      ?? ''),
           numero_conta_contabil:    String(get(row, 'numero_conta_contabil')    ?? ''),
           centro_custo:             String(get(row, 'centro_custo')             ?? ''),
-          id_cc_cc:                 String(get(row, 'id_cc_cc')                 ?? '') || null,
-          num_transacao:            String(get(row, 'num_transacao')            ?? '') || null,
           nome_conta_contrapartida: String(get(row, 'nome_conta_contrapartida') ?? ''),
           fonte:                    String(get(row, 'fonte')                    ?? ''),
           observacao:               String(get(row, 'observacao')               ?? ''),
           debito_credito:           parseNumber(get(row, 'debito_credito')),
+          ...(idCcCc       ? { id_cc_cc:      idCcCc      } : {}),
+          ...(numTransacao ? { num_transacao: numTransacao } : {}),
         }
       })
 
