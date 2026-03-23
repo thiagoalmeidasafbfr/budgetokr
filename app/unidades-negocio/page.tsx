@@ -161,15 +161,14 @@ export default function UnidadesNegocioPage() {
 
   useEffect(() => {
     async function init() {
-      const [uns, rows] = await Promise.all([
-        fetch('/api/unidades-negocio?type=distinct_unidades').then(r => r.json()),
-        fetch('/api/unidades-negocio?type=dre').then(r => r.json()),
-      ])
-      setUnidades(Array.isArray(uns) ? uns : [])
+      const res  = await fetch('/api/unidades-negocio?type=dre')
+      const rows = res.ok ? await res.json() : []
       const dRows: DreRow[] = Array.isArray(rows) ? rows : []
       setData(dRows)
-      const ps = [...new Set(dRows.map(r => r.periodo).filter(Boolean))].sort()
-      setPeriodos(ps)
+      // Derive filter options directly from data — avoids schema-cache issues
+      // with the separate distinct_unidades REST call
+      setUnidades([...new Set(dRows.map(r => r.unidade).filter(Boolean))].sort())
+      setPeriodos([...new Set(dRows.map(r => r.periodo).filter(Boolean))].sort())
     }
     init()
   }, [])
