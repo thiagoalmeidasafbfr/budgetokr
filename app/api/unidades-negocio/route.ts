@@ -26,17 +26,18 @@ export async function GET(req: NextRequest) {
     }
 
     // DRE breakdown: unidade > dre > agrupamento > periodo
+    // A função retorna JSONB (array único) para contornar o limite de linhas do PostgREST
     if (type === 'dre') {
       const { data, error } = await supabase.rpc('get_unidades_negocio_dre', {
         p_periodos: periodos,
         p_unidades: unidades,
-      }).range(0, 99999)
+      })
       if (error) throw new Error(error.message)
-      const rows = (data ?? []) as Array<{
+      const rows = Array.isArray(data) ? data as Array<{
         unidade: string; dre: string; ordem_dre: number; agrupamento_arvore: string
         numero_conta_contabil: string; nome_conta_contabil: string
         periodo: string; budget: number; razao: number
-      }>
+      }> : []
       return NextResponse.json(rows.map(r => ({
         ...r,
         budget: r.budget ?? 0,
