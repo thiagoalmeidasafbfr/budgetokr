@@ -18,45 +18,52 @@ export interface ContextMenuState {
 
 interface DetalhamentoLinha {
   id: number; tipo: string; data_lancamento: string
+  numero_transacao: string
   numero_conta_contabil: string; nome_conta_contabil: string
-  centro_custo: string; nome_centro_custo: string
+  centro_custo: string; nome_centro_custo: string; nome_area: string
   agrupamento_arvore: string; dre: string
   nome_conta_contrapartida: string; debito_credito: number
-  observacao: string; fonte: string
+  observacao: string; fonte: string; num_transacao: string
+  id_cc_cc: string; unidade: string
 }
 
-type DetColKey = 'data' | 'tipo' | 'centro' | 'dre' | 'agrupamento' | 'conta' | 'valor' | 'contrapartida' | 'obs'
+type DetColKey = 'data' | 'tipo' | 'numero_transacao' | 'centro' | 'unidade' | 'dre' | 'agrupamento' | 'conta' | 'valor' | 'contrapartida' | 'obs'
 const DET_COLS: { key: DetColKey; label: string; align?: 'right' }[] = [
-  { key: 'data',          label: 'Data Lançamento' },
-  { key: 'tipo',          label: 'Tipo' },
-  { key: 'centro',        label: 'Centro de Custo' },
-  { key: 'dre',           label: 'DRE Gerencial' },
-  { key: 'agrupamento',   label: 'Agrupamento' },
-  { key: 'conta',         label: 'Conta Contábil' },
-  { key: 'valor',         label: 'Valor', align: 'right' },
-  { key: 'contrapartida', label: 'Conta Contrapartida' },
-  { key: 'obs',           label: 'Observação' },
+  { key: 'data',             label: 'Data Lançamento' },
+  { key: 'tipo',             label: 'Tipo' },
+  { key: 'numero_transacao', label: 'Nº Transação' },
+  { key: 'centro',           label: 'Centro de Custo' },
+  { key: 'unidade',          label: 'Unidade de Negócio' },
+  { key: 'dre',              label: 'DRE Gerencial' },
+  { key: 'agrupamento',      label: 'Agrupamento' },
+  { key: 'conta',            label: 'Conta Contábil' },
+  { key: 'valor',            label: 'Valor', align: 'right' },
+  { key: 'contrapartida',    label: 'Conta Contrapartida' },
+  { key: 'obs',              label: 'Observação' },
 ]
 
 function colValue(r: DetalhamentoLinha, key: DetColKey): string | number {
   switch (key) {
-    case 'data':          return r.data_lancamento
-    case 'tipo':          return r.tipo
-    case 'centro':        return `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}`
-    case 'dre':           return r.dre
-    case 'agrupamento':   return r.agrupamento_arvore
-    case 'conta':         return `${r.numero_conta_contabil} — ${r.nome_conta_contabil}`
-    case 'valor':         return r.debito_credito
-    case 'contrapartida': return r.nome_conta_contrapartida
-    case 'obs':           return r.observacao ?? ''
+    case 'data':             return r.data_lancamento
+    case 'tipo':             return r.tipo
+    case 'numero_transacao': return r.numero_transacao || r.num_transacao || ''
+    case 'centro':           return `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}`
+    case 'unidade':          return r.unidade ?? ''
+    case 'dre':              return r.dre
+    case 'agrupamento':      return r.agrupamento_arvore
+    case 'conta':            return `${r.numero_conta_contabil} — ${r.nome_conta_contabil}`
+    case 'valor':            return r.debito_credito
+    case 'contrapartida':    return r.nome_conta_contrapartida
+    case 'obs':              return r.observacao ?? ''
   }
 }
 
 function exportDetalhamento(rows: DetalhamentoLinha[], title: string) {
-  const header = ['Data', 'Tipo', 'Centro de Custo', 'DRE', 'Agrupamento', 'Conta Contábil', 'Valor', 'Conta Contrapartida', 'Observação']
+  const header = ['Data', 'Tipo', 'Nº Transação', 'Centro de Custo', 'Unidade de Negócio', 'DRE', 'Agrupamento', 'Conta Contábil', 'Valor', 'Conta Contrapartida', 'Observação']
   const csvRows = rows.map(r => [
-    r.data_lancamento, r.tipo,
+    r.data_lancamento, r.tipo, r.numero_transacao || r.num_transacao || '',
     `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}`,
+    r.unidade ?? '',
     r.dre, r.agrupamento_arvore,
     `${r.numero_conta_contabil} — ${r.nome_conta_contabil}`,
     r.debito_credito, r.nome_conta_contrapartida, r.observacao,
@@ -217,11 +224,12 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
       contaMap.set(r.numero_conta_contabil, r.nome_conta_contabil)
     }
     return {
-      centro:      [...ccMap.entries()].map(([v, n]) => ({ value: v, label: n ? `${v} — ${n}` : v })).sort((a, b) => a.label.localeCompare(b.label)),
-      dre:         uniq(rows.map(r => r.dre)).map(v => ({ value: v, label: v })),
-      agrupamento: uniq(rows.map(r => r.agrupamento_arvore)).map(v => ({ value: v, label: v })),
-      conta:       [...contaMap.entries()].map(([v, n]) => ({ value: v, label: n ? `${v} — ${n}` : v })).sort((a, b) => a.label.localeCompare(b.label)),
-      contrapartida: uniq(rows.map(r => r.nome_conta_contrapartida)).map(v => ({ value: v, label: v })),
+      centro:         [...ccMap.entries()].map(([v, n]) => ({ value: v, label: n ? `${v} — ${n}` : v })).sort((a, b) => a.label.localeCompare(b.label)),
+      unidade: uniq(rows.map(r => r.unidade).filter(Boolean)).map(v => ({ value: v, label: v })),
+      dre:            uniq(rows.map(r => r.dre)).map(v => ({ value: v, label: v })),
+      agrupamento:    uniq(rows.map(r => r.agrupamento_arvore)).map(v => ({ value: v, label: v })),
+      conta:          [...contaMap.entries()].map(([v, n]) => ({ value: v, label: n ? `${v} — ${n}` : v })).sort((a, b) => a.label.localeCompare(b.label)),
+      contrapartida:  uniq(rows.map(r => r.nome_conta_contrapartida)).map(v => ({ value: v, label: v })),
     }
   }, [rows])
 
@@ -237,20 +245,22 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
   // Main filter + sort
   const displayed = useMemo(() => {
     const q = deferredText.toLowerCase()
-    const centroSet = new Set(colFilters['centro'] ?? [])
-    const dreSet    = new Set(colFilters['dre'] ?? [])
-    const agrupSet  = new Set(colFilters['agrupamento'] ?? [])
-    const contaSet  = new Set(colFilters['conta'] ?? [])
-    const cpSet     = new Set(colFilters['contrapartida'] ?? [])
+    const centroSet   = new Set(colFilters['centro'] ?? [])
+    const unidadeSet  = new Set(colFilters['unidade'] ?? [])
+    const dreSet      = new Set(colFilters['dre'] ?? [])
+    const agrupSet    = new Set(colFilters['agrupamento'] ?? [])
+    const contaSet    = new Set(colFilters['conta'] ?? [])
+    const cpSet       = new Set(colFilters['contrapartida'] ?? [])
 
     const filtered = rows.filter((r, i) => {
       if (filterTipo !== 'all' && r.tipo !== filterTipo) return false
       if (filterPeriodo && r.data_lancamento?.substring(0, 7) !== filterPeriodo) return false
-      if (centroSet.size > 0 && !centroSet.has(r.centro_custo)) return false
-      if (dreSet.size > 0    && !dreSet.has(r.dre)) return false
-      if (agrupSet.size > 0  && !agrupSet.has(r.agrupamento_arvore)) return false
-      if (contaSet.size > 0  && !contaSet.has(r.numero_conta_contabil)) return false
-      if (cpSet.size > 0     && !cpSet.has(r.nome_conta_contrapartida)) return false
+      if (centroSet.size > 0  && !centroSet.has(r.centro_custo)) return false
+      if (unidadeSet.size > 0 && !unidadeSet.has(r.unidade)) return false
+      if (dreSet.size > 0     && !dreSet.has(r.dre)) return false
+      if (agrupSet.size > 0   && !agrupSet.has(r.agrupamento_arvore)) return false
+      if (contaSet.size > 0   && !contaSet.has(r.numero_conta_contabil)) return false
+      if (cpSet.size > 0      && !cpSet.has(r.nome_conta_contrapartida)) return false
       if (q && !rowSearchStrings[i].includes(q)) return false
       return true
     })
@@ -456,6 +466,12 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
                 selected={colFilters['centro'] ?? []}
                 onChange={v => setColFilter('centro', v)} />
 
+              {filterOptions.unidade.length > 0 && (
+                <MultiFilter label="Unidade de Negócio" options={filterOptions.unidade}
+                  selected={colFilters['unidade'] ?? []}
+                  onChange={v => setColFilter('unidade', v)} />
+              )}
+
               <MultiFilter label="DRE" options={filterOptions.dre}
                 selected={colFilters['dre'] ?? []}
                 onChange={v => setColFilter('dre', v)} />
@@ -530,22 +546,24 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
                           <MessageSquare size={11} />
                         </button>
                       </td>
-                      {visibleCols.has('data')          && <td className={cellCls} title={r.data_lancamento} style={{ fontVariantNumeric: 'tabular-nums' }}>{r.data_lancamento}</td>}
-                      {visibleCols.has('tipo')          && <td className={cellCls}>
+                      {visibleCols.has('data')             && <td className={cellCls} title={r.data_lancamento} style={{ fontVariantNumeric: 'tabular-nums' }}>{r.data_lancamento}</td>}
+                      {visibleCols.has('tipo')             && <td className={cellCls}>
                         <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium',
                           r.tipo === 'budget' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700')}>
                           {r.tipo === 'budget' ? 'Budget' : 'Real'}
                         </span>
                       </td>}
-                      {visibleCols.has('centro')        && <td className={cellCls} title={ccLabel}>{ccLabel}</td>}
-                      {visibleCols.has('dre')           && <td className={cellCls} title={r.dre}>{r.dre}</td>}
-                      {visibleCols.has('agrupamento')   && <td className={cellCls} title={r.agrupamento_arvore}>{r.agrupamento_arvore}</td>}
-                      {visibleCols.has('conta')         && <td className={cellCls} title={contaLabel}>{contaLabel}</td>}
-                      {visibleCols.has('valor')         && <td className={cn(cellCls, 'text-right font-semibold', r.debito_credito < 0 ? 'text-red-600' : 'text-gray-800')}>
+                      {visibleCols.has('numero_transacao') && <td className={cn(cellCls, 'text-gray-500')} title={r.numero_transacao || r.num_transacao || ''}>{r.numero_transacao || r.num_transacao}</td>}
+                      {visibleCols.has('centro')           && <td className={cellCls} title={ccLabel}>{ccLabel}</td>}
+                      {visibleCols.has('unidade')          && <td className={cellCls} title={r.unidade ?? ''}>{r.unidade}</td>}
+                      {visibleCols.has('dre')              && <td className={cellCls} title={r.dre}>{r.dre}</td>}
+                      {visibleCols.has('agrupamento')      && <td className={cellCls} title={r.agrupamento_arvore}>{r.agrupamento_arvore}</td>}
+                      {visibleCols.has('conta')            && <td className={cellCls} title={contaLabel}>{contaLabel}</td>}
+                      {visibleCols.has('valor')            && <td className={cn(cellCls, 'text-right font-semibold', r.debito_credito < 0 ? 'text-red-600' : 'text-gray-800')}>
                         {formatCurrency(r.debito_credito)}
                       </td>}
-                      {visibleCols.has('contrapartida') && <td className={cn(cellCls, 'text-gray-500')} title={r.nome_conta_contrapartida}>{r.nome_conta_contrapartida}</td>}
-                      {visibleCols.has('obs')           && <td className={cn(cellCls, 'text-gray-500')} title={r.observacao ?? ''}>{r.observacao}</td>}
+                      {visibleCols.has('contrapartida')    && <td className={cn(cellCls, 'text-gray-500')} title={r.nome_conta_contrapartida}>{r.nome_conta_contrapartida}</td>}
+                      {visibleCols.has('obs')              && <td className={cn(cellCls, 'text-gray-500')} title={r.observacao ?? ''}>{r.observacao}</td>}
                     </tr>
                   )
                 })}
