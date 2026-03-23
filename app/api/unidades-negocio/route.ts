@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
       const { data, error } = await supabase.rpc('get_unidades_negocio_dre', {
         p_periodos: periodos,
         p_unidades: unidades,
-      })
+      }).range(0, 99999)
       if (error) throw new Error(error.message)
       const rows = (data ?? []) as Array<{
         unidade: string; dre: string; ordem_dre: number; agrupamento_arvore: string
