@@ -15,7 +15,8 @@ export async function validateUser(userId: string, password: string): Promise<Se
       role: data.role,
       department: data.department ?? undefined,
     }
-  } catch {
+  } catch (e) {
+    console.error('[validateUser] erro:', e)
     return null
   }
 }
