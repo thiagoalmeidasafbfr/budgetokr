@@ -567,7 +567,71 @@ BEGIN
 END;
 $$;
 
--- ─── Unidades de Negócio: análise Budget vs Razão por unidade ─────────────────
+-- ─── get_unidades_distintas: fallback via centros_custo.nome_departamento ─────
+CREATE OR REPLACE FUNCTION get_unidades_distintas()
+RETURNS JSONB LANGUAGE sql AS $$
+  SELECT COALESCE(jsonb_agg(unidade ORDER BY unidade), '[]'::JSONB)
+  FROM (
+    SELECT DISTINCT COALESCE(cc.nome_departamento, 'Sem Unidade') AS unidade
+    FROM lancamentos l
+    LEFT JOIN centros_custo cc ON l.centro_custo = cc.centro_custo
+  ) t;
+$$;
+
+-- ─── get_por_unidade: hierarquia via centros_custo (fallback sem unidades_negocio)
+CREATE OR REPLACE FUNCTION get_por_unidade(
+  p_periodos TEXT[] DEFAULT '{}',
+  p_unidades TEXT[] DEFAULT '{}'
+) RETURNS JSONB LANGUAGE plpgsql AS $$
+DECLARE
+  v_cond   TEXT[] := '{}';
+  v_sql    TEXT;
+  v_result JSONB;
+BEGIN
+  IF array_length(p_periodos, 1) > 0 THEN
+    v_cond := array_append(v_cond,
+      format('to_char(l.data_lancamento, ''YYYY-MM'') = ANY(%s)', quote_literal(p_periodos::TEXT)));
+  END IF;
+  IF array_length(p_unidades, 1) > 0 THEN
+    v_cond := array_append(v_cond,
+      format('COALESCE(cc.nome_departamento, ''Sem Unidade'') = ANY(%s)', quote_literal(p_unidades::TEXT)));
+  END IF;
+
+  v_sql :=
+    'SELECT
+      COALESCE(cc.nome_departamento, ''Sem Unidade'') AS unidade,
+      COALESCE(ca.dre, ''Sem classificação'') AS dre,
+      COALESCE(ca.agrupamento_arvore, '''') AS agrupamento,
+      l.numero_conta_contabil AS conta,
+      MAX(COALESCE(ca.nome_conta_contabil, l.nome_conta_contabil, l.numero_conta_contabil, '''')) AS nome_conta,
+      COALESCE(MIN(ca.ordem_dre), 999) AS ordem_dre,
+      SUM(CASE WHEN l.tipo=''budget'' THEN l.debito_credito ELSE 0 END) AS budget,
+      SUM(CASE WHEN l.tipo=''razao''  THEN l.debito_credito ELSE 0 END) AS razao
+    FROM lancamentos l
+    LEFT JOIN centros_custo    cc ON l.centro_custo          = cc.centro_custo
+    LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil' ||
+    CASE WHEN array_length(v_cond, 1) > 0
+      THEN ' WHERE ' || array_to_string(v_cond, ' AND ')
+      ELSE ''
+    END ||
+    ' GROUP BY
+        COALESCE(cc.nome_departamento, ''Sem Unidade''),
+        COALESCE(ca.dre, ''Sem classificação''),
+        COALESCE(ca.agrupamento_arvore, ''''),
+        l.numero_conta_contabil
+      ORDER BY
+        COALESCE(cc.nome_departamento, ''Sem Unidade''),
+        COALESCE(MIN(ca.ordem_dre), 999),
+        COALESCE(ca.dre, ''Sem classificação''),
+        COALESCE(ca.agrupamento_arvore, ''''),
+        l.numero_conta_contabil';
+
+  EXECUTE 'SELECT jsonb_agg(row_to_json(t)) FROM (' || v_sql || ') t' INTO v_result;
+  RETURN COALESCE(v_result, '[]'::JSONB);
+END;
+$$;
+
+-- ─── Unidades de Negócio via tabela unidades_negocio (id_cc_cc) ───────────────
 CREATE OR REPLACE FUNCTION get_unidades_negocio_analise(
   p_periodos  TEXT[]  DEFAULT '{}',
   p_unidades  TEXT[]  DEFAULT '{}'
@@ -639,7 +703,7 @@ BEGIN
 END;
 $$;
 
--- ─── get_distinct_unidades: lista de unidades com lançamentos ─────────────────
+-- ─── get_distinct_unidades: unidades com lançamentos via unidades_negocio ─────
 CREATE OR REPLACE FUNCTION get_distinct_unidades()
 RETURNS TABLE(unidade TEXT) LANGUAGE sql STABLE AS $$
   SELECT DISTINCT COALESCE(u.unidade, 'Sem Unidade') AS unidade

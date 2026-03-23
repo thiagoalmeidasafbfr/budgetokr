@@ -555,3 +555,36 @@ export async function getMedidas(): Promise<import('./types').Medida[]> {
     updated_at:                     raw.updated_at as string,
   }))
 }
+
+// ─── Por Unidade de Negócio ────────────────────────────────────────────────────
+
+export interface PorUnidadeRow {
+  unidade: string
+  dre: string
+  agrupamento: string
+  conta: string
+  nome_conta: string
+  ordem_dre: number
+  budget: number
+  razao: number
+}
+
+export async function getPorUnidade(
+  periodos?: string[],
+  unidades?: string[]
+): Promise<PorUnidadeRow[]> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase.rpc('get_por_unidade', {
+    p_periodos: periodos ?? [],
+    p_unidades: unidades ?? [],
+  })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as PorUnidadeRow[]
+}
+
+export async function getUnidadesDistintas(): Promise<string[]> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase.rpc('get_unidades_distintas')
+  if (error) throw new Error(error.message)
+  return (data ?? []) as string[]
+}
