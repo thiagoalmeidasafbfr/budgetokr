@@ -594,6 +594,7 @@ END;
 $$;
 
 -- ─── get_unidades_negocio_dre: breakdown por unidade > DRE > agrupamento > conta
+DROP FUNCTION IF EXISTS get_unidades_negocio_dre(TEXT[], TEXT[]);
 CREATE OR REPLACE FUNCTION get_unidades_negocio_dre(
   p_periodos  TEXT[]  DEFAULT '{}',
   p_unidades  TEXT[]  DEFAULT '{}'
