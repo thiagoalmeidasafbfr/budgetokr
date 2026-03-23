@@ -638,3 +638,22 @@ BEGIN
            TO_CHAR(l.data_lancamento, 'YYYY-MM');
 END;
 $$;
+
+-- ─── get_distinct_unidades: lista de unidades com lançamentos ─────────────────
+CREATE OR REPLACE FUNCTION get_distinct_unidades()
+RETURNS TABLE(unidade TEXT) LANGUAGE sql STABLE AS $$
+  SELECT DISTINCT COALESCE(u.unidade, 'Sem Unidade') AS unidade
+  FROM lancamentos l
+  LEFT JOIN unidades_negocio u ON l.id_cc_cc = u.id_cc_cc
+  WHERE l.id_cc_cc IS NOT NULL
+  ORDER BY 1;
+$$;
+
+-- ─── get_distinct_periodos: lista de períodos YYYY-MM disponíveis ─────────────
+CREATE OR REPLACE FUNCTION get_distinct_periodos()
+RETURNS TABLE(periodo TEXT) LANGUAGE sql STABLE AS $$
+  SELECT DISTINCT TO_CHAR(data_lancamento, 'YYYY-MM') AS periodo
+  FROM lancamentos
+  WHERE data_lancamento IS NOT NULL
+  ORDER BY 1;
+$$;

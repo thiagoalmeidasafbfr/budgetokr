@@ -161,14 +161,28 @@ export default function UnidadesNegocioPage() {
 
   useEffect(() => {
     async function init() {
-      const res  = await fetch('/api/unidades-negocio?type=dre')
-      const rows = res.ok ? await res.json() : []
-      const dRows: DreRow[] = Array.isArray(rows) ? rows : []
-      setData(dRows)
-      // Derive filter options directly from data — avoids schema-cache issues
-      // with the separate distinct_unidades REST call
-      setUnidades([...new Set(dRows.map(r => r.unidade).filter(Boolean))].sort())
-      setPeriodos([...new Set(dRows.map(r => r.periodo).filter(Boolean))].sort())
+      // Use dedicated lightweight RPCs (few rows each) to populate sidebar filters
+      const [unRes, perRes] = await Promise.all([
+        fetch('/api/unidades-negocio?type=distinct_unidades'),
+        fetch('/api/unidades-negocio?type=distinct_periodos'),
+      ])
+      const uns  = unRes.ok  ? await unRes.json()  : []
+      const pers = perRes.ok ? await perRes.json() : []
+      const allUnidades = Array.isArray(uns)  ? (uns  as string[]).filter(Boolean) : []
+      const allPeriodos = Array.isArray(pers) ? (pers as string[]).filter(Boolean) : []
+      setUnidades(allUnidades)
+      setPeriodos(allPeriodos)
+
+      // Auto-select current year YTD so initial tree load is filtered (avoids row limit)
+      const now      = new Date()
+      const curYear  = String(now.getFullYear())
+      const curMonth = `${curYear}-${String(now.getMonth() + 1).padStart(2, '0')}`
+      const ytd      = allPeriodos.filter(p => p.startsWith(curYear) && p <= curMonth)
+      const defaultPeriods = ytd.length > 0
+        ? ytd
+        : allPeriodos.filter(p => p.startsWith(curYear))
+      setSelYear(curYear)
+      setSelPeriods(defaultPeriods)
     }
     init()
   }, [])

@@ -11,17 +11,18 @@ export async function GET(req: NextRequest) {
     const unidades = sp.get('unidades')?.split(',').filter(Boolean) ?? []
     const supabase = getSupabase()
 
-    // Distinct unidades for filter options
+    // Distinct unidades — uses dedicated RPC that returns ~11 rows max
     if (type === 'distinct_unidades') {
-      const { data, error } = await supabase
-        .from('unidades_negocio')
-        .select('unidade')
-        .not('unidade', 'is', null)
-        .neq('unidade', '')
-        .order('unidade')
+      const { data, error } = await supabase.rpc('get_distinct_unidades')
       if (error) throw new Error(error.message)
-      const unique = [...new Set((data ?? []).map(r => r.unidade).filter(Boolean))]
-      return NextResponse.json(unique)
+      return NextResponse.json((data ?? []).map((r: { unidade: string }) => r.unidade))
+    }
+
+    // Distinct periodos — uses dedicated RPC that returns ~24 rows max
+    if (type === 'distinct_periodos') {
+      const { data, error } = await supabase.rpc('get_distinct_periodos')
+      if (error) throw new Error(error.message)
+      return NextResponse.json((data ?? []).map((r: { periodo: string }) => r.periodo))
     }
 
     // DRE breakdown: unidade > dre > agrupamento > periodo
