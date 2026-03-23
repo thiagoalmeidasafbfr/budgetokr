@@ -1,42 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
-import { getDb } from '@/lib/db'
+import { getSupabase } from '@/lib/supabase'
 
 export const maxDuration = 60
 
-// Accepted content types for upload
-// We support both multipart/form-data (legacy) and application/octet-stream (preferred for large files)
-
 /**
  * Converte qualquer valor vindo do Excel para número JS correto.
- *
- * Casos cobertos:
- *   número nativo float  →  retorna direto (xlsx já parseou certo)
- *   "-4.425,04"          →  -4425.04   (pt-BR: ponto=milhar, vírgula=decimal)
- *   "-23.076,28"         →  -23076.28
- *   "-0,02"              →  -0.02
- *   "1,234.56"           →  1234.56    (en-US)
- *   "825.70"             →  825.70
- *   "-0,00002"           →  -0.00002
- *
- * Problema raiz anterior: Excel exporta o sinal de menos como Unicode
- * MINUS SIGN (U+2212 −) em vez do hífen ASCII (U+002D -). Isso quebrava
- * todas as regexes de detecção de formato.
  */
 function parseNumber(v: unknown): number {
   if (v === null || v === undefined || v === '') return 0
-
-  // Número nativo: xlsx já leu como float — retorna direto, sem escala
   if (typeof v === 'number') return isNaN(v) ? 0 : v
 
   let s = String(v)
     .trim()
-    // Normaliza QUALQUER variante de sinal negativo para hífen ASCII
     .replace(/[\u2212\u2010\u2011\u2013\u2014\uFE58\uFE63\uFF0D]/g, '-')
-    // Remove espaços e caracteres invisíveis
     .replace(/[\s\u00A0\u202F\u2009]/g, '')
 
-  // Formato contábil: (1.234,56) → -1.234,56
   if (s.startsWith('(') && s.endsWith(')')) {
     s = '-' + s.slice(1, -1)
   }
@@ -48,19 +27,10 @@ function parseNumber(v: unknown): number {
 
   let result: number
 
-  // Caso 1 — pt-BR: tem vírgula (decimal) e pode ter pontos (milhar)
-  // Ex: "4.425,04" | "23.076,28" | "0,02" | "1.234.567,89"
   if (s.includes(',')) {
-    // Remove todos os pontos (separadores de milhar) e troca vírgula por ponto
     result = parseFloat(s.replace(/\./g, '').replace(',', '.'))
-
-  // Caso 2 — en-US: tem ponto decimal e pode ter vírgulas (milhar)
-  // Ex: "4,425.04" | "1,234.56"
   } else if (s.includes(',') === false && s.includes('.')) {
-    // Vírgulas são milhares; ponto é decimal — remove as vírgulas
     result = parseFloat(s.replace(/,/g, ''))
-
-  // Caso 3 — inteiro puro ou ponto como decimal sem ambiguidade
   } else {
     result = parseFloat(s) || 0
   }
@@ -71,11 +41,9 @@ function parseNumber(v: unknown): number {
 
 function parseDate(v: unknown): string {
   if (!v) return ''
-
   const s = String(v).trim()
   if (!s) return ''
 
-  // Excel serial number como string inteira (ex: "45658")
   if (/^\d{4,6}$/.test(s)) {
     try {
       const dd = XLSX.SSF.parse_date_code(parseInt(s))
@@ -83,15 +51,12 @@ function parseDate(v: unknown): string {
     } catch { /* not a serial */ }
   }
 
-  // ISO: yyyy-mm-dd or yyyy/mm/dd
   const iso = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/)
   if (iso) return `${iso[1]}-${iso[2].padStart(2,'0')}-${iso[3].padStart(2,'0')}`
 
-  // Formato Brasileiro (padrão): dd/mm/aaaa  → "01/02/2025" = 1 de Fevereiro
   const br = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/)
   if (br) return `${br[3]}-${br[2].padStart(2,'0')}-${br[1].padStart(2,'0')}`
 
-  // Brasileiro curto: dd/mm/aa
   const brShort = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2})$/)
   if (brShort) {
     const yr = parseInt(brShort[3])
@@ -99,16 +64,27 @@ function parseDate(v: unknown): string {
     return `${y4}-${brShort[2].padStart(2,'0')}-${brShort[1].padStart(2,'0')}`
   }
 
-  // Apenas mês/ano: MM/YYYY ou M/YYYY (orçamento sem dia, ex: "01/2025")
-  // Assume dia 01 para compatibilidade com strftime
   const mmyyyy = s.match(/^(\d{1,2})[-\/](\d{4})$/)
   if (mmyyyy) return `${mmyyyy[2]}-${mmyyyy[1].padStart(2,'0')}-01`
 
-  // Apenas ano/mês: YYYY/MM ou YYYY-MM
   const yyyymm = s.match(/^(\d{4})[-\/](\d{1,2})$/)
   if (yyyymm) return `${yyyymm[1]}-${yyyymm[2].padStart(2,'0')}-01`
 
   return s
+}
+
+const CHUNK_SIZE = 1000
+
+async function insertInChunks(
+  table: string,
+  rows: Record<string, unknown>[],
+  supabase: ReturnType<typeof getSupabase>
+) {
+  for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+    const chunk = rows.slice(i, i + CHUNK_SIZE)
+    const { error } = await supabase.from(table).insert(chunk)
+    if (error) throw new Error(error.message)
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -122,13 +98,11 @@ export async function POST(req: NextRequest) {
     let modeFromQuery: string | null
 
     if (ct.includes('application/octet-stream')) {
-      // ── New protocol: file as raw binary, metadata in query params ──────────
       bytes         = await req.arrayBuffer()
       tipo          = sp.get('tipo') ?? ''
       mapping       = sp.get('mapping')
       modeFromQuery = sp.get('mode')
     } else {
-      // ── Legacy protocol: multipart/form-data ─────────────────────────────────
       const formData = await req.formData()
       const file     = formData.get('file') as File
       tipo           = (formData.get('tipo') as string) ?? ''
@@ -140,35 +114,25 @@ export async function POST(req: NextRequest) {
 
     if (!bytes || bytes.byteLength === 0)
       return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
-    // cellNF:true → preserva o format code (cell.z) para detectarmos datas
+
     const workbook = XLSX.read(bytes, { type: 'array', cellNF: true })
     const sheet    = workbook.Sheets[workbook.SheetNames[0]]
 
-    // ── Pré-processa células de data ─────────────────────────────────────────
-    // Problema: rawNumbers:false usa o valor formatado (.w) que depende do
-    // formato da célula no Excel (pode ser M/D/YY americano = "12/31/24"
-    // em vez de "01/01/2025"). A solução é detectar células numéricas com
-    // formato de data pelo código de formato (.z), extrair o número serial
-    // e converter para ISO via parse_date_code — completamente independente
-    // de locale e timezone.
     for (const key of Object.keys(sheet)) {
       if (key.startsWith('!')) continue
       const cell = sheet[key]
       if (!cell || cell.t !== 'n') continue
       const fmt = String(cell.z ?? '')
-      // Formato de data contém d/m/y (fora de texto entre aspas e colchetes)
       const fmtClean = fmt.replace(/"[^"]*"/g, '').replace(/\[[^\]]*\]/g, '')
       if (!/[yYdD]/.test(fmtClean)) continue
       try {
         const dd = XLSX.SSF.parse_date_code(cell.v as number)
         if (dd && dd.y > 1900 && dd.y < 2200) {
-          // Substitui o valor formatado pelo ISO — sem locale, sem timezone
           cell.w = `${dd.y}-${String(dd.m).padStart(2,'0')}-${String(dd.d).padStart(2,'0')}`
         }
       } catch { /* não é serial de data */ }
     }
 
-    // rawNumbers: false → células numéricas não-data chegam como string pt-BR
     const raw = XLSX.utils.sheet_to_json(sheet, {
       defval:     '',
       rawNumbers: false,
@@ -185,7 +149,7 @@ export async function POST(req: NextRequest) {
     const map: Record<string, string> = JSON.parse(mapping)
     const get = (row: Record<string, unknown>, key: string) => map[key] ? row[map[key]] : ''
 
-    const db = getDb()
+    const supabase = getSupabase()
 
     // ── Lançamentos Budget ou Razão ──────────────────────────────────────────
     if (tipo === 'lancamentos_budget' || tipo === 'lancamentos_razao') {
@@ -193,50 +157,39 @@ export async function POST(req: NextRequest) {
       const modeRaw = modeFromQuery ?? 'append'
 
       if (modeRaw === 'replace') {
-        db.prepare(`DELETE FROM lancamentos WHERE tipo = ?`).run(tipoVal)
+        const { error } = await supabase.from('lancamentos').delete().eq('tipo', tipoVal)
+        if (error) throw new Error(error.message)
       }
 
-      const insert = db.prepare(`
-        INSERT INTO lancamentos
-          (tipo, data_lancamento, nome_conta_contabil, numero_conta_contabil,
-           centro_custo, nome_conta_contrapartida, fonte, observacao, debito_credito)
-        VALUES (?,?,?,?,?,?,?,?,?)
-      `)
-
-      const insertMany = db.transaction((rows: Record<string, unknown>[]) => {
-        for (const row of rows) {
-          // Se os campos Ano e Mês estão mapeados, constrói a data como
-          // YYYY-MM-01 — mais confiável que a célula de data do Excel,
-          // que pode ter seriais deslocados (ex.: 31/12/2024 para Janeiro).
-          const anoRaw = get(row, 'data_ano')
-          const mesRaw = get(row, 'data_mes')
-          let dataFinal: string
-          if (anoRaw && mesRaw) {
-            const ano = parseInt(String(anoRaw), 10)
-            const mes = parseInt(String(mesRaw), 10)
-            if (ano > 1900 && mes >= 1 && mes <= 12) {
-              dataFinal = `${ano}-${String(mes).padStart(2, '0')}-01`
-            } else {
-              dataFinal = parseDate(get(row, 'data_lancamento'))
-            }
+      const rows = raw.map(row => {
+        const anoRaw = get(row, 'data_ano')
+        const mesRaw = get(row, 'data_mes')
+        let dataFinal: string
+        if (anoRaw && mesRaw) {
+          const ano = parseInt(String(anoRaw), 10)
+          const mes = parseInt(String(mesRaw), 10)
+          if (ano > 1900 && mes >= 1 && mes <= 12) {
+            dataFinal = `${ano}-${String(mes).padStart(2, '0')}-01`
           } else {
             dataFinal = parseDate(get(row, 'data_lancamento'))
           }
-          insert.run(
-            tipoVal,
-            dataFinal,
-            String(get(row, 'nome_conta_contabil')      ?? ''),
-            String(get(row, 'numero_conta_contabil')    ?? ''),
-            String(get(row, 'centro_custo')             ?? ''),
-            String(get(row, 'nome_conta_contrapartida') ?? ''),
-            String(get(row, 'fonte')                    ?? ''),
-            String(get(row, 'observacao')               ?? ''),
-            parseNumber(get(row, 'debito_credito')),
-          )
+        } else {
+          dataFinal = parseDate(get(row, 'data_lancamento'))
+        }
+        return {
+          tipo:                     tipoVal,
+          data_lancamento:          dataFinal || null,
+          nome_conta_contabil:      String(get(row, 'nome_conta_contabil')      ?? ''),
+          numero_conta_contabil:    String(get(row, 'numero_conta_contabil')    ?? ''),
+          centro_custo:             String(get(row, 'centro_custo')             ?? ''),
+          nome_conta_contrapartida: String(get(row, 'nome_conta_contrapartida') ?? ''),
+          fonte:                    String(get(row, 'fonte')                    ?? ''),
+          observacao:               String(get(row, 'observacao')               ?? ''),
+          debito_credito:           parseNumber(get(row, 'debito_credito')),
         }
       })
 
-      insertMany(raw)
+      await insertInChunks('lancamentos', rows, supabase)
       return NextResponse.json({ success: true, rowCount: raw.length, tipo: tipoVal })
     }
 
@@ -246,149 +199,129 @@ export async function POST(req: NextRequest) {
       const modeRaw = modeFromQuery ?? 'append'
 
       if (modeRaw === 'replace') {
-        db.prepare(`DELETE FROM capex WHERE tipo = ?`).run(tipoVal)
+        const { error } = await supabase.from('capex').delete().eq('tipo', tipoVal)
+        if (error) throw new Error(error.message)
       }
 
-      const insert = db.prepare(`
-        INSERT INTO capex
-          (tipo, data_lancamento, nome_projeto, nome_conta_contabil, numero_conta_contabil,
-           centro_custo, nome_conta_contrapartida, fonte, observacao, debito_credito)
-        VALUES (?,?,?,?,?,?,?,?,?,?)
-      `)
-
-      const insertMany = db.transaction((rows: Record<string, unknown>[]) => {
-        for (const row of rows) {
-          const anoRaw = get(row, 'data_ano')
-          const mesRaw = get(row, 'data_mes')
-          let dataFinal: string
-          if (anoRaw && mesRaw) {
-            const ano = parseInt(String(anoRaw), 10)
-            const mes = parseInt(String(mesRaw), 10)
-            if (ano > 1900 && mes >= 1 && mes <= 12) {
-              dataFinal = `${ano}-${String(mes).padStart(2, '0')}-01`
-            } else {
-              dataFinal = parseDate(get(row, 'data_lancamento'))
-            }
+      const rows = raw.map(row => {
+        const anoRaw = get(row, 'data_ano')
+        const mesRaw = get(row, 'data_mes')
+        let dataFinal: string
+        if (anoRaw && mesRaw) {
+          const ano = parseInt(String(anoRaw), 10)
+          const mes = parseInt(String(mesRaw), 10)
+          if (ano > 1900 && mes >= 1 && mes <= 12) {
+            dataFinal = `${ano}-${String(mes).padStart(2, '0')}-01`
           } else {
             dataFinal = parseDate(get(row, 'data_lancamento'))
           }
-          insert.run(
-            tipoVal,
-            dataFinal,
-            String(get(row, 'nome_projeto')              ?? ''),
-            String(get(row, 'nome_conta_contabil')       ?? ''),
-            String(get(row, 'numero_conta_contabil')     ?? ''),
-            String(get(row, 'centro_custo')              ?? ''),
-            String(get(row, 'nome_conta_contrapartida')  ?? ''),
-            String(get(row, 'fonte')                     ?? ''),
-            String(get(row, 'observacao')                ?? ''),
-            parseNumber(get(row, 'debito_credito')),
-          )
+        } else {
+          dataFinal = parseDate(get(row, 'data_lancamento'))
+        }
+        return {
+          tipo:                     tipoVal,
+          data_lancamento:          dataFinal || null,
+          nome_projeto:             String(get(row, 'nome_projeto')              ?? ''),
+          nome_conta_contabil:      String(get(row, 'nome_conta_contabil')       ?? ''),
+          numero_conta_contabil:    String(get(row, 'numero_conta_contabil')     ?? ''),
+          centro_custo:             String(get(row, 'centro_custo')              ?? ''),
+          nome_conta_contrapartida: String(get(row, 'nome_conta_contrapartida')  ?? ''),
+          fonte:                    String(get(row, 'fonte')                     ?? ''),
+          observacao:               String(get(row, 'observacao')                ?? ''),
+          debito_credito:           parseNumber(get(row, 'debito_credito')),
         }
       })
 
-      insertMany(raw)
+      await insertInChunks('capex', rows, supabase)
       return NextResponse.json({ success: true, rowCount: raw.length, tipo: tipoVal })
     }
 
     // ── Centros de Custo ─────────────────────────────────────────────────────
     if (tipo === 'centros_custo') {
-      const upsert = db.prepare(`
-        INSERT INTO centros_custo (centro_custo, nome_centro_custo, departamento, nome_departamento, area, nome_area)
-        VALUES (?,?,?,?,?,?)
-        ON CONFLICT(centro_custo) DO UPDATE SET
-          nome_centro_custo=excluded.nome_centro_custo,
-          departamento=excluded.departamento,
-          nome_departamento=excluded.nome_departamento,
-          area=excluded.area,
-          nome_area=excluded.nome_area
-      `)
-      const upsertMany = db.transaction((rows: Record<string, unknown>[]) => {
-        for (const row of rows) {
-          const cc = String(get(row, 'centro_custo') ?? '').trim()
-          if (!cc) continue
-          upsert.run(
-            cc,
-            String(get(row, 'nome_centro_custo')   ?? ''),
-            String(get(row, 'departamento')         ?? ''),
-            String(get(row, 'nome_departamento')    ?? ''),
-            String(get(row, 'area')                 ?? ''),
-            String(get(row, 'nome_area')            ?? ''),
-          )
-        }
-      })
-      upsertMany(raw)
-      return NextResponse.json({ success: true, rowCount: raw.length, tipo })
+      const rows = raw
+        .map(row => ({
+          centro_custo:       String(get(row, 'centro_custo')       ?? '').trim(),
+          nome_centro_custo:  String(get(row, 'nome_centro_custo')  ?? ''),
+          departamento:       String(get(row, 'departamento')        ?? ''),
+          nome_departamento:  String(get(row, 'nome_departamento')   ?? ''),
+          area:               String(get(row, 'area')                ?? ''),
+          nome_area:          String(get(row, 'nome_area')           ?? ''),
+        }))
+        .filter(r => r.centro_custo)
+
+      for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+        const chunk = rows.slice(i, i + CHUNK_SIZE)
+        const { error } = await supabase
+          .from('centros_custo')
+          .upsert(chunk, { onConflict: 'centro_custo' })
+        if (error) throw new Error(error.message)
+      }
+      return NextResponse.json({ success: true, rowCount: rows.length, tipo })
     }
 
     // ── Contas Contábeis ─────────────────────────────────────────────────────
     if (tipo === 'contas_contabeis') {
-      const upsert = db.prepare(`
-        INSERT INTO contas_contabeis (numero_conta_contabil, nome_conta_contabil, agrupamento_arvore, dre, ordem_dre)
-        VALUES (?,?,?,?,?)
-        ON CONFLICT(numero_conta_contabil) DO UPDATE SET
-          nome_conta_contabil=excluded.nome_conta_contabil,
-          agrupamento_arvore=excluded.agrupamento_arvore,
-          dre=excluded.dre,
-          ordem_dre=excluded.ordem_dre
-      `)
-      const upsertMany = db.transaction((rows: Record<string, unknown>[]) => {
-        for (const row of rows) {
+      const rows = raw
+        .map(row => {
           const num = String(get(row, 'numero_conta_contabil') ?? '').trim()
-          if (!num) continue
+          if (!num) return null
           const ordemRaw = get(row, 'ordem_dre')
           const ordem = ordemRaw !== '' && ordemRaw !== null && ordemRaw !== undefined
             ? parseInt(String(ordemRaw), 10) || 999
             : 999
-          upsert.run(
-            num,
-            String(get(row, 'nome_conta_contabil') ?? ''),
-            String(get(row, 'agrupamento_arvore')  ?? ''),
-            String(get(row, 'dre')                 ?? ''),
-            ordem,
-          )
-        }
-      })
-      upsertMany(raw)
-      return NextResponse.json({ success: true, rowCount: raw.length, tipo })
+          return {
+            numero_conta_contabil: num,
+            nome_conta_contabil:   String(get(row, 'nome_conta_contabil') ?? ''),
+            agrupamento_arvore:    String(get(row, 'agrupamento_arvore')  ?? ''),
+            dre:                   String(get(row, 'dre')                 ?? ''),
+            ordem_dre:             ordem,
+          }
+        })
+        .filter(Boolean) as Array<Record<string, unknown>>
+
+      for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+        const chunk = rows.slice(i, i + CHUNK_SIZE)
+        const { error } = await supabase
+          .from('contas_contabeis')
+          .upsert(chunk, { onConflict: 'numero_conta_contabil' })
+        if (error) throw new Error(error.message)
+      }
+      return NextResponse.json({ success: true, rowCount: rows.length, tipo })
     }
 
     // ── Estrutura DRE (linhas + subtotais) ───────────────────────────────────
     if (tipo === 'dre_linhas') {
       const modeRaw = modeFromQuery ?? 'replace'
       if (modeRaw === 'replace') {
-        db.prepare(`DELETE FROM dre_linhas`).run()
+        const { error } = await supabase.from('dre_linhas').delete().neq('id', 0)
+        if (error) throw new Error(error.message)
       }
-      const upsert = db.prepare(`
-        INSERT INTO dre_linhas (ordem, nome, tipo, sinal, formula_grupos, formula_sinais, negrito, separador)
-        VALUES (?,?,?,?,?,?,?,?)
-        ON CONFLICT(nome) DO UPDATE SET
-          ordem=excluded.ordem,
-          tipo=excluded.tipo,
-          sinal=excluded.sinal,
-          formula_grupos=excluded.formula_grupos,
-          formula_sinais=excluded.formula_sinais,
-          negrito=excluded.negrito,
-          separador=excluded.separador
-      `)
-      const upsertMany = db.transaction((rows: Record<string, unknown>[]) => {
-        for (const row of rows) {
+
+      const rows = raw
+        .map(row => {
           const nome = String(get(row, 'nome') ?? '').trim()
-          if (!nome) continue
-          upsert.run(
-            parseInt(String(get(row, 'ordem') ?? '999'), 10) || 999,
+          if (!nome) return null
+          return {
+            ordem:          parseInt(String(get(row, 'ordem') ?? '999'), 10) || 999,
             nome,
-            String(get(row, 'tipo') ?? 'grupo').trim() || 'grupo',
-            parseInt(String(get(row, 'sinal') ?? '1'), 10) || 1,
-            String(get(row, 'formula_grupos') ?? '[]').trim() || '[]',
-            String(get(row, 'formula_sinais') ?? '[]').trim() || '[]',
-            parseInt(String(get(row, 'negrito') ?? '0'), 10) ? 1 : 0,
-            parseInt(String(get(row, 'separador') ?? '0'), 10) ? 1 : 0,
-          )
-        }
-      })
-      upsertMany(raw)
-      return NextResponse.json({ success: true, rowCount: raw.length, tipo })
+            tipo:           String(get(row, 'tipo') ?? 'grupo').trim() || 'grupo',
+            sinal:          parseInt(String(get(row, 'sinal') ?? '1'), 10) || 1,
+            formula_grupos: (() => { try { return JSON.parse(String(get(row, 'formula_grupos') ?? '[]')) } catch { return [] } })(),
+            formula_sinais: (() => { try { return JSON.parse(String(get(row, 'formula_sinais') ?? '[]')) } catch { return [] } })(),
+            negrito:        parseInt(String(get(row, 'negrito') ?? '0'), 10) ? true : false,
+            separador:      parseInt(String(get(row, 'separador') ?? '0'), 10) ? true : false,
+          }
+        })
+        .filter(Boolean) as Array<Record<string, unknown>>
+
+      for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+        const chunk = rows.slice(i, i + CHUNK_SIZE)
+        const { error } = await supabase
+          .from('dre_linhas')
+          .upsert(chunk, { onConflict: 'nome' })
+        if (error) throw new Error(error.message)
+      }
+      return NextResponse.json({ success: true, rowCount: rows.length, tipo })
     }
 
     return NextResponse.json({ error: 'tipo inválido' }, { status: 400 })

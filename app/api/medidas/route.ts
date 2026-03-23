@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getDb } from '@/lib/db'
+import { getSupabase } from '@/lib/supabase'
 
 function parseRow(m: Record<string, unknown>) {
   return {
@@ -10,31 +10,24 @@ function parseRow(m: Record<string, unknown>) {
     cor: (m.cor ?? '#6366f1') as string,
     tipo_fonte: (m.tipo_fonte ?? 'ambos') as string,
     tipo_medida: (m.tipo_medida || 'simples') as string,
-    filtros: JSON.parse((m.filtros as string) || '[]'),
+    filtros: Array.isArray(m.filtros) ? m.filtros : JSON.parse((m.filtros as string) || '[]'),
     filtros_operador: (m.filtros_operador || 'AND') as string,
-    denominador_filtros: JSON.parse((m.denominador_filtros as string) || '[]'),
+    denominador_filtros: Array.isArray(m.denominador_filtros) ? m.denominador_filtros : JSON.parse((m.denominador_filtros as string) || '[]'),
     denominador_filtros_operador: (m.denominador_filtros_operador || 'AND') as string,
     denominador_tipo_fonte: (m.denominador_tipo_fonte || 'ambos') as string,
-    departamentos: JSON.parse((m.departamentos as string) || '[]') as string[],
+    departamentos: Array.isArray(m.departamentos) ? m.departamentos as string[] : JSON.parse((m.departamentos as string) || '[]') as string[],
     created_at: m.created_at as string,
     updated_at: m.updated_at as string,
   }
 }
 
-// Ensure columns exist (idempotent) — handles case where migration didn't run
-function ensureColumns(db: ReturnType<typeof getDb>) {
-  try { db.exec(`ALTER TABLE medidas ADD COLUMN filtros_operador TEXT DEFAULT 'AND'`) } catch { /* already exists */ }
-  try { db.exec(`ALTER TABLE medidas ADD COLUMN denominador_filtros_operador TEXT DEFAULT 'AND'`) } catch { /* already exists */ }
-  try { db.exec(`ALTER TABLE medidas ADD COLUMN departamentos TEXT DEFAULT '[]'`) } catch { /* already exists */ }
-  try { db.exec(`ALTER TABLE medidas ADD COLUMN unidade TEXT DEFAULT ''`) } catch { /* already exists */ }
-}
-
 export async function GET(req: NextRequest) {
   try {
-    const db = getDb()
     const dept = new URL(req.url).searchParams.get('departamento') ?? ''
-    const rows = db.prepare('SELECT * FROM medidas ORDER BY created_at DESC').all() as Record<string, unknown>[]
-    const parsed = rows.map(parseRow)
+    const supabase = getSupabase()
+    const { data, error } = await supabase.from('medidas').select('*').order('created_at', { ascending: false })
+    if (error) throw new Error(error.message)
+    const parsed = (data ?? []).map(r => parseRow(r as Record<string, unknown>))
     const filtered = dept
       ? parsed.filter(m => m.departamentos.length === 0 || m.departamentos.includes(dept))
       : parsed
@@ -52,26 +45,24 @@ export async function POST(req: NextRequest) {
             filtros_operador, denominador_filtros, denominador_filtros_operador,
             denominador_tipo_fonte, departamentos } = body
     if (!nome) return NextResponse.json({ error: 'Nome obrigatório' }, { status: 400 })
-    const db = getDb()
-    ensureColumns(db)
-    const r = db.prepare(`
-      INSERT INTO medidas (nome, descricao, unidade, cor, tipo_fonte, tipo_medida,
-        filtros, filtros_operador, denominador_filtros, denominador_filtros_operador,
-        denominador_tipo_fonte, departamentos)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      nome, descricao ?? '', unidade ?? '',
-      cor ?? '#6366f1',
-      tipo_fonte ?? 'ambos', tipo_medida ?? 'simples',
-      JSON.stringify(filtros ?? []),
-      filtros_operador ?? 'AND',
-      JSON.stringify(denominador_filtros ?? []),
-      denominador_filtros_operador ?? 'AND',
-      denominador_tipo_fonte ?? 'ambos',
-      JSON.stringify(departamentos ?? [])
-    )
-    const m = db.prepare('SELECT * FROM medidas WHERE id = ?').get(r.lastInsertRowid) as Record<string, unknown>
-    return NextResponse.json(parseRow(m))
+    const supabase = getSupabase()
+    const { data, error } = await supabase
+      .from('medidas')
+      .insert({
+        nome, descricao: descricao ?? '', unidade: unidade ?? '',
+        cor: cor ?? '#6366f1',
+        tipo_fonte: tipo_fonte ?? 'ambos', tipo_medida: tipo_medida ?? 'simples',
+        filtros: filtros ?? [],
+        filtros_operador: filtros_operador ?? 'AND',
+        denominador_filtros: denominador_filtros ?? [],
+        denominador_filtros_operador: denominador_filtros_operador ?? 'AND',
+        denominador_tipo_fonte: denominador_tipo_fonte ?? 'ambos',
+        departamentos: departamentos ?? [],
+      })
+      .select()
+      .single()
+    if (error) throw new Error(error.message)
+    return NextResponse.json(parseRow(data as Record<string, unknown>))
   } catch (e) {
     console.error('[medidas POST]', e)
     return NextResponse.json({ error: String(e) }, { status: 500 })
@@ -85,27 +76,25 @@ export async function PUT(req: NextRequest) {
             filtros_operador, denominador_filtros, denominador_filtros_operador,
             denominador_tipo_fonte, departamentos } = body
     if (!id) return NextResponse.json({ error: 'id obrigatório' }, { status: 400 })
-    const db = getDb()
-    ensureColumns(db)
-    db.prepare(`
-      UPDATE medidas SET nome=?, descricao=?, unidade=?, cor=?, tipo_fonte=?, tipo_medida=?,
-        filtros=?, filtros_operador=?, denominador_filtros=?, denominador_filtros_operador=?,
-        denominador_tipo_fonte=?, departamentos=?, updated_at=CURRENT_TIMESTAMP
-      WHERE id=?
-    `).run(
-      nome, descricao ?? '', unidade ?? '',
-      cor ?? '#6366f1',
-      tipo_fonte ?? 'ambos', tipo_medida ?? 'simples',
-      JSON.stringify(filtros ?? []),
-      filtros_operador ?? 'AND',
-      JSON.stringify(denominador_filtros ?? []),
-      denominador_filtros_operador ?? 'AND',
-      denominador_tipo_fonte ?? 'ambos',
-      JSON.stringify(departamentos ?? []),
-      id
-    )
-    const m = db.prepare('SELECT * FROM medidas WHERE id = ?').get(id) as Record<string, unknown>
-    return NextResponse.json(parseRow(m))
+    const supabase = getSupabase()
+    const { data, error } = await supabase
+      .from('medidas')
+      .update({
+        nome, descricao: descricao ?? '', unidade: unidade ?? '',
+        cor: cor ?? '#6366f1',
+        tipo_fonte: tipo_fonte ?? 'ambos', tipo_medida: tipo_medida ?? 'simples',
+        filtros: filtros ?? [],
+        filtros_operador: filtros_operador ?? 'AND',
+        denominador_filtros: denominador_filtros ?? [],
+        denominador_filtros_operador: denominador_filtros_operador ?? 'AND',
+        denominador_tipo_fonte: denominador_tipo_fonte ?? 'ambos',
+        departamentos: departamentos ?? [],
+      })
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) throw new Error(error.message)
+    return NextResponse.json(parseRow(data as Record<string, unknown>))
   } catch (e) {
     console.error('[medidas PUT]', e)
     return NextResponse.json({ error: String(e) }, { status: 500 })
@@ -116,10 +105,15 @@ export async function PATCH(req: NextRequest) {
   try {
     const { id, unidade } = await req.json()
     if (!id) return NextResponse.json({ error: 'id obrigatório' }, { status: 400 })
-    const db = getDb()
-    db.prepare(`UPDATE medidas SET unidade=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(unidade ?? '', id)
-    const m = db.prepare('SELECT * FROM medidas WHERE id = ?').get(id) as Record<string, unknown>
-    return NextResponse.json(parseRow(m))
+    const supabase = getSupabase()
+    const { data, error } = await supabase
+      .from('medidas')
+      .update({ unidade: unidade ?? '' })
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) throw new Error(error.message)
+    return NextResponse.json(parseRow(data as Record<string, unknown>))
   } catch (e) {
     console.error('[medidas PATCH]', e)
     return NextResponse.json({ error: String(e) }, { status: 500 })
@@ -129,7 +123,9 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const id = new URL(req.url).searchParams.get('id')
-    getDb().prepare('DELETE FROM medidas WHERE id = ?').run(id)
+    const supabase = getSupabase()
+    const { error } = await supabase.from('medidas').delete().eq('id', id!)
+    if (error) throw new Error(error.message)
     return NextResponse.json({ success: true })
   } catch (e) {
     console.error('[medidas DELETE]', e)

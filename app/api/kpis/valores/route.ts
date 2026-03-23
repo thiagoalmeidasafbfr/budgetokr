@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     if (!kpiId) return NextResponse.json({ error: 'kpiId required' }, { status: 400 })
     const periodosRaw = sp.get('periodos')
     const periodos = periodosRaw ? periodosRaw.split(',').filter(Boolean) : undefined
-    const valores = getKpiValores(Number(kpiId), periodos)
+    const valores = await getKpiValores(Number(kpiId), periodos)
     return NextResponse.json(valores)
   } catch (e) {
     console.error(e)
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     const { kpiId, valores } = body
     if (!kpiId) return NextResponse.json({ error: 'kpiId required' }, { status: 400 })
     if (!Array.isArray(valores)) return NextResponse.json({ error: 'valores must be an array' }, { status: 400 })
-    upsertKpiValores(Number(kpiId), valores)
+    await upsertKpiValores(Number(kpiId), valores)
     return NextResponse.json({ ok: true })
   } catch (e) {
     console.error(e)

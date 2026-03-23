@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getDb } from '@/lib/db'
+import { getSupabase } from '@/lib/supabase'
 import { getUserFromHeaders } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
@@ -17,31 +17,24 @@ export async function GET(req: NextRequest) {
   const limit   = 100
   const offset  = (page - 1) * limit
 
-  const db = getDb()
+  const supabase = getSupabase()
 
-  const conditions: string[] = []
-  const params: unknown[] = []
+  let query = supabase
+    .from('login_logs')
+    .select('id, user_id, role, department, success, ip, user_agent, created_at', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1)
 
   if (q) {
-    conditions.push(`(LOWER(user_id) LIKE LOWER(?) OR LOWER(ip) LIKE LOWER(?))`)
-    params.push(`%${q}%`, `%${q}%`)
+    query = query.or(`user_id.ilike.%${q}%,ip.ilike.%${q}%`)
   }
   if (success !== null && success !== '') {
-    conditions.push(`success = ?`)
-    params.push(parseInt(success))
+    query = query.eq('success', success === '1')
   }
 
-  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+  const { data: rows, count, error } = await query
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const { total } = db.prepare(`SELECT COUNT(*) as total FROM login_logs ${where}`).get(...params) as { total: number }
-
-  const rows = db.prepare(`
-    SELECT id, user_id, role, department, success, ip, user_agent, created_at
-    FROM login_logs
-    ${where}
-    ORDER BY created_at DESC
-    LIMIT ${limit} OFFSET ${offset}
-  `).all(...params)
-
-  return NextResponse.json({ rows, total, page, pages: Math.ceil(total / limit) })
+  const total = count ?? 0
+  return NextResponse.json({ rows: rows ?? [], total, page, pages: Math.ceil(total / limit) })
 }

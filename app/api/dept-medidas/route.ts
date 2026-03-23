@@ -8,9 +8,7 @@ export async function GET(req: NextRequest) {
   const user = getUserFromHeaders(req)
   const forcedDept = user?.role === 'dept' ? user.department : undefined
   const dept = forcedDept || req.nextUrl.searchParams.get('departamento') || ''
-  const pinned  = getDeptMedidas(dept)
-  const allMedidas = getMedidas()
-  // Filter medidas by department: only show medidas assigned to this dept or unassigned (available to all)
+  const [pinned, allMedidas] = await Promise.all([getDeptMedidas(dept), getMedidas()])
   const medidas = dept
     ? allMedidas.filter(m => {
         const depts: string[] = Array.isArray(m.departamentos) ? m.departamentos : JSON.parse(m.departamentos || '[]')
@@ -22,12 +20,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const { departamento, medidaId } = await req.json()
-  upsertDeptMedida(departamento, Number(medidaId))
+  await upsertDeptMedida(departamento, Number(medidaId))
   return NextResponse.json({ ok: true })
 }
 
 export async function DELETE(req: NextRequest) {
   const { departamento, medidaId } = await req.json()
-  deleteDeptMedida(departamento, Number(medidaId))
+  await deleteDeptMedida(departamento, Number(medidaId))
   return NextResponse.json({ ok: true })
 }
