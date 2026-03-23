@@ -126,6 +126,7 @@ export const LANCAMENTO_COLUMNS = [
   { key: 'numero_conta_contabil',     label: 'Número Conta Contábil',       required: true  },
   { key: 'centro_custo',              label: 'Centro de Custo',             required: true  },
   { key: 'id_cc_cc',                  label: 'ID CC- CC (Unidade Negócio)', required: false },
+  { key: 'num_transacao',             label: 'Nº Transação',                required: false },
   { key: 'nome_conta_contrapartida',  label: 'Nome Conta Contra Partida',   required: false },
   { key: 'fonte',                     label: 'Fonte',                       required: false },
   { key: 'observacao',                label: 'Observação',                  required: false },
