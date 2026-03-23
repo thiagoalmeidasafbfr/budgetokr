@@ -327,8 +327,9 @@ BEGIN
     v_cond := array_append(v_cond, format('l.centro_custo = ANY(%s)', quote_literal(p_centros::TEXT)));
   END IF;
 
-  v_sql := 'SELECT l.id, l.tipo, l.data_lancamento, l.numero_conta_contabil,
-      l.nome_conta_contabil, l.centro_custo, cc.nome_centro_custo,
+  v_sql := 'SELECT l.id, l.tipo, l.data_lancamento, l.numero_transacao,
+      l.numero_conta_contabil, l.nome_conta_contabil,
+      l.centro_custo, cc.nome_centro_custo, cc.nome_area,
       ca.agrupamento_arvore, ca.dre, l.nome_conta_contrapartida,
       l.debito_credito, l.observacao, l.fonte, l.num_transacao,
       l.id_cc_cc, un.unidade
