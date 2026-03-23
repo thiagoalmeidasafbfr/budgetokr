@@ -284,14 +284,19 @@ export async function POST(req: NextRequest) {
         })
         .filter(Boolean) as Array<Record<string, unknown>>
 
-      for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
-        const chunk = rows.slice(i, i + CHUNK_SIZE)
+      // deduplica pelo campo chave
+      const deduped = Object.values(
+        Object.fromEntries(rows.map(r => [r.numero_conta_contabil, r]))
+      )
+
+      for (let i = 0; i < deduped.length; i += CHUNK_SIZE) {
+        const chunk = deduped.slice(i, i + CHUNK_SIZE)
         const { error } = await supabase
           .from('contas_contabeis')
           .upsert(chunk, { onConflict: 'numero_conta_contabil' })
         if (error) throw new Error(error.message)
       }
-      return NextResponse.json({ success: true, rowCount: rows.length, tipo })
+      return NextResponse.json({ success: true, rowCount: deduped.length, tipo })
     }
 
     // ── Estrutura DRE (linhas + subtotais) ───────────────────────────────────
@@ -319,14 +324,19 @@ export async function POST(req: NextRequest) {
         })
         .filter(Boolean) as Array<Record<string, unknown>>
 
-      for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
-        const chunk = rows.slice(i, i + CHUNK_SIZE)
+      // deduplica pelo campo chave
+      const deduped = Object.values(
+        Object.fromEntries(rows.map(r => [r.nome, r]))
+      )
+
+      for (let i = 0; i < deduped.length; i += CHUNK_SIZE) {
+        const chunk = deduped.slice(i, i + CHUNK_SIZE)
         const { error } = await supabase
           .from('dre_linhas')
           .upsert(chunk, { onConflict: 'nome' })
         if (error) throw new Error(error.message)
       }
-      return NextResponse.json({ success: true, rowCount: rows.length, tipo })
+      return NextResponse.json({ success: true, rowCount: deduped.length, tipo })
     }
 
     return NextResponse.json({ error: 'tipo inválido' }, { status: 400 })
