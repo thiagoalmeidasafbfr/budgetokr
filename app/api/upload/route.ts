@@ -249,14 +249,19 @@ export async function POST(req: NextRequest) {
         }))
         .filter(r => r.centro_custo)
 
-      for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
-        const chunk = rows.slice(i, i + CHUNK_SIZE)
+      // deduplica pelo campo chave (mantém última ocorrência)
+      const deduped = Object.values(
+        Object.fromEntries(rows.map(r => [r.centro_custo, r]))
+      )
+
+      for (let i = 0; i < deduped.length; i += CHUNK_SIZE) {
+        const chunk = deduped.slice(i, i + CHUNK_SIZE)
         const { error } = await supabase
           .from('centros_custo')
           .upsert(chunk, { onConflict: 'centro_custo' })
         if (error) throw new Error(error.message)
       }
-      return NextResponse.json({ success: true, rowCount: rows.length, tipo })
+      return NextResponse.json({ success: true, rowCount: deduped.length, tipo })
     }
 
     // ── Contas Contábeis ─────────────────────────────────────────────────────
