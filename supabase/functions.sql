@@ -330,10 +330,12 @@ BEGIN
   v_sql := 'SELECT l.id, l.tipo, l.data_lancamento, l.numero_conta_contabil,
       l.nome_conta_contabil, l.centro_custo, cc.nome_centro_custo,
       ca.agrupamento_arvore, ca.dre, l.nome_conta_contrapartida,
-      l.debito_credito, l.observacao, l.fonte, l.num_transacao
+      l.debito_credito, l.observacao, l.fonte, l.num_transacao,
+      l.id_cc_cc, un.unidade
     FROM lancamentos l
     LEFT JOIN centros_custo    cc ON l.centro_custo          = cc.centro_custo
-    LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil' ||
+    LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil
+    LEFT JOIN unidades_negocio un ON l.id_cc_cc              = un.id_cc_cc' ||
     CASE WHEN array_length(v_cond, 1) > 0 THEN ' WHERE ' || array_to_string(v_cond, ' AND ') ELSE '' END ||
     ' ORDER BY l.data_lancamento, l.numero_conta_contabil
       LIMIT 50000';
