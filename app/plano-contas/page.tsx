@@ -159,7 +159,7 @@ export default function PlanoContasPage() {
   const rows = data ? flattenTree(data.tree).filter(r => r.visible) : []
 
   // Totals (sum of root nodes only)
-  const totals = data?.tree.reduce(
+  const totals = data?.tree?.reduce(
     (acc, n) => ({ budget: acc.budget + n.budget, razao: acc.razao + n.razao }),
     { budget: 0, razao: 0 }
   ) ?? { budget: 0, razao: 0 }
