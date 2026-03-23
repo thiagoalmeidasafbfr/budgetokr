@@ -185,6 +185,7 @@ export async function POST(req: NextRequest) {
         return {
           tipo:                     tipoVal,
           data_lancamento:          dataFinal || null,
+          numero_transacao:         String(get(row, 'numero_transacao')         ?? '') || null,
           nome_conta_contabil:      String(get(row, 'nome_conta_contabil')      ?? ''),
           numero_conta_contabil:    String(get(row, 'numero_conta_contabil')    ?? ''),
           centro_custo:             String(get(row, 'centro_custo')             ?? ''),

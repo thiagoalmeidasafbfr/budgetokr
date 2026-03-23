@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS lancamentos (
   id                        BIGSERIAL PRIMARY KEY,
   tipo                      TEXT        NOT NULL CHECK (tipo IN ('budget','razao')),
   data_lancamento           DATE,
+  numero_transacao          TEXT,
   nome_conta_contabil       TEXT,
   numero_conta_contabil     TEXT,
   centro_custo              TEXT,
@@ -18,6 +19,8 @@ CREATE TABLE IF NOT EXISTS lancamentos (
   created_at                TIMESTAMPTZ DEFAULT NOW(),
   updated_at                TIMESTAMPTZ DEFAULT NOW()
 );
+-- Migration: add numero_transacao if not exists
+ALTER TABLE lancamentos ADD COLUMN IF NOT EXISTS numero_transacao TEXT;
 CREATE INDEX IF NOT EXISTS idx_lanc_tipo       ON lancamentos(tipo);
 CREATE INDEX IF NOT EXISTS idx_lanc_cc         ON lancamentos(centro_custo);
 CREATE INDEX IF NOT EXISTS idx_lanc_conta      ON lancamentos(numero_conta_contabil);
