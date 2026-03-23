@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = getUserFromHeaders(req)
     const body = await req.json()
-    const { dre_linha, agrupamento, conta, periodo, tipo_valor, texto, parent_id, filter_state } = body
+    const { dre_linha, agrupamento, conta, periodo, tipo_valor, texto, parent_id, filter_state, lancamento_id } = body
     if (!dre_linha || !texto) return NextResponse.json({ error: 'dre_linha e texto obrigatórios' }, { status: 400 })
 
     const supabase = getSupabase()
@@ -78,9 +78,10 @@ export async function POST(req: NextRequest) {
         usuario:      user?.userId ?? null,
         user_role:    user?.role   ?? 'master',
         departamento,
-        parent_id:    parent_id   ?? null,
+        parent_id:    parent_id    ?? null,
         status:       'open',
         filter_state: filter_state ?? {},
+        lancamento_id: lancamento_id ?? null,
       })
       .select()
       .single()

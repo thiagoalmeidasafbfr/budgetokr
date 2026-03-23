@@ -30,6 +30,7 @@ interface DREComment {
   filter_state?: string
   created_at: string
   updated_at?: string
+  lancamento_id?: number
 }
 
 // Group tickets + replies
@@ -78,12 +79,19 @@ function navigateToDRE(comment: DREComment, router: ReturnType<typeof useRouter>
     const depts   = fs.depts?.length   ? fs.depts   : (comment.departamento ? [comment.departamento] : [])
     const periods = fs.periods?.length ? fs.periods : (comment.periodo       ? [comment.periodo]       : [])
     const centros = fs.centros?.length ? fs.centros : []
-    sessionStorage.setItem('dre_deeplink', JSON.stringify({
+    const dl: Record<string, unknown> = {
       depts, periods, centros,
       view:        'total',
-      expand:      comment.dre_linha    ?? null,
-      expandAgrup: comment.agrupamento  ?? null,
-    }))
+      expand:      comment.dre_linha   ?? null,
+      expandAgrup: comment.agrupamento ?? null,
+    }
+    // Lancamento comment: open detalhamento and highlight the specific row
+    if (comment.lancamento_id && fs.detNode) {
+      dl.openDetalhamento      = true
+      dl.detNode               = fs.detNode
+      dl.highlightLancamentoId = comment.lancamento_id
+    }
+    sessionStorage.setItem('dre_deeplink', JSON.stringify(dl))
   } catch { /* ignore */ }
   router.push('/dre')
 }
@@ -203,6 +211,11 @@ function TicketCard({
                   ticket.tipo_valor === 'budget' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'
                 )}>
                   {ticket.tipo_valor === 'budget' ? 'Budget' : 'Realizado'}
+                </span>
+              )}
+              {ticket.lancamento_id && (
+                <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 flex items-center gap-1">
+                  <ExternalLink size={9} /> Lançamento #{ticket.lancamento_id}
                 </span>
               )}
               <StatusBadge status={ticket.status} />
