@@ -32,7 +32,8 @@ export async function GET(req: NextRequest) {
       })
       if (error) throw new Error(error.message)
       const rows = (data ?? []) as Array<{
-        unidade: string; dre: string; agrupamento_arvore: string
+        unidade: string; dre: string; ordem_dre: number; agrupamento_arvore: string
+        numero_conta_contabil: string; nome_conta_contabil: string
         periodo: string; budget: number; razao: number
       }>
       return NextResponse.json(rows.map(r => ({

@@ -593,25 +593,31 @@ BEGIN
 END;
 $$;
 
--- ─── get_unidades_negocio_dre: breakdown por unidade > DRE > agrupamento ─────
+-- ─── get_unidades_negocio_dre: breakdown por unidade > DRE > agrupamento > conta
 CREATE OR REPLACE FUNCTION get_unidades_negocio_dre(
   p_periodos  TEXT[]  DEFAULT '{}',
   p_unidades  TEXT[]  DEFAULT '{}'
 ) RETURNS TABLE(
-  unidade           TEXT,
-  dre               TEXT,
-  agrupamento_arvore TEXT,
-  periodo           TEXT,
-  budget            NUMERIC,
-  razao             NUMERIC
+  unidade               TEXT,
+  dre                   TEXT,
+  ordem_dre             INTEGER,
+  agrupamento_arvore    TEXT,
+  numero_conta_contabil TEXT,
+  nome_conta_contabil   TEXT,
+  periodo               TEXT,
+  budget                NUMERIC,
+  razao                 NUMERIC
 ) LANGUAGE plpgsql AS $$
 BEGIN
   RETURN QUERY
   SELECT
     u.unidade,
-    COALESCE(ca.dre, 'Sem Classificação')               AS dre,
-    COALESCE(ca.agrupamento_arvore, 'Sem Agrupamento')  AS agrupamento_arvore,
-    TO_CHAR(l.data_lancamento, 'YYYY-MM')               AS periodo,
+    COALESCE(ca.dre, 'Sem Classificação')                              AS dre,
+    COALESCE(ca.ordem_dre, 999)                                        AS ordem_dre,
+    COALESCE(ca.agrupamento_arvore, 'Sem Agrupamento')                 AS agrupamento_arvore,
+    l.numero_conta_contabil,
+    COALESCE(ca.nome_conta_contabil, l.numero_conta_contabil)          AS nome_conta_contabil,
+    TO_CHAR(l.data_lancamento, 'YYYY-MM')                              AS periodo,
     SUM(CASE WHEN l.tipo = 'budget' THEN l.debito_credito ELSE 0 END) AS budget,
     SUM(CASE WHEN l.tipo = 'razao'  THEN l.debito_credito ELSE 0 END) AS razao
   FROM lancamentos l
@@ -619,7 +625,14 @@ BEGIN
   LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil
   WHERE (array_length(p_periodos, 1) IS NULL OR TO_CHAR(l.data_lancamento, 'YYYY-MM') = ANY(p_periodos))
     AND (array_length(p_unidades, 1) IS NULL OR u.unidade = ANY(p_unidades))
-  GROUP BY u.unidade, ca.dre, ca.agrupamento_arvore, TO_CHAR(l.data_lancamento, 'YYYY-MM')
-  ORDER BY u.unidade, ca.dre, ca.agrupamento_arvore, TO_CHAR(l.data_lancamento, 'YYYY-MM');
+  GROUP BY u.unidade, ca.dre, ca.ordem_dre, ca.agrupamento_arvore,
+           l.numero_conta_contabil, ca.nome_conta_contabil,
+           TO_CHAR(l.data_lancamento, 'YYYY-MM')
+  ORDER BY u.unidade,
+           COALESCE(ca.ordem_dre, 999),
+           COALESCE(ca.dre, 'Sem Classificação'),
+           COALESCE(ca.agrupamento_arvore, 'Sem Agrupamento'),
+           l.numero_conta_contabil,
+           TO_CHAR(l.data_lancamento, 'YYYY-MM');
 END;
 $$;
