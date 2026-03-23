@@ -276,7 +276,7 @@ BEGIN
       COALESCE(ca.dre, ''Sem classificação'') AS dre,
       COALESCE(ca.agrupamento_arvore, '''') AS agrupamento_arvore,
       l.numero_conta_contabil,
-      COALESCE(ca.nome_conta_contabil, l.nome_conta_contabil, '''') AS nome_conta_contabil,
+      MAX(COALESCE(ca.nome_conta_contabil, l.nome_conta_contabil, '''')) AS nome_conta_contabil,
       to_char(l.data_lancamento, ''YYYY-MM'') AS periodo,
       SUM(CASE WHEN l.tipo=''budget'' THEN l.debito_credito ELSE 0 END) AS budget,
       SUM(CASE WHEN l.tipo=''razao''  THEN l.debito_credito ELSE 0 END) AS razao
