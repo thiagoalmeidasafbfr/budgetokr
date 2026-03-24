@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
-import { getUserFromHeaders } from '@/lib/session'
+import { getSession } from '@/lib/session'
 import { logAudit, logBulkAudit } from '@/lib/audit'
 
 const PAGE_SIZE = 100
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     const per   = sp.get('periodo')
     const ano   = sp.get('ano')
 
-    const user = getUserFromHeaders(req)
+    const user = await getSession()
     const dept = user?.role === 'dept' ? (user.department ?? null) : sp.get('departamento')
 
     const supabase = getSupabase()
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
 // PATCH: update single field(s) — with audit logging
 export async function PATCH(req: NextRequest) {
   try {
-    const user = getUserFromHeaders(req)
+    const user = await getSession()
     const { id, ...fields } = await req.json()
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
@@ -117,7 +117,7 @@ export async function PATCH(req: NextRequest) {
 // DELETE: remove row — with audit logging
 export async function DELETE(req: NextRequest) {
   try {
-    const user = getUserFromHeaders(req)
+    const user = await getSession()
     const id = new URL(req.url).searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 

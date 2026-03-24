@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPorUnidade, getUnidadesDistintas } from '@/lib/query'
-import { getUserFromHeaders } from '@/lib/session'
+import { getSession } from '@/lib/session'
 import { getSupabase } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
   try {
     const sp   = new URL(req.url).searchParams
-    const user = getUserFromHeaders(req)
+    const user = await getSession()
     const forcedDept = user?.role === 'dept' ? user.department : undefined
 
     const type = sp.get('type') ?? 'data'

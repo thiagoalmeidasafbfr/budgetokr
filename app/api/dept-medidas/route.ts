@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDeptMedidas, upsertDeptMedida, deleteDeptMedida, getMedidas } from '@/lib/query'
-import { getUserFromHeaders } from '@/lib/session'
+import { getSession } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
-  const user = getUserFromHeaders(req)
+  const user = await getSession()
   const forcedDept = user?.role === 'dept' ? user.department : undefined
   const dept = forcedDept || req.nextUrl.searchParams.get('departamento') || ''
   const [pinned, allMedidas] = await Promise.all([getDeptMedidas(dept), getMedidas()])
