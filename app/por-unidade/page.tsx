@@ -1,9 +1,13 @@
 'use client'
 import React, { useState, useEffect, useCallback } from 'react'
+import dynamic from 'next/dynamic'
 import { ChevronRight, ChevronDown, RefreshCw, Download, X, Filter, Calendar } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
+import type { ContextMenuState } from '@/components/DreDetalhamentoModal'
+
+const DetalhamentoModal = dynamic(() => import('@/components/DreDetalhamentoModal'), { ssr: false })
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -127,6 +131,7 @@ export default function PorUnidadePage() {
   const [expanded,    setExpanded]    = useState<Set<string>>(new Set())
   const [loading,     setLoading]     = useState(false)
   const [initialized, setInitialized] = useState(false)
+  const [detModal,    setDetModal]    = useState<ContextMenuState | null>(null)
 
   // ── Init: fetch distinct unidades + periods ──────────────────────────────
   useEffect(() => {
@@ -174,7 +179,8 @@ export default function PorUnidadePage() {
       if (units.length > 0) params.set('unidades', units.join(','))
       const res = await fetch(`/api/por-unidade?${params}`, { cache: 'no-store' })
       if (res.ok) {
-        const data: PorUnidadeRow[] = await res.json()
+        const json = await res.json()
+        const data: PorUnidadeRow[] = json.rows ?? []
         setAllRows(data)
         setTree(buildTree(data))
         setExpanded(new Set()) // collapse all on new data
@@ -197,6 +203,43 @@ export default function PorUnidadePage() {
       next.has(key) ? next.delete(key) : next.add(key)
       return next
     })
+
+  // ── Open detalhamento modal for a row ─────────────────────────────────────
+  const openDetalhamento = useCallback((row: TreeNode & { depth: number }) => {
+    // Parse key: u:unit|d:dre|a:agrup|c:conta
+    const parts: Record<string, string> = {}
+    for (const part of row.key.split('|')) {
+      const idx = part.indexOf(':')
+      if (idx !== -1) parts[part.slice(0, idx)] = part.slice(idx + 1)
+    }
+    const dreVal   = parts['d'] ?? undefined
+    const agrupVal = parts['a'] ?? undefined
+    const contaVal = parts['c'] ?? undefined
+    const unidVal  = parts['u'] ?? undefined
+
+    setDetModal({
+      x: 0, y: 0,
+      tipo: 'ambos',
+      periodos: selPeriods,
+      unidades: unidVal ? [unidVal] : selUnidades.length > 0 ? selUnidades : undefined,
+      node: {
+        name:        row.label,
+        isGroup:     row.level !== 'conta',
+        isAccount:   row.level === 'conta',
+        depth:       row.depth,
+        ordem:       0,
+        budget:      row.budget,
+        razao:       row.razao,
+        variacao:    row.variacao,
+        variacao_pct: row.variacao_pct,
+        children:    [],
+        byPeriod:    {},
+        dre:         dreVal,
+        agrupamento: agrupVal,
+        conta:       contaVal,
+      },
+    })
+  }, [selPeriods, selUnidades])
 
   // ── Derived data ──────────────────────────────────────────────────────────
   const visibleRows = flattenVisible(tree, 0, expanded)
@@ -227,6 +270,7 @@ export default function PorUnidadePage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
+    <>
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -388,9 +432,10 @@ export default function PorUnidadePage() {
                           <tr
                             key={row.key}
                             className={cn(
-                              'border-b border-gray-50 transition-colors',
-                              isUnit ? 'hover:bg-gray-50 font-semibold' : 'hover:bg-gray-50'
+                              'border-b border-gray-50 transition-colors cursor-pointer',
+                              isUnit ? 'hover:bg-indigo-50 font-semibold' : 'hover:bg-indigo-50'
                             )}
+                            onClick={() => openDetalhamento(row)}
                           >
                             <td className="py-2 pr-4" style={{ paddingLeft: `${indent}px` }}>
                               <div className="flex items-center gap-1.5">
@@ -473,5 +518,13 @@ export default function PorUnidadePage() {
         </div>
       </div>
     </div>
+
+    {detModal && (
+      <DetalhamentoModal
+        ctx={detModal}
+        onClose={() => setDetModal(null)}
+      />
+    )}
+    </>
   )
 }

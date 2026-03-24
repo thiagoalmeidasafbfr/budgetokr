@@ -96,36 +96,44 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // ── 3. Query de lançamentos com todos filtros no banco ─────────────────────
-    let q = supabase
-      .from('lancamentos')
-      .select('id,tipo,data_lancamento,numero_transacao,numero_conta_contabil,nome_conta_contabil,centro_custo,debito_credito,observacao,fonte,num_transacao,id_cc_cc,nome_conta_contrapartida')
-      .order('data_lancamento', { ascending: true })
-      .order('numero_conta_contabil', { ascending: true })
-      .range(0, 199999)
+    // ── 3. Query de lançamentos paginada (contorna max-rows do PostgREST) ────────
+    const PAGE = 1000
+    const MAX_PAGES = 500          // teto de 500 k linhas
+    const lancRows: LancRow[] = []
 
-    if (tipo !== 'ambos')        q = q.eq('tipo', tipo)
-    if (contasFiltro)            q = q.in('numero_conta_contabil', contasFiltro)
-    if (centrosFiltro.length > 0) q = q.in('centro_custo', centrosFiltro)
+    for (let page = 0; page < MAX_PAGES; page++) {
+      let q = supabase
+        .from('lancamentos')
+        .select('id,tipo,data_lancamento,numero_transacao,numero_conta_contabil,nome_conta_contabil,centro_custo,debito_credito,observacao,fonte,num_transacao,id_cc_cc,nome_conta_contrapartida')
+        .order('data_lancamento', { ascending: true })
+        .order('numero_conta_contabil', { ascending: true })
+        .range(page * PAGE, page * PAGE + PAGE - 1)
 
-    // Filtro de período via range + verificação exata client-side
-    if (periodo) {
-      q = q.gte('data_lancamento', `${periodo}-01`).lte('data_lancamento', `${periodo}-31`)
-    } else if (periodos.length > 0) {
-      const sorted = [...periodos].sort()
-      const minDate = `${sorted[0]}-01`
-      const last    = sorted[sorted.length - 1]
-      const [lyr, lmo] = last.split('-').map(Number)
-      const nextYr  = lmo === 12 ? lyr + 1 : lyr
-      const nextMo  = lmo === 12 ? 1 : lmo + 1
-      const maxDate = `${nextYr}-${String(nextMo).padStart(2, '0')}-01`
-      q = q.gte('data_lancamento', minDate).lt('data_lancamento', maxDate)
+      if (tipo !== 'ambos')         q = q.eq('tipo', tipo)
+      if (contasFiltro)             q = q.in('numero_conta_contabil', contasFiltro)
+      if (centrosFiltro.length > 0) q = q.in('centro_custo', centrosFiltro)
+
+      // Filtro de período via range + verificação exata client-side
+      if (periodo) {
+        q = q.gte('data_lancamento', `${periodo}-01`).lte('data_lancamento', `${periodo}-31`)
+      } else if (periodos.length > 0) {
+        const sorted = [...periodos].sort()
+        const minDate = `${sorted[0]}-01`
+        const last    = sorted[sorted.length - 1]
+        const [lyr, lmo] = last.split('-').map(Number)
+        const nextYr  = lmo === 12 ? lyr + 1 : lyr
+        const nextMo  = lmo === 12 ? 1 : lmo + 1
+        const maxDate = `${nextYr}-${String(nextMo).padStart(2, '0')}-01`
+        q = q.gte('data_lancamento', minDate).lt('data_lancamento', maxDate)
+      }
+
+      const lancRes = await q
+      if (lancRes.error) throw new Error(lancRes.error.message)
+      const batch = (lancRes.data ?? []) as LancRow[]
+      lancRows.push(...batch)
+      if (batch.length < PAGE) break  // última página
     }
 
-    const lancRes = await q
-    if (lancRes.error) throw new Error(lancRes.error.message)
-
-    const lancRows   = (lancRes.data ?? []) as LancRow[]
     const periodoSet = new Set(periodos)
 
     // ── 4. Enriquecimento + filtragem exata por período ────────────────────────
@@ -162,7 +170,7 @@ export async function GET(req: NextRequest) {
         }
       })
 
-    const truncated = lancRows.length >= 200000
+    const truncated = lancRows.length >= PAGE * MAX_PAGES
     return NextResponse.json({ rows, truncated })
   } catch (e) {
     console.error('[detalhamento]', e)
