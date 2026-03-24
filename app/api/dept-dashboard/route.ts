@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAnalise, getDRE, getMedidas, getDRELinhas, getDeptMedidas, getMedidaResultados } from '@/lib/query'
+import { getAnalise, getDRE, getMedidas, getDRELinhas, getDeptMedidas, getMedidaResultados, getCentrosByDepartamentos } from '@/lib/query'
 import { getSupabase } from '@/lib/supabase'
 import { getUserFromHeaders } from '@/lib/session'
 import type { Medida } from '@/lib/types'
@@ -21,9 +21,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'departamento required' }, { status: 400 })
     }
 
+    // Resolve dept → centros before calling getDRE (same pattern as /api/dre)
+    const ccList = (await getCentrosByDepartamentos([departamento])) as Array<{ cc: string; nome: string }>
+    const deptCentros = ccList.map(r => r.cc)
+
     const [byPeriodo, dreRows, allMedidas, dreLinhas, deptMedidas] = await Promise.all([
       getAnalise([], [departamento], periodos, false),
-      getDRE(periodos, [departamento]),
+      deptCentros.length > 0 ? getDRE(periodos, undefined, deptCentros) : Promise.resolve([]),
       getMedidas(),
       getDRELinhas(),
       getDeptMedidas(departamento),
