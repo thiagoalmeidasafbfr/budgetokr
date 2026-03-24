@@ -90,6 +90,7 @@ export function getUserFromHeaders(req: NextRequest | Request): SessionUser | nu
   const role = req.headers.get('x-user-role')
   if (!role) return null
   const userId = req.headers.get('x-user-id') || ''
-  const department = req.headers.get('x-user-dept') || undefined
+  const deptRaw = req.headers.get('x-user-dept') || ''
+  const department = deptRaw ? (decodeURIComponent(deptRaw) || undefined) : undefined
   return { userId, role: role as 'master' | 'dept', department }
 }
