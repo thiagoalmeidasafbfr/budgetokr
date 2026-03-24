@@ -11,6 +11,28 @@ import {
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/components/ThemeProvider'
 
+// ─── Per-icon accent colors ──────────────────────────────────────────────────────
+const iconColors = new Map<React.ElementType, string>([
+  [LayoutDashboard, 'text-blue-400'],
+  [LineChart,       'text-emerald-400'],
+  [GitCompare,      'text-violet-400'],
+  [Layers,          'text-orange-400'],
+  [Landmark,        'text-yellow-400'],
+  [Briefcase,       'text-cyan-400'],
+  [ListTree,        'text-teal-400'],
+  [MessageSquare,   'text-pink-400'],
+  [Gauge,           'text-amber-400'],
+  [Target,          'text-rose-400'],
+  [FileText,        'text-sky-400'],
+  [Database,        'text-purple-400'],
+  [Upload,          'text-green-400'],
+  [Shield,          'text-indigo-400'],
+  [History,         'text-amber-300'],
+  [Building2,       'text-orange-300'],
+  [BookOpen,        'text-lime-400'],
+  [LayoutList,      'text-blue-300'],
+])
+
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
 type SessionUser = { userId: string; role: 'master' | 'dept'; department?: string }
@@ -237,7 +259,7 @@ export function Sidebar() {
                   'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-default',
                   anyActive ? 'text-indigo-400' : 'text-slate-500'
                 )}>
-                  <Icon size={13} className={anyActive ? 'text-indigo-400' : 'text-slate-600'} />
+                  <Icon size={13} className={anyActive ? 'text-indigo-400' : (iconColors.get(Icon) ?? 'text-slate-500')} />
                   <span>{item.label}</span>
                 </div>
                 <div className="ml-4 border-l border-white/10 pl-1 space-y-0.5">
@@ -252,7 +274,7 @@ export function Sidebar() {
                             ? 'bg-white/10 text-slate-100 font-medium'
                             : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
                         )}>
-                        {CIcon && <CIcon size={12} className={active ? 'text-indigo-400' : 'text-slate-600'} />}
+                        {CIcon && <CIcon size={12} className={active ? 'text-indigo-400' : (iconColors.get(CIcon) ?? 'text-slate-500')} />}
                         <span className="text-xs">{child.label}</span>
                         {active && <ChevronRight size={10} className="ml-auto text-indigo-400" />}
                       </Link>
@@ -278,7 +300,7 @@ export function Sidebar() {
                 'w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 transition-colors',
                 active ? 'bg-indigo-500/20' : 'bg-white/5 group-hover:bg-white/10'
               )}>
-                <Icon size={14} className={active ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'} />
+                <Icon size={14} className={active ? 'text-indigo-400' : (iconColors.get(Icon) ?? 'text-slate-500')} />
               </div>
               <div className="flex-1 min-w-0">
                 <p className={cn('text-sm font-medium leading-tight', active ? 'text-slate-100' : 'text-slate-300')}>

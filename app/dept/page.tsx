@@ -1180,7 +1180,8 @@ export default function DeptDashboardPage() {
       setAllPeriodos(unique)
       // Default to YTD: all 2026 periods up to and including the current month
       const now = new Date()
-      const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+      const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      const curMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
       const ytd2026 = unique.filter(p => p.startsWith('2026') && p <= curMonth)
       const def2026 = ytd2026.length > 0 ? ytd2026 : unique.filter(p => p.startsWith('2026'))
       if (def2026.length > 0) setSelPeriods(def2026)
@@ -1390,7 +1391,8 @@ export default function DeptDashboardPage() {
                     setSelYear(y)
                     if (!y) { setSelPeriods([]); return }
                     const now = new Date()
-                    const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+                    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+                    const curMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
                     const ytd = allPeriodos.filter(p => p.startsWith(y) && p <= curMonth)
                     setSelPeriods(ytd.length > 0 ? ytd : allPeriodos.filter(p => p.startsWith(y)))
                   }}

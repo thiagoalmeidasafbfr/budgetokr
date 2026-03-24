@@ -205,8 +205,9 @@ export default function UnidadesNegocioPage() {
 
       // Auto-select current year YTD so initial tree load is filtered (avoids row limit)
       const now      = new Date()
+      const prev     = new Date(now.getFullYear(), now.getMonth() - 1, 1)
       const curYear  = String(now.getFullYear())
-      const curMonth = `${curYear}-${String(now.getMonth() + 1).padStart(2, '0')}`
+      const curMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
       const ytd      = allPeriodos.filter(p => p.startsWith(curYear) && p <= curMonth)
       const defaultPeriods = ytd.length > 0
         ? ytd
@@ -227,7 +228,8 @@ export default function UnidadesNegocioPage() {
     setSelYear(year)
     if (!year) { setSelPeriods([]); return }
     const now      = new Date()
-    const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    const prev     = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const curMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
     const ytd = periodos.filter(p => p.startsWith(year) && p <= curMonth)
     setSelPeriods(ytd.length > 0 ? ytd : periodos.filter(p => p.startsWith(year)))
   }

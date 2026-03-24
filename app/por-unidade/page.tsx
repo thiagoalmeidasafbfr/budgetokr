@@ -155,7 +155,8 @@ export default function PorUnidadePage() {
     if (!initialized || periodos.length === 0) return
     if (selYear) {
       const now      = new Date()
-      const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+      const prev     = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      const curMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
       const ytd      = periodos.filter(p => p.startsWith(selYear) && p <= curMonth)
       setSelPeriods(ytd.length > 0 ? ytd : periodos.filter(p => p.startsWith(selYear)))
     } else {

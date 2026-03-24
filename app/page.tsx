@@ -148,7 +148,8 @@ export default function Dashboard() {
 
   // YTD: all periods in the selected year up to and including the current month
   const now = new Date()
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const prevM = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const currentMonth = `${prevM.getFullYear()}-${String(prevM.getMonth() + 1).padStart(2, '0')}`
   const ytdPeriodSet = new Set(filteredAnalise.map(r => r.periodo).filter(p => p <= currentMonth))
   const hasYtdData = ytdPeriodSet.size > 0
 
