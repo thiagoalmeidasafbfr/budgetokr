@@ -58,13 +58,6 @@ const nav: NavItem[] = [
     sublabel: 'Investimentos por projeto',
   },
   {
-    type: 'link', href: '/por-unidade',
-    icon: Layers,
-    label: 'Por Unidade',
-    sublabel: 'DRE por unidade de negócio',
-    masterOnly: true,
-  },
-  {
     type: 'link', href: '/unidades-negocio',
     icon: Briefcase,
     label: 'Unidades de Negócio',
