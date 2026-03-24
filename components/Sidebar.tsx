@@ -6,7 +6,7 @@ import {
   LayoutDashboard, TrendingUp, LineChart, GitCompare,
   Target, Layers, FileText, Database, Upload,
   ChevronRight, Building2, BookOpen, LayoutList, Gauge,
-  LogOut, User, ListTree, Shield, Landmark, Moon, Sun, History, MessageSquare, BarChart2, Briefcase,
+  LogOut, User, ListTree, Shield, Landmark, Moon, Sun, History, MessageSquare, BarChart2, Briefcase, Users,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/components/ThemeProvider'
@@ -140,6 +140,13 @@ const nav: NavItem[] = [
     icon: Upload,
     label: 'Importar Dados',
     sublabel: 'Excel · CSV',
+    masterOnly: true,
+  },
+  {
+    type: 'link', href: '/admin/users',
+    icon: Users,
+    label: 'Usuários',
+    sublabel: 'Gerenciar acessos',
     masterOnly: true,
   },
   {
