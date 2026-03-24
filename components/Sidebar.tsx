@@ -153,11 +153,17 @@ export function Sidebar() {
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    // Only fetch once on mount — navigation doesn't change the user
+    // Skip fetch on login page; re-fetch when navigating away (e.g. right after login)
+    if (pathname === '/login' || pathname === '/logout') {
+      setLoaded(true)
+      return
+    }
+    // Already have user — no need to re-fetch on subsequent navigations
+    if (user) return
     fetch('/api/me')
       .then(r => {
         if (r.status === 401) {
-          if (pathname !== '/login' && pathname !== '/logout') router.push('/login')
+          router.push('/login')
           setLoaded(true)
           return null
         }
@@ -165,8 +171,9 @@ export function Sidebar() {
       })
       .then(u => { if (u) setUser(u); setLoaded(true) })
       .catch(() => setLoaded(true))
+  // pathname as dep so it re-fetches right after login redirect
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [pathname])
 
   // Hide sidebar on login page
   if (pathname === '/login') return null
