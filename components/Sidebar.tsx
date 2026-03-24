@@ -190,16 +190,16 @@ export function Sidebar() {
     href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/')
 
   return (
-    <aside className="w-60 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-100 dark:border-slate-700 flex flex-col h-screen sticky top-0">
+    <aside className="w-60 flex-shrink-0 bg-[#1a2535] border-r border-white/5 flex flex-col h-screen sticky top-0">
       {/* Logo */}
-      <div className="px-4 py-4 border-b border-gray-100 dark:border-slate-700 flex-shrink-0">
+      <div className="px-4 py-4 border-b border-white/5 flex-shrink-0">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-sm">
+          <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center shadow-sm">
             <TrendingUp size={15} className="text-white" />
           </div>
           <div>
-            <p className="font-bold text-gray-900 dark:text-white text-sm leading-tight">Glorioso Finance</p>
-            <p className="text-[11px] text-gray-400 dark:text-slate-400 leading-tight">Botafogo F.R.</p>
+            <p className="font-semibold text-slate-100 text-sm leading-tight">Glorioso Finance</p>
+            <p className="text-[11px] text-slate-500 leading-tight">Botafogo F.R.</p>
           </div>
         </div>
       </div>
@@ -208,7 +208,7 @@ export function Sidebar() {
       <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto min-h-0">
         {!loaded && (
           <div className="space-y-2 px-3 py-2">
-            {[1,2,3,4].map(i => <div key={i} className="h-8 bg-gray-100 dark:bg-slate-700 rounded-lg animate-pulse" />)}
+            {[1,2,3,4].map(i => <div key={i} className="h-8 bg-white/5 rounded-lg animate-pulse" />)}
           </div>
         )}
         {loaded && user && nav.map((item, i) => {
@@ -220,7 +220,7 @@ export function Sidebar() {
           if (item.type === 'section') {
             return (
               <div key={i} className={cn('px-3 pt-3 pb-1', i === 0 ? 'pt-1' : '')}>
-                <p className="text-[10px] font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-widest">
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
                   {item.label}
                 </p>
               </div>
@@ -235,12 +235,12 @@ export function Sidebar() {
               <div key={item.label}>
                 <div className={cn(
                   'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-default',
-                  anyActive ? 'text-indigo-700 dark:text-indigo-300' : 'text-gray-500 dark:text-slate-400'
+                  anyActive ? 'text-indigo-400' : 'text-slate-500'
                 )}>
-                  <Icon size={13} className={anyActive ? 'text-indigo-500 dark:text-indigo-400' : 'text-gray-400 dark:text-slate-500'} />
+                  <Icon size={13} className={anyActive ? 'text-indigo-400' : 'text-slate-600'} />
                   <span>{item.label}</span>
                 </div>
-                <div className="ml-4 border-l border-gray-100 dark:border-slate-700 pl-1 space-y-0.5">
+                <div className="ml-4 border-l border-white/10 pl-1 space-y-0.5">
                   {item.children.map(child => {
                     const active = isActive(child.href)
                     const CIcon = child.icon
@@ -249,10 +249,10 @@ export function Sidebar() {
                         className={cn(
                           'flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-lg text-sm transition-colors',
                           active
-                            ? 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-medium'
-                            : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700 hover:text-gray-800 dark:hover:text-white'
+                            ? 'bg-white/10 text-slate-100 font-medium'
+                            : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
                         )}>
-                        {CIcon && <CIcon size={12} className={active ? 'text-indigo-500 dark:text-indigo-400' : 'text-gray-400 dark:text-slate-500'} />}
+                        {CIcon && <CIcon size={12} className={active ? 'text-indigo-400' : 'text-slate-600'} />}
                         <span className="text-xs">{child.label}</span>
                         {active && <ChevronRight size={10} className="ml-auto text-indigo-400" />}
                       </Link>
@@ -271,21 +271,21 @@ export function Sidebar() {
               className={cn(
                 'flex items-center gap-3 px-3 py-2 rounded-lg transition-colors group',
                 active
-                  ? 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300'
-                  : 'text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-white'
+                  ? 'bg-white/10 text-slate-100'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
               )}>
               <div className={cn(
                 'w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 transition-colors',
-                active ? 'bg-indigo-100 dark:bg-indigo-900' : 'bg-gray-100 dark:bg-slate-700 group-hover:bg-gray-200 dark:group-hover:bg-slate-600'
+                active ? 'bg-indigo-500/20' : 'bg-white/5 group-hover:bg-white/10'
               )}>
-                <Icon size={14} className={active ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-slate-400'} />
+                <Icon size={14} className={active ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className={cn('text-sm font-medium leading-tight', active ? 'text-indigo-700 dark:text-indigo-300' : 'text-gray-700 dark:text-slate-200')}>
+                <p className={cn('text-sm font-medium leading-tight', active ? 'text-slate-100' : 'text-slate-300')}>
                   {item.label}
                 </p>
                 {item.sublabel && (
-                  <p className={cn('text-[11px] leading-tight mt-0.5 truncate', active ? 'text-indigo-500 dark:text-indigo-400' : 'text-gray-400 dark:text-slate-500')}>
+                  <p className={cn('text-[11px] leading-tight mt-0.5 truncate', active ? 'text-slate-400' : 'text-slate-600')}>
                     {item.sublabel}
                   </p>
                 )}
@@ -298,28 +298,28 @@ export function Sidebar() {
 
       {/* Footer: usuário + logout — fixado no fundo */}
       {user && (
-        <div className="flex-shrink-0 px-3 py-2 border-t border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800">
+        <div className="flex-shrink-0 px-3 py-2 border-t border-white/5 bg-black/20">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center flex-shrink-0">
-              <User size={12} className="text-indigo-600" />
+            <div className="w-6 h-6 rounded-full bg-indigo-500/20 flex items-center justify-center flex-shrink-0">
+              <User size={12} className="text-indigo-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-gray-700 dark:text-slate-200 truncate">{user.userId}</p>
-              <p className="text-[10px] text-gray-400 dark:text-slate-500 truncate">
+              <p className="text-xs font-medium text-slate-200 truncate">{user.userId}</p>
+              <p className="text-[10px] text-slate-500 truncate">
                 {user.role === 'master' ? 'Administrador' : (user.department || 'Departamento')}
               </p>
             </div>
             <button
               onClick={toggleTheme}
               title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
-              className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 dark:text-slate-400 transition-colors flex-shrink-0"
+              className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-white/10 text-slate-500 hover:text-slate-300 transition-colors flex-shrink-0"
             >
               {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
             </button>
             <button
               onClick={handleLogout}
               title="Sair"
-              className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-red-50 dark:hover:bg-red-950 hover:text-red-600 text-gray-400 dark:text-slate-400 transition-colors flex-shrink-0 text-[10px] font-medium"
+              className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-red-500/10 hover:text-red-400 text-slate-500 transition-colors flex-shrink-0 text-[10px] font-medium"
             >
               <LogOut size={11} />
             </button>
