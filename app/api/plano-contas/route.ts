@@ -182,7 +182,7 @@ export async function GET(req: NextRequest) {
         }
       }
     }
-    const departamentos = (deptsRes.data ?? []).map((d: { nome_departamento: string }) => d.nome_departamento)
+    const departamentos = [...new Set((deptsRes.data ?? []).map((d: { nome_departamento: string }) => d.nome_departamento))]
     const periodosAll   = [...periodSet].sort()
 
     // The RPC returns a flat JSONB array of rows — build the tree here

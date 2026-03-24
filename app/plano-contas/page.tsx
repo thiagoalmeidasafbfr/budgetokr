@@ -340,8 +340,8 @@ export default function PlanoContasPage() {
                   <Filter size={11} /> Departamentos
                 </p>
                 <div className="space-y-0.5 max-h-36 overflow-y-auto">
-                  {data.departamentos.map(d => (
-                    <label key={d} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                  {data.departamentos.map((d, i) => (
+                    <label key={`${d}-${i}`} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
                       <input type="checkbox" checked={selDepts.includes(d)}
                         onChange={e => setSelDepts(prev => e.target.checked ? [...prev, d] : prev.filter(x => x !== d))}
                         className="w-3 h-3 accent-indigo-600" />
