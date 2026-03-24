@@ -10,9 +10,11 @@ export async function validateUser(userId: string, password: string): Promise<Se
       .eq('username', userId.trim())
       .single()
     if (!data || data.password !== password) return null
+    // Garantia defensiva: qualquer valor que não seja exatamente 'master' é tratado como 'dept'
+    const role: 'master' | 'dept' = data.role === 'master' ? 'master' : 'dept'
     return {
       userId: data.username,
-      role: data.role,
+      role,
       department: data.department ?? undefined,
     }
   } catch (e) {
