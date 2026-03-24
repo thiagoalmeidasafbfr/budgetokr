@@ -333,7 +333,7 @@ export default function PlanoContasPage() {
           </Card>
 
           {/* Department filter */}
-          {data && data.departamentos.length > 0 && (
+          {data && (data.departamentos?.length ?? 0) > 0 && (
             <Card>
               <CardContent className="p-3 space-y-2">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
@@ -354,7 +354,7 @@ export default function PlanoContasPage() {
           )}
 
           {/* Period filter */}
-          {data && data.periodos.length > 0 && (
+          {data && (data.periodos?.length ?? 0) > 0 && (
             <Card>
               <CardContent className="p-3 space-y-2">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Períodos</p>
