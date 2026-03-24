@@ -1,6 +1,6 @@
 'use client'
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { ChevronRight, ChevronDown, Filter, X, Download, RefreshCw, ExternalLink, MessageSquare, TrendingUp, Printer } from 'lucide-react'
+import { ChevronRight, ChevronDown, Filter, X, Download, ExternalLink, MessageSquare, TrendingUp, Printer } from 'lucide-react'
 import { YearFilter } from '@/components/YearFilter'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -38,6 +38,7 @@ export default function DREPage() {
   const [selPeriods,    setSelPeriods]    = useState<string[]>([])
   const [selCentros,    setSelCentros]    = useState<string[]>([])
   const [selYear,       setSelYear]       = useState<string | null>('2026')
+  const [expandedYears, setExpandedYears] = useState<Set<string>>(new Set(['2026']))
   const [centrosDisp,   setCentrosDisp]   = useState<Array<{ cc: string; nome: string }>>([])
   const [expanded,      setExpanded]      = useState<Set<string>>(new Set())
   const [loading,       setLoading]       = useState(false)
@@ -343,22 +344,24 @@ export default function DREPage() {
     window.print()
   }
 
-  const applyFilters = () => loadData(selDepts, selPeriods, selCentros)
+  // Reactive filters — debounced to absorb cascading state updates (e.g. selDepts → selCentros)
+  const isFirstRef = useRef(true)
+  useEffect(() => {
+    if (isFirstRef.current) { isFirstRef.current = false; return }
+    const t = setTimeout(() => loadData(selDepts, selPeriods, selCentros), 150)
+    return () => clearTimeout(t)
+  }, [selDepts, selPeriods, selCentros, loadData])
 
-  // When year changes, default to YTD (≤ current month) and auto-apply
+  // When year changes, default to YTD (≤ current month); reactive effect handles reload
   const handleYearChange = (year: string | null) => {
     setSelYear(year)
-    if (!year) {
-      setSelPeriods([])
-      loadData(selDepts, [], selCentros)
-      return
-    }
+    if (!year) { setSelPeriods([]); return }
     const now = new Date()
     const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
     const ytd = periodos.filter(p => p.startsWith(year) && p <= curMonth)
     const newPeriods = ytd.length > 0 ? ytd : periodos.filter(p => p.startsWith(year))
     setSelPeriods(newPeriods)
-    loadData(selDepts, newPeriods, selCentros)
+    setExpandedYears(new Set([year]))
   }
 
   const toggleExpand = (name: string) => {
@@ -425,6 +428,17 @@ export default function DREPage() {
     () => [...new Set(rawData.map(r => r.periodo).filter(Boolean))].sort(),
     [rawData]
   )
+
+  // Group available periods by year for the sidebar filter (newest year first)
+  const periodsByYear = useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const p of periodos) {
+      const y = p.substring(0, 4)
+      if (!map.has(y)) map.set(y, [])
+      map.get(y)!.push(p)
+    }
+    return [...map.entries()].sort(([a], [b]) => b.localeCompare(a))
+  }, [periodos])
 
   // Flatten tree for table rendering — recomputes only when tree or expanded changes
   const flatRows = useMemo(() => flattenTree(tree, expanded), [tree, expanded])
@@ -690,26 +704,59 @@ export default function DREPage() {
 
               <div>
                 <p className="text-xs font-medium text-gray-600 mb-1">Períodos</p>
-                <div className="space-y-0.5 max-h-32 overflow-y-auto">
-                  {periodos.map(p => (
-                    <label key={p} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
-                      <input type="checkbox" checked={selPeriods.includes(p)}
-                        onChange={e => setSelPeriods(prev => e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}
-                        className="w-3 h-3 accent-indigo-600" />
-                      <span className="text-xs text-gray-600">{formatPeriodo(p)}</span>
-                    </label>
-                  ))}
+                <div className="space-y-0.5 max-h-52 overflow-y-auto">
+                  {periodsByYear.map(([year, months]) => {
+                    const selInYear = months.filter(m => selPeriods.includes(m))
+                    const allSel  = selInYear.length === months.length
+                    const someSel = selInYear.length > 0
+                    const isOpen  = expandedYears.has(year)
+                    return (
+                      <div key={year}>
+                        <div className="flex items-center gap-1 py-0.5 px-1 rounded hover:bg-gray-50 cursor-pointer select-none"
+                          onClick={() => setExpandedYears(prev => { const s = new Set(prev); s.has(year) ? s.delete(year) : s.add(year); return s })}>
+                          {isOpen ? <ChevronDown size={10} className="text-gray-400 flex-shrink-0" /> : <ChevronRight size={10} className="text-gray-400 flex-shrink-0" />}
+                          <input type="checkbox"
+                            checked={allSel}
+                            ref={el => { if (el) el.indeterminate = someSel && !allSel }}
+                            onClick={e => e.stopPropagation()}
+                            onChange={e => setSelPeriods(prev =>
+                              e.target.checked
+                                ? [...new Set([...prev, ...months])]
+                                : prev.filter(p => !months.includes(p))
+                            )}
+                            className="w-3 h-3 accent-indigo-600 flex-shrink-0" />
+                          <span className="text-xs font-semibold text-gray-700">{year}</span>
+                          {someSel && <span className="ml-auto text-[10px] text-indigo-500 tabular-nums">{selInYear.length}/{months.length}</span>}
+                        </div>
+                        {isOpen && (
+                          <div className="ml-4 space-y-0.5">
+                            {months.map(m => (
+                              <label key={m} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                                <input type="checkbox" checked={selPeriods.includes(m)}
+                                  onChange={e => setSelPeriods(prev => e.target.checked ? [...prev, m] : prev.filter(x => x !== m))}
+                                  className="w-3 h-3 accent-indigo-600" />
+                                <span className="text-xs text-gray-600">{formatPeriodo(m)}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
-              </div>
-              <div className="flex gap-1">
-                <Button size="sm" onClick={applyFilters} className="flex-1 text-xs h-7"><RefreshCw size={10} /> Filtrar</Button>
-                {(selDepts.length > 0 || selPeriods.length > 0 || selCentros.length > 0) && (
-                  <Button size="sm" variant="outline" onClick={() => {
-                    setSelDepts([]); setSelPeriods([]); setSelCentros([])
-                    loadData([], [], [])
-                  }} className="h-7 px-2"><X size={10} /></Button>
+                {selPeriods.length > 0 && (
+                  <button onClick={() => setSelPeriods([])}
+                    className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 px-1 mt-1">
+                    <X size={10} /> Limpar períodos
+                  </button>
                 )}
               </div>
+              {(selDepts.length > 0 || selCentros.length > 0) && (
+                <button onClick={() => { setSelDepts([]); setSelCentros([]) }}
+                  className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 px-1">
+                  <X size={10} /> Limpar filtros dept
+                </button>
+              )}
             </CardContent>
           </Card>
 
