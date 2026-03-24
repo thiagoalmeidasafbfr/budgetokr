@@ -123,7 +123,35 @@ export async function GET(req: NextRequest) {
       periodos: string[]
     } | null
 
-    if (result) return NextResponse.json(result)
+    if (result) {
+      // A RPC pode não incluir departamentos/periodos — garantir que sempre existam
+      const needsMeta = !result.departamentos || !result.periodos
+      if (needsMeta) {
+        const [{ data: deptsData }, { data: periodosData }] = await Promise.all([
+          supabase.from('centros_custo')
+            .select('nome_departamento')
+            .not('nome_departamento', 'is', null)
+            .neq('nome_departamento', '')
+            .order('nome_departamento'),
+          supabase.from('lancamentos')
+            .select('data_lancamento')
+            .not('data_lancamento', 'is', null),
+        ])
+        const periodSet = new Set<string>()
+        for (const r of periodosData ?? []) {
+          if (r.data_lancamento) {
+            const d = new Date(r.data_lancamento)
+            if (!isNaN(d.getTime())) {
+              periodSet.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+            }
+          }
+        }
+        result.departamentos = result.departamentos ??
+          (deptsData ?? []).map((d: { nome_departamento: string }) => d.nome_departamento)
+        result.periodos = result.periodos ?? [...periodSet].sort()
+      }
+      return NextResponse.json(result)
+    }
 
     // Fallback: build tree manually
     const { data: contasData, error: contasError } = await supabase
