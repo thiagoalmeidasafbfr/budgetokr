@@ -4,18 +4,18 @@ import { getSupabase } from '@/lib/supabase'
 export const dynamic = 'force-dynamic'
 
 // Retorna os lançamentos individuais que compõem um valor na visão de Unidades de Negócio.
-// A filtragem é feita via id_cc_cc → unidades_negocio.unidade (diferente da DRE que usa
+// A filtragem usa id_cc_cc → unidades_negocio.unidade (dimensão diferente da DRE que usa
 // centros_custo.nome_departamento). Isso garante que o detalhamento bata com os totais
 // exibidos na página de Unidades de Negócio.
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
-  const dre          = searchParams.get('dre')         ?? ''
-  const agrupamento  = searchParams.get('agrupamento') ?? ''
-  const conta        = searchParams.get('conta')       ?? ''
-  const periodo      = searchParams.get('periodo')     ?? ''
-  const tipo         = searchParams.get('tipo')        ?? 'ambos'
-  const periodosRaw  = searchParams.get('periodos')    ?? ''
-  const unidadesRaw  = searchParams.get('unidades')    ?? ''
+  const dre         = searchParams.get('dre')         ?? ''
+  const agrupamento = searchParams.get('agrupamento') ?? ''
+  const conta       = searchParams.get('conta')       ?? ''
+  const periodo     = searchParams.get('periodo')     ?? ''
+  const tipo        = searchParams.get('tipo')        ?? 'ambos'
+  const periodosRaw = searchParams.get('periodos')    ?? ''
+  const unidadesRaw = searchParams.get('unidades')    ?? ''
 
   const periodos = periodosRaw ? periodosRaw.split(',').filter(Boolean) : []
   const unidades = unidadesRaw ? unidadesRaw.split(',').filter(Boolean) : []
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   try {
     const supabase = getSupabase()
 
-    type UnRow  = { id_cc_cc: string; unidade: string }
+    type UnRow  = { id_cc_cc: string }
     type CaRow  = { numero_conta_contabil: string; agrupamento_arvore: string; dre: string }
     type CcRow  = { centro_custo: string; nome_centro_custo: string; nome_area: string; nome_departamento: string }
     type LancRow = {
@@ -34,48 +34,50 @@ export async function GET(req: NextRequest) {
       nome_conta_contrapartida: string
     }
 
-    // ── 1. Lookups em paralelo ──────────────────────────────────────────────────
-    const [unRes, caRes, ccRes] = await Promise.all([
-      supabase.from('unidades_negocio').select('id_cc_cc,unidade').range(0, 49999),
-      supabase.from('contas_contabeis').select('numero_conta_contabil,agrupamento_arvore,dre').range(0, 49999),
-      supabase.from('centros_custo').select('centro_custo,nome_centro_custo,nome_area,nome_departamento').range(0, 49999),
-    ])
-
-    if (unRes.error) throw new Error(unRes.error.message)
-    if (caRes.error) throw new Error(caRes.error.message)
-    if (ccRes.error) throw new Error(ccRes.error.message)
-
-    const unRows = (unRes.data ?? []) as UnRow[]
-    const caMap  = new Map((caRes.data ?? [] as CaRow[]).map((r: CaRow) => [r.numero_conta_contabil, r]))
-    const ccMap  = new Map((ccRes.data ?? [] as CcRow[]).map((r: CcRow) => [r.centro_custo, r]))
-
-    // ── 2. Deriva id_cc_cc a partir das unidades selecionadas ──────────────────
+    // ── 1. Obtém os id_cc_cc da(s) unidade(s) selecionada(s) ──────────────────
+    // Query FILTRADA por unidade — não carrega a tabela inteira, evitando o
+    // limite de 1000 linhas do PostgREST para tabelas grandes
     let idCcCcFiltro: string[] | null = null
+
     if (unidades.length > 0) {
-      idCcCcFiltro = unRows
-        .filter(r => unidades.includes(r.unidade ?? 'Sem Unidade'))
-        .map(r => r.id_cc_cc)
+      const res = await supabase
+        .from('unidades_negocio')
+        .select('id_cc_cc')
+        .in('unidade', unidades)
+        .range(0, 49999)
+      if (res.error) throw new Error(res.error.message)
+      idCcCcFiltro = (res.data ?? [] as UnRow[]).map((r: UnRow) => r.id_cc_cc).filter(Boolean)
       if (idCcCcFiltro.length === 0) {
         return NextResponse.json({ rows: [], truncated: false })
       }
     }
 
-    // ── 3. Filtra contas a partir do contexto DRE/agrupamento/conta ────────────
+    // ── 2. Deriva contasFiltro a partir do contexto DRE/agrupamento/conta ──────
     let contasFiltro: string[] | null = null
+
     if (conta) {
       contasFiltro = [conta]
     } else if (dre || agrupamento) {
-      contasFiltro = (caRes.data ?? []).filter((r: CaRow) => {
-        if (dre         && (r.dre               ?? 'Sem Classificação') !== dre)         return false
-        if (agrupamento && (r.agrupamento_arvore ?? 'Sem Agrupamento')  !== agrupamento) return false
-        return true
-      }).map((r: CaRow) => r.numero_conta_contabil)
+      let caQ = supabase.from('contas_contabeis')
+        .select('numero_conta_contabil,agrupamento_arvore,dre')
+      if (dre)         caQ = caQ.eq('dre', dre)
+      if (agrupamento) caQ = caQ.eq('agrupamento_arvore', agrupamento)
+
+      const caRows: CaRow[] = []
+      for (let pg = 0; ; pg++) {
+        const res = await caQ.range(pg * 1000, pg * 1000 + 999)
+        if (res.error) throw new Error(res.error.message)
+        const batch = (res.data ?? []) as CaRow[]
+        caRows.push(...batch)
+        if (batch.length < 1000) break
+      }
+      contasFiltro = caRows.map(r => r.numero_conta_contabil)
       if (contasFiltro.length === 0) {
         return NextResponse.json({ rows: [], truncated: false })
       }
     }
 
-    // ── 4. Query paginada de lançamentos (contorna max-rows do PostgREST) ───────
+    // ── 3. Query paginada de lançamentos ───────────────────────────────────────
     const PAGE = 1000
     const MAX_PAGES = 500
     const lancRows: LancRow[] = []
@@ -89,16 +91,16 @@ export async function GET(req: NextRequest) {
         .order('id', { ascending: true })
         .range(page * PAGE, page * PAGE + PAGE - 1)
 
-      // Filtra apenas lançamentos com id_cc_cc vinculado à unidade selecionada
+      // Filtro principal: id_cc_cc vinculado à unidade selecionada
       if (idCcCcFiltro) {
         q = q.in('id_cc_cc', idCcCcFiltro)
       } else {
-        // Sem filtro de unidade: retorna apenas lançamentos que têm id_cc_cc preenchido
+        // Sem filtro de unidade: retorna apenas lançamentos com id_cc_cc preenchido
         q = q.not('id_cc_cc', 'is', null)
       }
 
-      if (tipo !== 'ambos')    q = q.eq('tipo', tipo)
-      if (contasFiltro)        q = q.in('numero_conta_contabil', contasFiltro)
+      if (tipo !== 'ambos')  q = q.eq('tipo', tipo)
+      if (contasFiltro)      q = q.in('numero_conta_contabil', contasFiltro)
 
       if (periodo) {
         q = q.gte('data_lancamento', `${periodo}-01`).lte('data_lancamento', `${periodo}-31`)
@@ -122,10 +124,41 @@ export async function GET(req: NextRequest) {
 
     const periodoSet = new Set(periodos)
 
-    // ── 5. Enriquecimento + filtragem exata por período ────────────────────────
-    // Mapa de id_cc_cc → unidade (para exibir no modal)
-    const idCcUnMap = new Map(unRows.map(r => [r.id_cc_cc, r.unidade]))
+    // ── 4. Enriquecimento seletivo ─────────────────────────────────────────────
+    // Busca SOMENTE os centros_custo e contas_contabeis que aparecem nos
+    // lançamentos encontrados — nunca carrega a tabela inteira
+    const uniqueCCs    = [...new Set(lancRows.map(l => l.centro_custo).filter(Boolean))]
+    const uniqueContas = [...new Set(lancRows.map(l => l.numero_conta_contabil).filter(Boolean))]
+    const uniqueIdCcCc = [...new Set(lancRows.map(l => l.id_cc_cc).filter(Boolean))]
 
+    const [ccEnrichRes, caEnrichRes, unEnrichRes] = await Promise.all([
+      uniqueCCs.length > 0
+        ? supabase.from('centros_custo')
+            .select('centro_custo,nome_centro_custo,nome_area,nome_departamento')
+            .in('centro_custo', uniqueCCs)
+        : Promise.resolve({ data: [] as CcRow[], error: null }),
+      uniqueContas.length > 0
+        ? supabase.from('contas_contabeis')
+            .select('numero_conta_contabil,agrupamento_arvore,dre')
+            .in('numero_conta_contabil', uniqueContas)
+        : Promise.resolve({ data: [] as CaRow[], error: null }),
+      uniqueIdCcCc.length > 0
+        ? supabase.from('unidades_negocio')
+            .select('id_cc_cc,unidade')
+            .in('id_cc_cc', uniqueIdCcCc)
+        : Promise.resolve({ data: [] as { id_cc_cc: string; unidade: string }[], error: null }),
+    ])
+
+    if (ccEnrichRes.error) throw new Error((ccEnrichRes.error as { message: string }).message)
+    if (caEnrichRes.error) throw new Error((caEnrichRes.error as { message: string }).message)
+    if (unEnrichRes.error) throw new Error((unEnrichRes.error as { message: string }).message)
+
+    const ccMap = new Map((ccEnrichRes.data ?? []).map((r: CcRow) => [r.centro_custo, r]))
+    const caMap = new Map((caEnrichRes.data ?? []).map((r: CaRow) => [r.numero_conta_contabil, r]))
+    const unMap = new Map((unEnrichRes.data ?? [] as { id_cc_cc: string; unidade: string }[])
+      .map((r: { id_cc_cc: string; unidade: string }) => [r.id_cc_cc, r.unidade]))
+
+    // ── 5. Filtragem exata por período + enriquecimento ────────────────────────
     const rows = lancRows
       .filter(l => {
         if (periodoSet.size > 0) {
@@ -156,7 +189,7 @@ export async function GET(req: NextRequest) {
           num_transacao:            l.num_transacao,
           id_cc_cc:                 l.id_cc_cc,
           // unidade vem da dimensão id_cc_cc → unidades_negocio (não do centro_custo)
-          unidade:                  idCcUnMap.get(l.id_cc_cc ?? '') ?? '',
+          unidade:                  unMap.get(l.id_cc_cc ?? '') ?? '',
         }
       })
 

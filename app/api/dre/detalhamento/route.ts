@@ -26,8 +26,8 @@ export async function GET(req: NextRequest) {
   try {
     const supabase = getSupabase()
 
-    type CcRow = { centro_custo: string; nome_centro_custo: string; nome_area: string; nome_departamento: string }
-    type CaRow = { numero_conta_contabil: string; agrupamento_arvore: string; dre: string }
+    type CcRow  = { centro_custo: string; nome_centro_custo: string; nome_area: string; nome_departamento: string }
+    type CaRow  = { numero_conta_contabil: string; agrupamento_arvore: string; dre: string }
     type LancRow = {
       id: number; tipo: string; data_lancamento: string; numero_transacao: string
       numero_conta_contabil: string; nome_conta_contabil: string
@@ -36,47 +36,55 @@ export async function GET(req: NextRequest) {
       nome_conta_contrapartida: string
     }
 
-    // ── 1. Lookups em paralelo ─────────────────────────────────────────────────
-    const [ccRes, caRes] = await Promise.all([
-      supabase.from('centros_custo').select('centro_custo,nome_centro_custo,nome_area,nome_departamento').range(0, 49999),
-      supabase.from('contas_contabeis').select('numero_conta_contabil,agrupamento_arvore,dre').range(0, 49999),
-    ])
+    // ── 1. Deriva contasFiltro de forma segmentada ─────────────────────────────
+    // Usa query filtrada no banco ao invés de carregar a tabela inteira
+    // (evita o limite de 1000 linhas do PostgREST para tabelas grandes)
 
-    if (ccRes.error) throw new Error(ccRes.error.message)
-    if (caRes.error) throw new Error(caRes.error.message)
-
-    const ccMap = new Map((ccRes.data ?? [] as CcRow[]).map((r: CcRow) => [r.centro_custo, r]))
-    const caMap = new Map((caRes.data ?? [] as CaRow[]).map((r: CaRow) => [r.numero_conta_contabil, r]))
-
-    // ── 2. Deriva filtros DB a partir dos lookups ──────────────────────────────
-
-    // Contas que satisfazem o filtro de DRE / agrupamento
     let contasFiltro: string[] | null = null
+
     if (conta) {
       contasFiltro = [conta]
-    } else if (dre || agrupamento) {
-      contasFiltro = (caRes.data ?? []).filter((r: CaRow) => {
-        const rDre  = r.dre               ?? 'Sem Classificação'
-        const rAgr  = r.agrupamento_arvore ?? 'Sem Agrupamento'
-        if (dre         && rDre !== dre)         return false
-        if (agrupamento && rAgr !== agrupamento) return false
-        return true
-      }).map((r: CaRow) => r.numero_conta_contabil)
+    } else {
+      // Monta query segmentada na contas_contabeis
+      let caQ = supabase.from('contas_contabeis')
+        .select('numero_conta_contabil,agrupamento_arvore,dre')
+
+      if (dre)         caQ = caQ.eq('dre', dre)
+      if (agrupamento) caQ = caQ.eq('agrupamento_arvore', agrupamento)
+      if (!dre && !agrupamento) {
+        // Sem filtro explícito (subtotal row) → apenas contas classificadas
+        // Garante que o total do detalhamento bata com os subtotais da DRE
+        // (contas sem classificação não entram nos subtotais da DRE)
+        caQ = caQ.not('dre', 'is', null)
+      }
+
+      // Pagina a busca de contas para suportar planos de conta grandes (>1000 contas)
+      const caRows: CaRow[] = []
+      for (let pg = 0; ; pg++) {
+        const res = await caQ.range(pg * 1000, pg * 1000 + 999)
+        if (res.error) throw new Error(res.error.message)
+        const batch = (res.data ?? []) as CaRow[]
+        caRows.push(...batch)
+        if (batch.length < 1000) break
+      }
+
+      contasFiltro = caRows.map(r => r.numero_conta_contabil)
       if (contasFiltro.length === 0) {
         return NextResponse.json({ rows: [], truncated: false })
       }
     }
 
-    // centros que satisfazem o filtro de departamento ou unidade
-    // IMPORTANT: unidades use cc.nome_departamento — the same field used by get_por_unidade.
-    // This ensures the detalhamento drill-down matches the DRE aggregation exactly.
+    // ── 2. Deriva centrosFiltro de forma segmentada ────────────────────────────
     let centrosFiltro: string[] = centros.slice()
 
     if (unidades.length > 0) {
-      // Filter by unidade = nome_departamento (not unidades_negocio table)
-      const ccPorUnidade = (ccRes.data ?? [])
-        .filter((r: CcRow) => unidades.includes(r.nome_departamento ?? 'Sem Unidade'))
-        .map((r: CcRow) => r.centro_custo)
+      // Busca apenas os CCs que pertencem às unidades selecionadas
+      const res = await supabase.from('centros_custo')
+        .select('centro_custo')
+        .in('nome_departamento', unidades)
+        .range(0, 49999)
+      if (res.error) throw new Error(res.error.message)
+      const ccPorUnidade = (res.data ?? []).map((r: { centro_custo: string }) => r.centro_custo)
       centrosFiltro = centrosFiltro.length > 0
         ? centrosFiltro.filter(c => ccPorUnidade.includes(c))
         : ccPorUnidade
@@ -84,10 +92,13 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ rows: [], truncated: false })
       }
     } else if (departamento || departamentos.length > 0) {
-      const depts = departamentos.length > 0 ? departamentos : [departamento]
-      const ccPorDept = (ccRes.data ?? [])
-        .filter((r: CcRow) => depts.includes(r.nome_departamento))
-        .map((r: CcRow) => r.centro_custo)
+      const depts = [...departamentos, ...(departamento ? [departamento] : [])]
+      const res = await supabase.from('centros_custo')
+        .select('centro_custo')
+        .in('nome_departamento', depts)
+        .range(0, 49999)
+      if (res.error) throw new Error(res.error.message)
+      const ccPorDept = (res.data ?? []).map((r: { centro_custo: string }) => r.centro_custo)
       centrosFiltro = centrosFiltro.length > 0
         ? centrosFiltro.filter(c => ccPorDept.includes(c))
         : ccPorDept
@@ -96,9 +107,9 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // ── 3. Query de lançamentos paginada (contorna max-rows do PostgREST) ────────
+    // ── 3. Query paginada de lançamentos ───────────────────────────────────────
     const PAGE = 1000
-    const MAX_PAGES = 500          // teto de 500 k linhas
+    const MAX_PAGES = 500
     const lancRows: LancRow[] = []
 
     for (let page = 0; page < MAX_PAGES; page++) {
@@ -114,7 +125,6 @@ export async function GET(req: NextRequest) {
       if (contasFiltro)             q = q.in('numero_conta_contabil', contasFiltro)
       if (centrosFiltro.length > 0) q = q.in('centro_custo', centrosFiltro)
 
-      // Filtro de período via range + verificação exata client-side
       if (periodo) {
         q = q.gte('data_lancamento', `${periodo}-01`).lte('data_lancamento', `${periodo}-31`)
       } else if (periodos.length > 0) {
@@ -132,12 +142,37 @@ export async function GET(req: NextRequest) {
       if (lancRes.error) throw new Error(lancRes.error.message)
       const batch = (lancRes.data ?? []) as LancRow[]
       lancRows.push(...batch)
-      if (batch.length < PAGE) break  // última página
+      if (batch.length < PAGE) break
     }
 
     const periodoSet = new Set(periodos)
 
-    // ── 4. Enriquecimento + filtragem exata por período ────────────────────────
+    // ── 4. Enriquecimento seletivo ─────────────────────────────────────────────
+    // Busca apenas os centros_custo e contas_contabeis que realmente aparecem
+    // nos lançamentos encontrados — evita carregar tabelas inteiras
+    const uniqueCCs    = [...new Set(lancRows.map(l => l.centro_custo).filter(Boolean))]
+    const uniqueContas = [...new Set(lancRows.map(l => l.numero_conta_contabil).filter(Boolean))]
+
+    const [ccEnrichRes, caEnrichRes] = await Promise.all([
+      uniqueCCs.length > 0
+        ? supabase.from('centros_custo')
+            .select('centro_custo,nome_centro_custo,nome_area,nome_departamento')
+            .in('centro_custo', uniqueCCs)
+        : Promise.resolve({ data: [] as CcRow[], error: null }),
+      uniqueContas.length > 0
+        ? supabase.from('contas_contabeis')
+            .select('numero_conta_contabil,agrupamento_arvore,dre')
+            .in('numero_conta_contabil', uniqueContas)
+        : Promise.resolve({ data: [] as CaRow[], error: null }),
+    ])
+
+    if (ccEnrichRes.error) throw new Error((ccEnrichRes.error as { message: string }).message)
+    if (caEnrichRes.error) throw new Error((caEnrichRes.error as { message: string }).message)
+
+    const ccMap = new Map((ccEnrichRes.data ?? []).map((r: CcRow) => [r.centro_custo, r]))
+    const caMap = new Map((caEnrichRes.data ?? []).map((r: CaRow) => [r.numero_conta_contabil, r]))
+
+    // ── 5. Filtragem exata por período + enriquecimento ────────────────────────
     const rows = lancRows
       .filter(l => {
         if (periodoSet.size > 0) {
