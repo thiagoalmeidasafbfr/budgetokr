@@ -52,10 +52,18 @@ export async function GET(req: NextRequest) {
       if (dre)         caQ = caQ.eq('dre', dre)
       if (agrupamento) caQ = caQ.eq('agrupamento_arvore', agrupamento)
       if (!dre && !agrupamento) {
-        // Sem filtro explícito (subtotal row) → apenas contas classificadas
-        // Garante que o total do detalhamento bata com os subtotais da DRE
-        // (contas sem classificação não entram nos subtotais da DRE)
-        caQ = caQ.not('dre', 'is', null)
+        // Sem filtro explícito (subtotal row) → apenas contas cujo grupo DRE
+        // existe em dre_linhas. Isso garante que o total do detalhamento bata
+        // com os subtotais da DRE (contas "sem classificação" ou com grupos
+        // fora da estrutura da DRE não entram nos subtotais).
+        const linhasRes = await supabase.from('dre_linhas')
+          .select('nome').eq('tipo', 'grupo')
+        const validGroups = (linhasRes.data ?? []).map((r: { nome: string }) => r.nome)
+        if (validGroups.length > 0) {
+          caQ = caQ.in('dre', validGroups)
+        } else {
+          caQ = caQ.not('dre', 'is', null)
+        }
       }
 
       // Pagina a busca de contas para suportar planos de conta grandes (>1000 contas)
