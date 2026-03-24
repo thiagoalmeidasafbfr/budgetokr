@@ -83,7 +83,7 @@ export default function DREPage() {
     if (!selDepts.length) { setCentrosDisp([]); return } // don't clear selCentros here
     const p = new URLSearchParams({ type: 'centros', departamentos: selDepts.join(',') })
     fetch(`/api/dre?${p}`).then(r => r.json()).then(data => {
-      const avail = Array.isArray(data) ? (data as Array<{cc:string}>) : []
+      const avail = Array.isArray(data) ? (data as Array<{cc:string; nome: string}>) : []
       setCentrosDisp(avail)
       // If init stored pending centros (from deep-link), apply them now that we have the list
       const pending = pendingCentrosRef.current
