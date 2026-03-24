@@ -255,6 +255,7 @@ export default function UnidadesNegocioPage() {
     dre?: string,
     agrupamento?: string,
     conta?: string,
+    tipo: 'budget' | 'razao' | 'ambos' = 'ambos',
   ) => {
     e.preventDefault()
     e.stopPropagation()
@@ -265,7 +266,7 @@ export default function UnidadesNegocioPage() {
       children: [], byPeriod: {},
     } as TreeNode
     setCtxMenu({
-      x: e.clientX, y: e.clientY, node, tipo: 'ambos',
+      x: e.clientX, y: e.clientY, node, tipo,
       periodos:  selPeriods.length ? selPeriods : undefined,
       unidades:  [unidade],
     })
@@ -303,12 +304,24 @@ export default function UnidadesNegocioPage() {
   }
 
   // ── Value cell components ─────────────────────────────────────────────────
-  const TotalCells = ({ n, bold }: { n: { budget: number; razao: number; variacao: number; variacao_pct: number }; bold?: boolean }) => (
+  const TotalCells = ({
+    n, bold, onCtx,
+  }: {
+    n: { budget: number; razao: number; variacao: number; variacao_pct: number }
+    bold?: boolean
+    onCtx?: (tipo: 'budget' | 'razao' | 'ambos') => (e: React.MouseEvent) => void
+  }) => (
     <>
-      <td className={cn('px-5 py-2.5 text-right tabular-nums', bold ? 'font-semibold text-gray-800' : 'text-gray-600')}>
+      <td
+        className={cn('px-5 py-2.5 text-right tabular-nums', bold ? 'font-semibold text-gray-800' : 'text-gray-600')}
+        onContextMenu={onCtx?.('budget')}
+      >
         {n.budget !== 0 ? formatCurrency(n.budget) : <span className="text-gray-300">—</span>}
       </td>
-      <td className={cn('px-5 py-2.5 text-right tabular-nums', bold ? 'font-semibold text-gray-800' : 'text-gray-600')}>
+      <td
+        className={cn('px-5 py-2.5 text-right tabular-nums', bold ? 'font-semibold text-gray-800' : 'text-gray-600')}
+        onContextMenu={onCtx?.('razao')}
+      >
         {n.razao !== 0 ? formatCurrency(n.razao) : <span className="text-gray-300">—</span>}
       </td>
       <td className={cn('px-5 py-2.5 text-right tabular-nums', bold ? 'font-semibold' : '', n.variacao !== 0 ? colorForVariance(n.variacao_pct) : 'text-gray-300')}>
@@ -510,7 +523,7 @@ export default function UnidadesNegocioPage() {
                                 {un.unidade || <span className="italic text-gray-400">sem unidade</span>}
                               </div>
                             </td>
-                            {isTotalView ? <TotalCells n={un} bold /> : <PeriodCells periodos={un.periodos} />}
+                            {isTotalView ? <TotalCells n={un} bold onCtx={tipo => e => { e.stopPropagation(); openCtxMenu(e, un.unidade, un.unidade, undefined, undefined, undefined, tipo) }} /> : <PeriodCells periodos={un.periodos} />}
                           </tr>
 
                           {unExpanded && un.dre_groups.map(dreNode => {
@@ -530,7 +543,7 @@ export default function UnidadesNegocioPage() {
                                       {dreNode.dre}
                                     </div>
                                   </td>
-                                  {isTotalView ? <TotalCells n={dreNode} /> : <PeriodCells periodos={dreNode.periodos} />}
+                                    {isTotalView ? <TotalCells n={dreNode} onCtx={tipo => e => { e.stopPropagation(); openCtxMenu(e, dreNode.dre, un.unidade, dreNode.dre, undefined, undefined, tipo) }} /> : <PeriodCells periodos={dreNode.periodos} />}
                                 </tr>
 
                                 {dreExpanded && dreNode.agrupamentos.map(ag => {
@@ -550,7 +563,7 @@ export default function UnidadesNegocioPage() {
                                             {ag.agrupamento}
                                           </div>
                                         </td>
-                                        {isTotalView ? <TotalCells n={ag} /> : <PeriodCells periodos={ag.periodos} />}
+                                        {isTotalView ? <TotalCells n={ag} onCtx={tipo => e => { e.stopPropagation(); openCtxMenu(e, ag.agrupamento, un.unidade, dreNode.dre, ag.agrupamento, undefined, tipo) }} /> : <PeriodCells periodos={ag.periodos} />}
                                       </tr>
 
                                       {/* Level 4: Conta contábil */}
@@ -564,7 +577,7 @@ export default function UnidadesNegocioPage() {
                                               {ct.nome}
                                             </span>
                                           </td>
-                                          {isTotalView ? <TotalCells n={ct} /> : <PeriodCells periodos={ct.periodos} />}
+                                          {isTotalView ? <TotalCells n={ct} onCtx={tipo => e => { e.stopPropagation(); openCtxMenu(e, ct.nome, un.unidade, dreNode.dre, ag.agrupamento, ct.numero, tipo) }} /> : <PeriodCells periodos={ct.periodos} />}
                                         </tr>
                                       ))}
                                     </React.Fragment>

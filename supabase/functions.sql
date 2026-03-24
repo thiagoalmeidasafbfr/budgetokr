@@ -729,6 +729,102 @@ RETURNS TABLE(unidade TEXT) LANGUAGE sql STABLE AS $$
   ORDER BY 1;
 $$;
 
+-- ─── get_unidades_negocio_lancamentos_detail ──────────────────────────────────
+-- Retorna lançamentos individuais para a visão de Unidades de Negócio.
+-- Filtra via id_cc_cc → unidades_negocio.unidade (NÃO usa centros_custo.nome_departamento).
+-- Usa paginação server-side para evitar explosão de linhas e o limite do PostgREST.
+-- O JOIN é feito no banco, evitando o problema de URL muito longa com .in() no cliente.
+DROP FUNCTION IF EXISTS get_unidades_negocio_lancamentos_detail(TEXT[], TEXT[], TEXT, TEXT, TEXT, TEXT, INT, INT);
+CREATE OR REPLACE FUNCTION get_unidades_negocio_lancamentos_detail(
+  p_unidades    TEXT[]  DEFAULT '{}',
+  p_periodos    TEXT[]  DEFAULT '{}',
+  p_tipo        TEXT    DEFAULT 'ambos',
+  p_dre         TEXT    DEFAULT '',
+  p_agrupamento TEXT    DEFAULT '',
+  p_conta       TEXT    DEFAULT '',
+  p_offset      INT     DEFAULT 0,
+  p_limit       INT     DEFAULT 1000
+) RETURNS JSONB LANGUAGE plpgsql STABLE AS $$
+DECLARE
+  v_cond   TEXT[] := '{}';
+  v_sql    TEXT;
+  v_result JSONB;
+BEGIN
+  -- Filtro de unidade via id_cc_cc (dimensão correta para esta visão)
+  IF array_length(p_unidades, 1) > 0 THEN
+    v_cond := array_append(v_cond,
+      format('COALESCE(u.unidade, ''Sem Unidade'') = ANY(%s)',
+             quote_literal(p_unidades::TEXT)));
+  ELSE
+    -- Sem filtro: apenas lançamentos com id_cc_cc preenchido
+    v_cond := array_append(v_cond, 'l.id_cc_cc IS NOT NULL');
+  END IF;
+
+  -- Filtro de tipo (budget / razao / ambos)
+  IF p_tipo NOT IN ('', 'ambos') THEN
+    v_cond := array_append(v_cond, format('l.tipo = %L', p_tipo));
+  END IF;
+
+  -- Filtro de conta / dre / agrupamento
+  IF p_conta <> '' THEN
+    v_cond := array_append(v_cond,
+      format('l.numero_conta_contabil = %L', p_conta));
+  ELSE
+    IF p_dre <> '' THEN
+      v_cond := array_append(v_cond,
+        format('COALESCE(ca.dre, ''Sem Classificação'') = %L', p_dre));
+    END IF;
+    IF p_agrupamento <> '' THEN
+      v_cond := array_append(v_cond,
+        format('COALESCE(ca.agrupamento_arvore, ''Sem Agrupamento'') = %L', p_agrupamento));
+    END IF;
+  END IF;
+
+  -- Filtro de períodos
+  IF array_length(p_periodos, 1) > 0 THEN
+    v_cond := array_append(v_cond,
+      format('TO_CHAR(l.data_lancamento, ''YYYY-MM'') = ANY(%s)',
+             quote_literal(p_periodos::TEXT)));
+  END IF;
+
+  v_sql :=
+    'SELECT
+       l.id,
+       l.tipo,
+       l.data_lancamento::text                                             AS data_lancamento,
+       COALESCE(l.numero_transacao, l.num_transacao, '''')                AS numero_transacao,
+       l.numero_conta_contabil,
+       COALESCE(ca.nome_conta_contabil, l.nome_conta_contabil,
+                l.numero_conta_contabil, '''')                            AS nome_conta_contabil,
+       l.centro_custo,
+       COALESCE(cc.nome_centro_custo, '''')                               AS nome_centro_custo,
+       COALESCE(cc.nome_area, '''')                                       AS nome_area,
+       COALESCE(ca.agrupamento_arvore, ''Sem Agrupamento'')               AS agrupamento_arvore,
+       COALESCE(ca.dre, ''Sem Classificação'')                            AS dre,
+       COALESCE(l.nome_conta_contrapartida, '''')                         AS nome_conta_contrapartida,
+       l.debito_credito,
+       COALESCE(l.observacao, '''')                                       AS observacao,
+       COALESCE(l.fonte, '''')                                            AS fonte,
+       COALESCE(l.num_transacao, '''')                                    AS num_transacao,
+       COALESCE(l.id_cc_cc, '''')                                         AS id_cc_cc,
+       COALESCE(u.unidade, '''')                                          AS unidade
+     FROM lancamentos l
+     LEFT JOIN unidades_negocio  u  ON l.id_cc_cc              = u.id_cc_cc
+     LEFT JOIN contas_contabeis  ca ON l.numero_conta_contabil = ca.numero_conta_contabil
+     LEFT JOIN centros_custo     cc ON l.centro_custo          = cc.centro_custo' ||
+    CASE WHEN array_length(v_cond, 1) > 0
+      THEN ' WHERE ' || array_to_string(v_cond, ' AND ')
+      ELSE ''
+    END ||
+    format(' ORDER BY l.data_lancamento, l.numero_conta_contabil, l.id
+     LIMIT %s OFFSET %s', p_limit, p_offset);
+
+  EXECUTE 'SELECT COALESCE(jsonb_agg(row_to_json(t)), ''[]''::jsonb) FROM (' || v_sql || ') t'
+    INTO v_result;
+  RETURN v_result;
+END;
+$$;
+
 -- ─── get_distinct_periodos: lista de períodos YYYY-MM disponíveis ─────────────
 CREATE OR REPLACE FUNCTION get_distinct_periodos()
 RETURNS TABLE(periodo TEXT) LANGUAGE sql STABLE AS $$
