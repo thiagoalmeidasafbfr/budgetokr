@@ -46,12 +46,6 @@ const nav: NavItem[] = [
     sublabel: 'Budget vs Realizado',
   },
   {
-    type: 'link', href: '/por-unidade',
-    icon: BarChart2,
-    label: 'Por Unidade de Negócio',
-    sublabel: 'Budget vs Realizado por área',
-  },
-  {
     type: 'link', href: '/dept',
     icon: Layers,
     label: 'Por Departamento',
@@ -64,7 +58,7 @@ const nav: NavItem[] = [
     sublabel: 'Investimentos por projeto',
   },
   {
-    type: 'link', href: '/dre',
+    type: 'link', href: '/por-unidade',
     icon: Layers,
     label: 'Por Unidade',
     sublabel: 'DRE por unidade de negócio',
