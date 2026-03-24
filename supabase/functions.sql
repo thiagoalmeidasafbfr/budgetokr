@@ -319,7 +319,9 @@ BEGIN
   ELSIF array_length(p_periodos, 1) > 0 THEN
     v_cond := array_append(v_cond, format('to_char(l.data_lancamento, ''YYYY-MM'') = ANY(%s)', quote_literal(p_periodos::TEXT)));
   END IF;
-  IF array_length(p_departamentos, 1) > 0 THEN
+  IF array_length(p_unidades, 1) > 0 THEN
+    v_cond := array_append(v_cond, format('COALESCE(cc.nome_departamento, ''Sem Unidade'') = ANY(%s)', quote_literal(p_unidades::TEXT)));
+  ELSIF array_length(p_departamentos, 1) > 0 THEN
     v_cond := array_append(v_cond, format('cc.nome_departamento = ANY(%s)', quote_literal(p_departamentos::TEXT)));
   ELSIF p_departamento IS NOT NULL THEN
     v_cond := array_append(v_cond, format('cc.nome_departamento = %s', quote_literal(p_departamento)));
@@ -343,7 +345,7 @@ BEGIN
     LEFT JOIN unidades_negocio un ON l.id_cc_cc              = un.id_cc_cc' ||
     CASE WHEN array_length(v_cond, 1) > 0 THEN ' WHERE ' || array_to_string(v_cond, ' AND ') ELSE '' END ||
     ' ORDER BY l.data_lancamento, l.numero_conta_contabil
-      LIMIT 50000';
+      LIMIT 200000';
 
   EXECUTE 'SELECT jsonb_agg(row_to_json(t)) FROM (' || v_sql || ') t' INTO v_result;
   RETURN COALESCE(v_result, '[]'::JSONB);
@@ -571,7 +573,7 @@ BEGIN
 END;
 $$;
 
--- ─── get_unidades_distintas: fallback via centros_custo.nome_departamento ─────
+-- ─── get_unidades_distintas: lista de unidades de negócio via nome_departamento ─
 CREATE OR REPLACE FUNCTION get_unidades_distintas()
 RETURNS JSONB LANGUAGE sql AS $$
   SELECT COALESCE(jsonb_agg(unidade ORDER BY unidade), '[]'::JSONB)
@@ -579,10 +581,11 @@ RETURNS JSONB LANGUAGE sql AS $$
     SELECT DISTINCT COALESCE(cc.nome_departamento, 'Sem Unidade') AS unidade
     FROM lancamentos l
     LEFT JOIN centros_custo cc ON l.centro_custo = cc.centro_custo
+    WHERE cc.nome_departamento IS NOT NULL AND cc.nome_departamento <> ''
   ) t;
 $$;
 
--- ─── get_por_unidade: hierarquia via centros_custo (fallback sem unidades_negocio)
+-- ─── get_por_unidade: DRE agrupada por unidade (via centros_custo.nome_departamento)
 CREATE OR REPLACE FUNCTION get_por_unidade(
   p_periodos TEXT[] DEFAULT '{}',
   p_unidades TEXT[] DEFAULT '{}'

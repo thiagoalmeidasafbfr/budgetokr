@@ -14,7 +14,6 @@ export async function GET(req: NextRequest) {
     const type = sp.get('type') ?? 'data'
 
     if (type === 'distinct') {
-      // Return distinct unidades and all available periods
       const [unidades, periodosData] = await Promise.all([
         getUnidadesDistintas(),
         getSupabase()
@@ -48,8 +47,8 @@ export async function GET(req: NextRequest) {
       ? [forcedDept]
       : unidadesRaw ? unidadesRaw.split(',').filter(Boolean) : []
 
-    const data = await getPorUnidade(periodos, unidades)
-    return NextResponse.json(data)
+    const rows = await getPorUnidade(periodos, unidades)
+    return NextResponse.json({ rows })
   } catch (e) {
     console.error('[por-unidade GET]', e)
     return NextResponse.json({ error: String(e) }, { status: 500 })

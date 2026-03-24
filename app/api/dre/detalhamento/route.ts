@@ -28,7 +28,6 @@ export async function GET(req: NextRequest) {
 
     type CcRow = { centro_custo: string; nome_centro_custo: string; nome_area: string; nome_departamento: string }
     type CaRow = { numero_conta_contabil: string; agrupamento_arvore: string; dre: string }
-    type UnRow = { id_cc_cc: string; unidade: string }
     type LancRow = {
       id: number; tipo: string; data_lancamento: string; numero_transacao: string
       numero_conta_contabil: string; nome_conta_contabil: string
@@ -38,19 +37,16 @@ export async function GET(req: NextRequest) {
     }
 
     // ── 1. Lookups em paralelo ─────────────────────────────────────────────────
-    const [ccRes, caRes, unRes] = await Promise.all([
+    const [ccRes, caRes] = await Promise.all([
       supabase.from('centros_custo').select('centro_custo,nome_centro_custo,nome_area,nome_departamento').range(0, 49999),
       supabase.from('contas_contabeis').select('numero_conta_contabil,agrupamento_arvore,dre').range(0, 49999),
-      supabase.from('unidades_negocio').select('id_cc_cc,unidade').range(0, 49999),
     ])
 
     if (ccRes.error) throw new Error(ccRes.error.message)
     if (caRes.error) throw new Error(caRes.error.message)
-    if (unRes.error) throw new Error(unRes.error.message)
 
     const ccMap = new Map((ccRes.data ?? [] as CcRow[]).map((r: CcRow) => [r.centro_custo, r]))
     const caMap = new Map((caRes.data ?? [] as CaRow[]).map((r: CaRow) => [r.numero_conta_contabil, r]))
-    const unMap = new Map((unRes.data ?? [] as UnRow[]).map((r: UnRow) => [r.id_cc_cc, r]))
 
     // ── 2. Deriva filtros DB a partir dos lookups ──────────────────────────────
 
@@ -67,25 +63,27 @@ export async function GET(req: NextRequest) {
         return true
       }).map((r: CaRow) => r.numero_conta_contabil)
       if (contasFiltro.length === 0) {
-        // Nenhuma conta corresponde aos filtros — retorna vazio imediatamente
         return NextResponse.json({ rows: [], truncated: false })
       }
     }
 
-    // id_cc_cc que satisfazem o filtro de unidades
-    let idCcFiltro: string[] | null = null
-    if (unidades.length > 0) {
-      idCcFiltro = (unRes.data ?? [])
-        .filter((r: UnRow) => unidades.includes(r.unidade))
-        .map((r: UnRow) => r.id_cc_cc)
-      if (idCcFiltro.length === 0) {
-        return NextResponse.json({ rows: [], truncated: false })
-      }
-    }
-
-    // centros que satisfazem o filtro de departamento
+    // centros que satisfazem o filtro de departamento ou unidade
+    // IMPORTANT: unidades use cc.nome_departamento — the same field used by get_por_unidade.
+    // This ensures the detalhamento drill-down matches the DRE aggregation exactly.
     let centrosFiltro: string[] = centros.slice()
-    if (departamento || departamentos.length > 0) {
+
+    if (unidades.length > 0) {
+      // Filter by unidade = nome_departamento (not unidades_negocio table)
+      const ccPorUnidade = (ccRes.data ?? [])
+        .filter((r: CcRow) => unidades.includes(r.nome_departamento ?? 'Sem Unidade'))
+        .map((r: CcRow) => r.centro_custo)
+      centrosFiltro = centrosFiltro.length > 0
+        ? centrosFiltro.filter(c => ccPorUnidade.includes(c))
+        : ccPorUnidade
+      if (centrosFiltro.length === 0) {
+        return NextResponse.json({ rows: [], truncated: false })
+      }
+    } else if (departamento || departamentos.length > 0) {
       const depts = departamentos.length > 0 ? departamentos : [departamento]
       const ccPorDept = (ccRes.data ?? [])
         .filter((r: CcRow) => depts.includes(r.nome_departamento))
@@ -104,11 +102,10 @@ export async function GET(req: NextRequest) {
       .select('id,tipo,data_lancamento,numero_transacao,numero_conta_contabil,nome_conta_contabil,centro_custo,debito_credito,observacao,fonte,num_transacao,id_cc_cc,nome_conta_contrapartida')
       .order('data_lancamento', { ascending: true })
       .order('numero_conta_contabil', { ascending: true })
-      .range(0, 199999)   // sem limite artificial
+      .range(0, 199999)
 
     if (tipo !== 'ambos')        q = q.eq('tipo', tipo)
     if (contasFiltro)            q = q.in('numero_conta_contabil', contasFiltro)
-    if (idCcFiltro)              q = q.in('id_cc_cc', idCcFiltro)
     if (centrosFiltro.length > 0) q = q.in('centro_custo', centrosFiltro)
 
     // Filtro de período via range + verificação exata client-side
@@ -128,7 +125,7 @@ export async function GET(req: NextRequest) {
     const lancRes = await q
     if (lancRes.error) throw new Error(lancRes.error.message)
 
-    const lancRows  = (lancRes.data ?? []) as LancRow[]
+    const lancRows   = (lancRes.data ?? []) as LancRow[]
     const periodoSet = new Set(periodos)
 
     // ── 4. Enriquecimento + filtragem exata por período ────────────────────────
@@ -143,7 +140,6 @@ export async function GET(req: NextRequest) {
       .map(l => {
         const cc = ccMap.get(l.centro_custo)
         const ca = caMap.get(l.numero_conta_contabil)
-        const un = l.id_cc_cc ? unMap.get(l.id_cc_cc) : undefined
         return {
           id:                       l.id,
           tipo:                     l.tipo,
@@ -152,17 +148,17 @@ export async function GET(req: NextRequest) {
           numero_conta_contabil:    l.numero_conta_contabil,
           nome_conta_contabil:      l.nome_conta_contabil,
           centro_custo:             l.centro_custo,
-          nome_centro_custo:        cc?.nome_centro_custo         ?? '',
-          nome_area:                cc?.nome_area                 ?? '',
-          agrupamento_arvore:       ca?.agrupamento_arvore        ?? 'Sem Agrupamento',
-          dre:                      ca?.dre                       ?? 'Sem Classificação',
+          nome_centro_custo:        cc?.nome_centro_custo  ?? '',
+          nome_area:                cc?.nome_area          ?? '',
+          agrupamento_arvore:       ca?.agrupamento_arvore ?? 'Sem Agrupamento',
+          dre:                      ca?.dre                ?? 'Sem Classificação',
           nome_conta_contrapartida: l.nome_conta_contrapartida,
           debito_credito:           l.debito_credito,
           observacao:               l.observacao,
           fonte:                    l.fonte,
           num_transacao:            l.num_transacao,
           id_cc_cc:                 l.id_cc_cc,
-          unidade:                  un?.unidade ?? '',
+          unidade:                  cc?.nome_departamento  ?? '',
         }
       })
 
