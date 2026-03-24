@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
+import { getUserFromHeaders } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,6 +11,11 @@ export async function GET(req: NextRequest) {
     const periodos = sp.get('periodos')?.split(',').filter(Boolean) ?? []
     const unidades = sp.get('unidades')?.split(',').filter(Boolean) ?? []
     const supabase = getSupabase()
+
+    // Forçar filtro de departamento para usuários dept
+    const user           = getUserFromHeaders(req)
+    const forcedDept     = user?.role === 'dept' ? user.department : undefined
+    const departamentos  = forcedDept ? [forcedDept] : []
 
     // Distinct unidades — uses dedicated RPC that returns ~11 rows max
     if (type === 'distinct_unidades') {
@@ -29,8 +35,9 @@ export async function GET(req: NextRequest) {
     // A função retorna JSONB (array único) para contornar o limite de linhas do PostgREST
     if (type === 'dre') {
       const { data, error } = await supabase.rpc('get_unidades_negocio_dre', {
-        p_periodos: periodos,
-        p_unidades: unidades,
+        p_periodos:      periodos,
+        p_unidades:      unidades,
+        p_departamentos: departamentos,
       })
       if (error) throw new Error(error.message)
       const rows = Array.isArray(data) ? data as Array<{
@@ -45,10 +52,28 @@ export async function GET(req: NextRequest) {
       })))
     }
 
+    // Detalhamento de lançamentos individuais
+    if (type === 'lancamentos_detail') {
+      const { data, error } = await supabase.rpc('get_unidades_negocio_lancamentos_detail', {
+        p_unidades:      unidades,
+        p_periodos:      periodos,
+        p_tipo:          sp.get('tipo')        ?? 'ambos',
+        p_dre:           sp.get('dre')         ?? '',
+        p_agrupamento:   sp.get('agrupamento') ?? '',
+        p_conta:         sp.get('conta')       ?? '',
+        p_offset:        Number(sp.get('offset') ?? 0),
+        p_limit:         Number(sp.get('limit')  ?? 1000),
+        p_departamentos: departamentos,
+      })
+      if (error) throw new Error(error.message)
+      return NextResponse.json(Array.isArray(data) ? data : [])
+    }
+
     // Default: flat unidade + periodo totals (kept for compatibility)
     const { data, error } = await supabase.rpc('get_unidades_negocio_analise', {
-      p_periodos: periodos,
-      p_unidades: unidades,
+      p_periodos:      periodos,
+      p_unidades:      unidades,
+      p_departamentos: departamentos,
     })
     if (error) throw new Error(error.message)
 
