@@ -46,18 +46,18 @@ export async function GET(req: NextRequest) {
     if (conta)              q = q.eq('numero_conta_contabil', conta)
     if (centros.length > 0) q = q.in('centro_custo', centros)
 
-    // Filtro de período via OR de ranges mensais
+    // Filtro de período: range simples (min–max) + filtragem exata client-side
     if (periodo) {
       q = q.gte('data_lancamento', `${periodo}-01`).lte('data_lancamento', `${periodo}-31`)
     } else if (periodos.length > 0) {
-      const orClauses = periodos.map(p => {
-        const [yr, mo] = p.split('-').map(Number)
-        const nextYr = mo === 12 ? yr + 1 : yr
-        const nextMo = mo === 12 ? 1 : mo + 1
-        const nextPeriod = `${nextYr}-${String(nextMo).padStart(2, '0')}`
-        return `and(data_lancamento.gte.${p}-01,data_lancamento.lt.${nextPeriod}-01)`
-      }).join(',')
-      q = q.or(orClauses)
+      const sorted = [...periodos].sort()
+      const minDate = `${sorted[0]}-01`
+      const last = sorted[sorted.length - 1]
+      const [lyr, lmo] = last.split('-').map(Number)
+      const nextYr = lmo === 12 ? lyr + 1 : lyr
+      const nextMo = lmo === 12 ? 1 : lmo + 1
+      const maxDate = `${nextYr}-${String(nextMo).padStart(2, '0')}-01`
+      q = q.gte('data_lancamento', minDate).lt('data_lancamento', maxDate)
     }
 
     // ── 2. Busca tabelas de lookup em paralelo ────────────────────────────────
@@ -82,6 +82,9 @@ export async function GET(req: NextRequest) {
     const caMap    = new Map((caRes.data  ?? [] as CaRow[]).map((r: CaRow) => [r.numero_conta_contabil, r]))
     const unMap    = new Map((unRes.data  ?? [] as UnRow[]).map((r: UnRow) => [r.id_cc_cc, r]))
 
+    // Conjunto de períodos para filtragem exata (YYYY-MM)
+    const periodoSet = new Set(periodos)
+
     // ── 3. Join + filtros em campos de lookup ─────────────────────────────────
     const rows = lancRows
       .map(l => {
@@ -98,8 +101,8 @@ export async function GET(req: NextRequest) {
           centro_custo:             l.centro_custo,
           nome_centro_custo:        cc?.nome_centro_custo        ?? '',
           nome_area:                cc?.nome_area                ?? '',
-          agrupamento_arvore:       ca?.agrupamento_arvore       ?? '',
-          dre:                      ca?.dre                      ?? '',
+          agrupamento_arvore:       ca?.agrupamento_arvore ?? 'Sem Agrupamento',
+          dre:                      ca?.dre                ?? 'Sem Classificação',
           nome_conta_contrapartida: l.nome_conta_contrapartida,
           debito_credito:           l.debito_credito,
           observacao:               l.observacao,
@@ -108,18 +111,21 @@ export async function GET(req: NextRequest) {
           id_cc_cc:                 l.id_cc_cc,
           unidade:                  un?.unidade                  ?? '',
           _dept:                    cc?.nome_departamento        ?? '',
+          _periodo:                 (l.data_lancamento ?? '').substring(0, 7),
         }
       })
       .filter(r => {
-        if (dre         && r.dre             !== dre)         return false
+        // Filtragem exata por mês (compensação pelo range simples no DB)
+        if (periodoSet.size > 0 && !periodoSet.has(r._periodo)) return false
+        if (dre         && r.dre               !== dre)         return false
         if (agrupamento && r.agrupamento_arvore !== agrupamento) return false
-        if (departamento && r._dept          !== departamento) return false
-        if (departamentos.length > 0 && !departamentos.includes(r._dept))  return false
-        if (unidades.length > 0      && !unidades.includes(r.unidade))     return false
+        if (departamento && r._dept            !== departamento) return false
+        if (departamentos.length > 0 && !departamentos.includes(r._dept))   return false
+        if (unidades.length > 0      && !unidades.includes(r.unidade))      return false
         return true
       })
-      // Remove campo interno
-      .map(({ _dept, ...rest }) => rest)
+      // Remove campos internos
+      .map(({ _dept, _periodo, ...rest }) => rest)
 
     const LIMIT    = 50000
     const truncated = lancRows.length >= LIMIT
