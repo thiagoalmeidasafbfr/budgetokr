@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
   const periodosRaw      = searchParams.get('periodos')        ?? ''
   const departamentosRaw = searchParams.get('departamentos')   ?? ''
   const centrosRaw       = searchParams.get('centros')         ?? ''
+  const unidadesRaw      = searchParams.get('unidades')        ?? ''
 
   try {
     const supabase = getSupabase()
@@ -28,10 +29,11 @@ export async function GET(req: NextRequest) {
       p_periodos:     periodosRaw ? periodosRaw.split(',').filter(Boolean) : [],
       p_departamentos: departamentosRaw ? departamentosRaw.split(',').filter(Boolean) : [],
       p_centros:      centrosRaw ? centrosRaw.split(',').filter(Boolean) : [],
+      p_unidades:     unidadesRaw ? unidadesRaw.split(',').filter(Boolean) : [],
     })
     if (error) throw new Error(error.message)
 
-    const LIMIT = 50000
+    const LIMIT = 200000
     const rows = (data ?? []) as unknown[]
     const truncated = rows.length >= LIMIT
     return NextResponse.json({ rows, truncated })
