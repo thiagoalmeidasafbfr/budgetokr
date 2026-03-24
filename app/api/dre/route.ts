@@ -38,12 +38,30 @@ export async function GET(req: NextRequest) {
       : sp.get('departamentos')?.split(',').filter(Boolean)
     const centros       = sp.get('centros')?.split(',').filter(Boolean)
 
+    // Convert dept filter → centros filter before calling the SQL function.
+    // get_dre/get_dre_by_account filter dept via a LEFT JOIN on centros_custo
+    // (cc.nome_departamento = ANY(...)), which can silently return empty when
+    // there are join mismatches. The detalhamento uses a safer 2-step approach:
+    // resolve dept→centros first, then filter lancamentos by centro_custo directly.
+    // We replicate that here so both views are consistent.
+    let finalCentros = centros
+    if (departamentos && departamentos.length > 0) {
+      const ccList = (await getCentrosByDepartamentos(departamentos)) as Array<{ cc: string; nome: string }>
+      const deptCentros = ccList.map(r => r.cc)
+      if (deptCentros.length === 0) {
+        return NextResponse.json([])
+      }
+      finalCentros = centros?.length
+        ? centros.filter(c => deptCentros.includes(c))
+        : deptCentros
+    }
+
     if (type === 'accounts') {
-      const data = await getDREByAccount(periodos, departamentos, centros)
+      const data = await getDREByAccount(periodos, undefined, finalCentros)
       return NextResponse.json(data)
     }
 
-    const data = await getDRE(periodos, departamentos, centros)
+    const data = await getDRE(periodos, undefined, finalCentros)
     return NextResponse.json(data)
   } catch (e) {
     console.error(e)
