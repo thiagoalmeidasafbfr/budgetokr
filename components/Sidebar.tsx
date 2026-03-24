@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import {
   LayoutDashboard, TrendingUp, LineChart, GitCompare,
   Target, Layers, FileText, Database, Upload,
-  ChevronRight, Building2, BookOpen, LayoutList, Gauge,
+  ChevronRight, ChevronDown, Building2, BookOpen, LayoutList, Gauge,
   LogOut, User, ListTree, Shield, Landmark, Moon, Sun, History, MessageSquare, BarChart2, Briefcase, Users,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -17,7 +17,7 @@ type SessionUser = { userId: string; role: 'master' | 'dept'; department?: strin
 
 type NavLink  = { type: 'link';    href: string; icon: React.ElementType; label: string; sublabel?: string; masterOnly?: boolean; deptOnly?: boolean }
 type NavGroup = { type: 'group';   icon: React.ElementType; label: string; masterOnly?: boolean; children: { href: string; label: string; icon?: React.ElementType }[] }
-type NavSep   = { type: 'section'; label: string; masterOnly?: boolean; deptOnly?: boolean }
+type NavSep   = { type: 'section'; label: string; masterOnly?: boolean; deptOnly?: boolean; defaultCollapsed?: boolean }
 type NavItem  = NavLink | NavGroup | NavSep
 
 // ─── Nav config ─────────────────────────────────────────────────────────────────
@@ -97,7 +97,7 @@ const nav: NavItem[] = [
     masterOnly: true,
   },
 
-  { type: 'section', label: 'Gestão de Dados', masterOnly: true },
+  { type: 'section', label: 'Gestão de Dados', masterOnly: true, defaultCollapsed: true },
   {
     type: 'group', icon: FileText, label: 'Lançamentos', masterOnly: true,
     children: [
@@ -159,13 +159,18 @@ export function Sidebar() {
   const [user, setUser] = useState<SessionUser | null>(null)
   const [loaded, setLoaded] = useState(false)
 
+  // Sections that are collapsed — initialised from defaultCollapsed flags
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => {
+    const s = new Set<string>()
+    nav.forEach(item => { if (item.type === 'section' && item.defaultCollapsed) s.add(item.label) })
+    return s
+  })
+
   useEffect(() => {
-    // Skip fetch on login page; re-fetch when navigating away (e.g. right after login)
     if (pathname === '/login' || pathname === '/logout') {
       setLoaded(true)
       return
     }
-    // Already have user — no need to re-fetch on subsequent navigations
     if (user) return
     fetch('/api/me')
       .then(r => {
@@ -178,11 +183,36 @@ export function Sidebar() {
       })
       .then(u => { if (u) setUser(u); setLoaded(true) })
       .catch(() => setLoaded(true))
-  // pathname as dep so it re-fetches right after login redirect
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname])
 
-  // Hide sidebar on login page
+  // If the active page is inside a collapsed section, auto-expand it
+  useEffect(() => {
+    if (!loaded) return
+    let currentSection = ''
+    for (const item of nav) {
+      if (item.type === 'section') { currentSection = item.label; continue }
+      const href = item.type === 'link' ? item.href
+        : item.type === 'group' ? item.children[0]?.href
+        : null
+      const anyActive = item.type === 'link'
+        ? (item.href === '/' ? pathname === '/' : pathname.startsWith(item.href))
+        : item.type === 'group'
+        ? item.children.some(c => pathname.startsWith(c.href))
+        : false
+      if (anyActive && currentSection) {
+        setCollapsedSections(prev => {
+          if (!prev.has(currentSection)) return prev
+          const next = new Set(prev)
+          next.delete(currentSection)
+          return next
+        })
+        break
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, pathname])
+
   if (pathname === '/login') return null
 
   async function handleLogout() {
@@ -191,10 +221,21 @@ export function Sidebar() {
     router.refresh()
   }
 
+  function toggleSection(label: string) {
+    setCollapsedSections(prev => {
+      const next = new Set(prev)
+      next.has(label) ? next.delete(label) : next.add(label)
+      return next
+    })
+  }
+
   const isMaster = user?.role === 'master'
 
   const isActive = (href: string) =>
     href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/')
+
+  // Track which section we're currently inside while rendering
+  let currentSection = ''
 
   return (
     <aside className="w-60 flex-shrink-0 bg-[#1a2535] border-r border-white/5 flex flex-col h-screen sticky top-0">
@@ -219,22 +260,37 @@ export function Sidebar() {
           </div>
         )}
         {loaded && user && nav.map((item, i) => {
-          // Esconde itens masterOnly para dept, deptOnly para master
           if (item.masterOnly && !isMaster) return null
           if (item.deptOnly && isMaster) return null
 
-          // ── Section label ──────────────────────────────────────────────────
+          // ── Section label (collapsible) ────────────────────────────────────
           if (item.type === 'section') {
+            currentSection = item.label
+            const isCollapsed = collapsedSections.has(item.label)
             return (
-              <div key={i} className={cn('px-3 pt-3 pb-1', i === 0 ? 'pt-1' : '')}>
-                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
+              <button
+                key={item.label}
+                onClick={() => toggleSection(item.label)}
+                className={cn(
+                  'w-full flex items-center gap-1 px-3 pb-1 hover:text-slate-300 transition-colors group',
+                  i === 0 ? 'pt-1' : 'pt-3'
+                )}
+              >
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest group-hover:text-slate-400 flex-1 text-left">
                   {item.label}
                 </p>
-              </div>
+                {isCollapsed
+                  ? <ChevronRight size={10} className="text-slate-600 group-hover:text-slate-400" />
+                  : <ChevronDown  size={10} className="text-slate-600 group-hover:text-slate-400" />
+                }
+              </button>
             )
           }
 
-          // ── Group (collapsible children) ───────────────────────────────────
+          // Hide items when their section is collapsed
+          if (collapsedSections.has(currentSection)) return null
+
+          // ── Group (always-open sub-list with label) ────────────────────────
           if (item.type === 'group') {
             const Icon = item.icon
             const anyActive = item.children.some(c => isActive(c.href))
@@ -303,7 +359,7 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Footer: usuário + logout — fixado no fundo */}
+      {/* Footer */}
       {user && (
         <div className="flex-shrink-0 px-3 py-2 border-t border-white/5 bg-black/20">
           <div className="flex items-center gap-2">
