@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
 import { YearFilter } from '@/components/YearFilter'
+import { FilterSidebar } from '@/components/FilterSidebar'
 import type { ContextMenuState } from '@/components/DreDetalhamentoModal'
 import type { TreeNode } from '@/lib/dre-utils'
 
@@ -379,12 +380,13 @@ export default function UnidadesNegocioPage() {
         />
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Por Unidade de Negócio</h1>
           <p className="text-gray-500 text-sm mt-0.5">Budget vs Realizado · Expansível por DRE → Agrupamento → Conta · Clique direito para detalhamento</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-3 flex-wrap">
+          <YearFilter periodos={periodos} selYear={selYear} onChange={handleYearChange} />
           <Button variant="outline" size="sm" onClick={() => load(selUnidades, selPeriods)}>
             <RefreshCw size={13} /> Atualizar
           </Button>
@@ -398,19 +400,15 @@ export default function UnidadesNegocioPage() {
         {/* ── Sidebar ──────────────────────────────────────────────────────── */}
         <div className="w-52 flex-shrink-0 space-y-3">
 
-          <Card>
-            <CardContent className="p-3 space-y-2">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Ano</p>
-              <YearFilter periodos={periodos} selYear={selYear} onChange={handleYearChange} />
-            </CardContent>
-          </Card>
-
-          {unidades.length > 0 && (
-            <Card>
-              <CardContent className="p-3 space-y-2">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
-                  <Filter size={11} /> Unidades
-                </p>
+          <FilterSidebar
+            periodos={periodos}
+            selPeriods={selPeriods}
+            onPeriodsChange={setSelPeriods}
+            selDepts={[]}
+            onDeptsChange={() => {}}
+            extraBefore={unidades.length > 0 ? (
+              <div>
+                <p className="text-xs font-medium text-gray-600 mb-1">Unidades</p>
                 <div className="space-y-0.5 max-h-48 overflow-y-auto">
                   {unidades.map(u => (
                     <label key={u} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
@@ -423,37 +421,13 @@ export default function UnidadesNegocioPage() {
                 </div>
                 {selUnidades.length > 0 && (
                   <button onClick={() => setSelUnidades([])}
-                    className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 px-1">
+                    className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 px-1 mt-0.5">
                     <X size={10} /> Limpar
                   </button>
                 )}
-              </CardContent>
-            </Card>
-          )}
-
-          {filteredPeriods.length > 0 && (
-            <Card>
-              <CardContent className="p-3 space-y-2">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Períodos</p>
-                <div className="space-y-0.5 max-h-48 overflow-y-auto">
-                  {filteredPeriods.map(p => (
-                    <label key={p} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
-                      <input type="checkbox" checked={selPeriods.includes(p)}
-                        onChange={e => setSelPeriods(prev => e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}
-                        className="w-3 h-3 accent-indigo-600" />
-                      <span className="text-xs text-gray-600">{formatPeriodo(p)}</span>
-                    </label>
-                  ))}
-                </div>
-                {selPeriods.length > 0 && (
-                  <button onClick={() => setSelPeriods([])}
-                    className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 px-1">
-                    <X size={10} /> Limpar
-                  </button>
-                )}
-              </CardContent>
-            </Card>
-          )}
+              </div>
+            ) : undefined}
+          />
 
           <Card>
             <CardContent className="p-3 space-y-2">
