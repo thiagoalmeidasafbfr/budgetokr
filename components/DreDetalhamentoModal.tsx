@@ -3,6 +3,7 @@ import React, {
   useState, useEffect, useRef, useMemo, useCallback, useDeferredValue
 } from 'react'
 import { X, Download, ArrowUpDown, Columns3, Filter, ChevronDown, MessageSquare } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { formatCurrency, formatPeriodo, cn } from '@/lib/utils'
 import type { TreeNode } from '@/lib/dre-utils'
 
@@ -61,19 +62,26 @@ function colValue(r: DetalhamentoLinha, key: DetColKey): string | number {
 
 function exportDetalhamento(rows: DetalhamentoLinha[], title: string) {
   const header = ['Data', 'Tipo', 'Nº Transação', 'Centro de Custo', 'Unidade de Negócio', 'DRE', 'Agrupamento', 'Conta Contábil', 'Valor', 'Conta Contrapartida', 'Observação']
-  const csvRows = rows.map(r => [
-    r.data_lancamento, r.tipo, r.numero_transacao || r.num_transacao || '',
+  const data = rows.map(r => [
+    r.data_lancamento,
+    r.tipo,
+    r.numero_transacao || r.num_transacao || '',
     `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}`,
     r.unidade ?? '',
-    r.dre, r.agrupamento_arvore,
+    r.dre,
+    r.agrupamento_arvore,
     `${r.numero_conta_contabil} — ${r.nome_conta_contabil}`,
-    r.debito_credito, r.nome_conta_contrapartida, r.observacao,
+    r.debito_credito,
+    r.nome_conta_contrapartida,
+    r.observacao,
   ])
-  const csv = [header, ...csvRows].map(row => row.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')).join('\n')
-  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url; a.download = `dre-lancamentos-${Date.now()}.csv`; a.click()
+  const ws = XLSX.utils.aoa_to_sheet([header, ...data])
+  ws['!cols'] = header.map((h, i) => ({
+    wch: Math.max(h.length, ...data.map(row => String(row[i] ?? '').length), 10)
+  }))
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Lançamentos')
+  XLSX.writeFile(wb, `dre-lancamentos-${Date.now()}.xlsx`)
 }
 
 // ── Generic multi-select filter dropdown ─────────────────────────────────────
@@ -412,7 +420,7 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
             {!loading && rows.length > 0 && (
               <button onClick={() => exportDetalhamento(displayed, title)}
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-indigo-50 hover:text-indigo-700 text-gray-600 transition-colors font-medium">
-                <Download size={13} /> Exportar CSV
+                <Download size={13} /> Exportar XLSX
               </button>
             )}
             <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600">
