@@ -271,8 +271,8 @@ export function Sidebar() {
                         className={cn(
                           'flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-lg text-sm transition-colors',
                           active
-                            ? 'bg-white/10 text-slate-100 font-medium'
-                            : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                            ? 'bg-white/10 text-white font-medium'
+                            : 'text-slate-200 hover:bg-white/5 hover:text-white'
                         )}>
                         {CIcon && <CIcon size={12} className={active ? 'text-indigo-400' : (iconColors.get(CIcon) ?? 'text-slate-500')} />}
                         <span className="text-xs">{child.label}</span>
@@ -303,11 +303,11 @@ export function Sidebar() {
                 <Icon size={14} className={active ? 'text-indigo-400' : (iconColors.get(Icon) ?? 'text-slate-500')} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className={cn('text-sm font-medium leading-tight', active ? 'text-slate-100' : 'text-slate-300')}>
+                <p className={cn('text-sm font-medium leading-tight', active ? 'text-white' : 'text-slate-100')}>
                   {item.label}
                 </p>
                 {item.sublabel && (
-                  <p className={cn('text-[11px] leading-tight mt-0.5 truncate', active ? 'text-slate-400' : 'text-slate-600')}>
+                  <p className={cn('text-[11px] leading-tight mt-0.5 truncate', active ? 'text-slate-300' : 'text-slate-400')}>
                     {item.sublabel}
                   </p>
                 )}
