@@ -42,13 +42,13 @@ const nav: NavItem[] = [
   {
     type: 'link', href: '/analise',
     icon: GitCompare,
-    label: 'Análise',
-    sublabel: 'Budget vs Realizado',
+    label: 'Análise Macro',
+    sublabel: 'Visão Geral por Centro de Custo',
   },
   {
     type: 'link', href: '/dept',
     icon: Layers,
-    label: 'Por Departamento',
+    label: 'Dashboard do Departamento',
     sublabel: 'KPIs e DRE por área',
   },
   {
@@ -61,7 +61,7 @@ const nav: NavItem[] = [
     type: 'link', href: '/unidades-negocio',
     icon: Briefcase,
     label: 'Unidades de Negócio',
-    sublabel: 'Budget vs Realizado · ID CC-CC',
+    sublabel: 'Visão Real vs Orçado por unidade de negócio',
     masterOnly: true,
   },
   {

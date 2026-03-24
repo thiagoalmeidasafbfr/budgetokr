@@ -514,6 +514,8 @@ BEGIN
   IF array_length(p_departamentos, 1) > 0 THEN v_cond := array_append(v_cond, format('cc.nome_departamento = ANY(%s)', quote_literal(p_departamentos::TEXT))); END IF;
 
   v_sql := 'SELECT ca.numero_conta_contabil, ca.nome_conta_contabil, ca.nivel,
+      COALESCE(ca.agrupamento_arvore, '''') AS agrupamento_arvore,
+      COALESCE(ca.dre, '''') AS dre,
       SUM(CASE WHEN l.tipo=''budget'' THEN l.debito_credito ELSE 0 END) AS budget,
       SUM(CASE WHEN l.tipo=''razao''  THEN l.debito_credito ELSE 0 END) AS razao
     FROM contas_contabeis ca
@@ -521,7 +523,7 @@ BEGIN
     CASE WHEN array_length(v_cond, 1) > 0 THEN
       ' LEFT JOIN centros_custo cc ON l.centro_custo = cc.centro_custo WHERE ' || array_to_string(v_cond, ' AND ')
     ELSE '' END ||
-    ' GROUP BY ca.numero_conta_contabil, ca.nome_conta_contabil, ca.nivel
+    ' GROUP BY ca.numero_conta_contabil, ca.nome_conta_contabil, ca.nivel, ca.agrupamento_arvore, ca.dre
       ORDER BY ca.numero_conta_contabil';
 
   EXECUTE 'SELECT jsonb_agg(row_to_json(t)) FROM (' || v_sql || ') t' INTO v_result;
