@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { BarChart3, Table2, Download, Target, ChevronDown, Printer } from 'lucide-react'
+import { BarChart3, Table2, Download, Target, ChevronDown, Printer, Filter, X } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
