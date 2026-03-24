@@ -166,6 +166,8 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
   const [scrollTop,     setScrollTop]     = useState(0)
   const [containerH,    setContainerH]    = useState(600)
 
+  const [fetchError,     setFetchError]     = useState<string | null>(null)
+
   const [commentingRow,  setCommentingRow]  = useState<DetalhamentoLinha | null>(null)
   const [commentText,    setCommentText]    = useState('')
   const [commentSaving,  setCommentSaving]  = useState(false)
@@ -194,7 +196,7 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
   }, [loading])
 
   useEffect(() => {
-    setRows([]); setLoading(true)
+    setRows([]); setLoading(true); setFetchError(null)
     const p = new URLSearchParams()
     if (ctx.node.dre)         p.set('dre',           ctx.node.dre)
     if (ctx.node.agrupamento) p.set('agrupamento',   ctx.node.agrupamento)
@@ -206,14 +208,19 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
     if (ctx.centros?.length)       p.set('centros',       ctx.centros.join(','))
     if (ctx.unidades?.length)      p.set('unidades',      ctx.unidades.join(','))
     fetch(`/api/dre/detalhamento?${p}`)
-      .then(r => r.json())
-      .then(data => {
+      .then(async res => {
+        const data = await res.json()
+        if (!res.ok || data.error) {
+          setFetchError(data.error ?? `HTTP ${res.status}`)
+          setRows([]); setLoading(false)
+          return
+        }
         const r = data.rows ?? data
         setRows(Array.isArray(r) ? r : [])
         setTruncated(data.truncated ?? false)
         setLoading(false)
       })
-      .catch(() => { setRows([]); setLoading(false) })
+      .catch(err => { setFetchError(String(err)); setRows([]); setLoading(false) })
   }, [ctx])
 
   // Pre-compute search strings (once per fetch)
@@ -506,7 +513,14 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
           </div>
         )}
 
-        {loading ? (
+        {fetchError ? (
+          <div className="flex-1 flex items-center justify-center p-8">
+            <div className="text-center">
+              <p className="text-sm font-medium text-red-600 mb-1">Erro ao carregar lançamentos</p>
+              <p className="text-xs text-gray-500 font-mono">{fetchError}</p>
+            </div>
+          </div>
+        ) : loading ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
           </div>
