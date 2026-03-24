@@ -1,7 +1,7 @@
 'use client'
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronRight, ChevronDown, Download, Upload, RefreshCw, ChevronsUpDown, Pencil } from 'lucide-react'
+import { ChevronRight, ChevronDown, X, Download, Upload, RefreshCw, ChevronsUpDown, Pencil } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { FilterSidebar } from '@/components/FilterSidebar'
 import { YearFilter } from '@/components/YearFilter'
