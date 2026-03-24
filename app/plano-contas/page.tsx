@@ -494,18 +494,18 @@ export default function PlanoContasPage() {
                             </td>
 
                             {/* Budget */}
-                            <td className={cn('px-4 py-2 text-right tabular-nums', isBold && 'font-semibold')}>
+                            <td className={cn('px-4 py-2 text-right tabular-nums whitespace-nowrap', isBold && 'font-semibold')}>
                               {row.budget !== 0 ? formatCurrency(row.budget) : <span className="text-gray-300">—</span>}
                             </td>
 
                             {/* Razão */}
-                            <td className={cn('px-4 py-2 text-right tabular-nums', isBold && 'font-semibold')}>
+                            <td className={cn('px-4 py-2 text-right tabular-nums whitespace-nowrap', isBold && 'font-semibold')}>
                               {row.razao !== 0 ? formatCurrency(row.razao) : <span className="text-gray-300">—</span>}
                             </td>
 
                             {/* Variação */}
                             <td className={cn(
-                              'px-4 py-2 text-right tabular-nums',
+                              'px-4 py-2 text-right tabular-nums whitespace-nowrap',
                               isBold && 'font-semibold',
                               row.variacao !== 0 && (row.nivel === 1
                                 ? (row.variacao >= 0 ? 'text-emerald-300' : 'text-red-300')
@@ -534,9 +534,9 @@ export default function PlanoContasPage() {
                     <tfoot>
                       <tr className="bg-gray-800 text-white font-bold text-sm">
                         <td className="px-4 py-3">Total Geral</td>
-                        <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(totals.budget)}</td>
-                        <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(totals.razao)}</td>
-                        <td className={cn('px-4 py-3 text-right tabular-nums', totalVariacao >= 0 ? 'text-emerald-300' : 'text-red-300')}>
+                        <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap">{formatCurrency(totals.budget)}</td>
+                        <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap">{formatCurrency(totals.razao)}</td>
+                        <td className={cn('px-4 py-3 text-right tabular-nums whitespace-nowrap', totalVariacao >= 0 ? 'text-emerald-300' : 'text-red-300')}>
                           {formatCurrency(totalVariacao)}
                         </td>
                         <td className="px-4 py-3 text-right">
