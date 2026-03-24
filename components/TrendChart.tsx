@@ -20,6 +20,7 @@ export default function TrendChart({ title, conta, agrupamento, dre, departament
   const [series, setSeries]   = useState<TrendPoint[]>([])
   const [fcBudget, setFcBudget] = useState<ForecastPoint[]>([])
   const [fcRazao, setFcRazao]   = useState<ForecastPoint[]>([])
+  const [lastClosed, setLastClosed] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [showForecast, setShowForecast] = useState(true)
   const [forecastMonths, setForecastMonths] = useState(6)
@@ -36,6 +37,7 @@ export default function TrendChart({ title, conta, agrupamento, dre, departament
       .then(r => r.json())
       .then(data => {
         setSeries(data.series ?? [])
+        setLastClosed(data.lastClosed ?? '')
         setFcBudget(data.forecast?.budget ?? [])
         setFcRazao(data.forecast?.razao ?? [])
         setLoading(false)
@@ -49,29 +51,39 @@ export default function TrendChart({ title, conta, agrupamento, dre, departament
       periodo: formatPeriodo(s.periodo),
       raw: s.periodo,
       budget: s.budget,
-      razao: s.razao,
+      // Hide razao for periods beyond the last closed month (incomplete data)
+      razao: lastClosed && s.periodo > lastClosed ? undefined : s.razao,
     }))
 
     if (showForecast && fcRazao.length > 0) {
-      // Bridge: last actual → first forecast
-      if (combined.length > 0) {
-        const last = combined[combined.length - 1]
-        last.budgetFc = last.budget
-        last.razaoFc = last.razao
+      // Bridge: anchor at the last closed month, not the last series point
+      const bridgePoint = lastClosed
+        ? combined.find(p => p.raw === lastClosed)
+        : combined[combined.length - 1]
+
+      if (bridgePoint) {
+        bridgePoint.budgetFc = bridgePoint.budget
+        bridgePoint.razaoFc = bridgePoint.razao
       }
 
       for (let i = 0; i < fcRazao.length; i++) {
-        combined.push({
-          periodo: formatPeriodo(fcRazao[i].periodo),
-          raw: fcRazao[i].periodo,
-          // budget/razao intentionally omitted → undefined → gap in actual lines
-          budgetFc: fcBudget[i]?.value ?? undefined,
-          razaoFc: fcRazao[i]?.value ?? undefined,
-        })
+        // Only add forecast point if not already present in series
+        if (!combined.find(p => p.raw === fcRazao[i].periodo)) {
+          combined.push({
+            periodo: formatPeriodo(fcRazao[i].periodo),
+            raw: fcRazao[i].periodo,
+            budgetFc: fcBudget[i]?.value ?? undefined,
+            razaoFc: fcRazao[i]?.value ?? undefined,
+          })
+        } else {
+          const existing = combined.find(p => p.raw === fcRazao[i].periodo)!
+          existing.budgetFc = fcBudget[i]?.value ?? undefined
+          existing.razaoFc = fcRazao[i]?.value ?? undefined
+        }
       }
     }
     return combined
-  }, [series, fcBudget, fcRazao, showForecast])
+  }, [series, fcBudget, fcRazao, showForecast, lastClosed])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
