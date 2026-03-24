@@ -145,11 +145,12 @@ const ROW_H   = 28
 const OVERSCAN = 8
 
 // ── Main modal ────────────────────────────────────────────────────────────────
-export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId, onCommentSaved }: {
+export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId, onCommentSaved, endpoint }: {
   ctx: ContextMenuState
   onClose: () => void
   highlightLancamentoId?: number
   onCommentSaved?: () => void
+  endpoint?: string
 }) {
   const [rows,          setRows]          = useState<DetalhamentoLinha[]>([])
   const [truncated,     setTruncated]     = useState(false)
@@ -207,7 +208,7 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
     if (ctx.periodos?.length && !ctx.periodo) p.set('periodos', ctx.periodos.join(','))
     if (ctx.centros?.length)       p.set('centros',       ctx.centros.join(','))
     if (ctx.unidades?.length)      p.set('unidades',      ctx.unidades.join(','))
-    fetch(`/api/dre/detalhamento?${p}`)
+    fetch(`${endpoint ?? '/api/dre/detalhamento'}?${p}`)
       .then(async res => {
         const data = await res.json()
         if (!res.ok || data.error) {

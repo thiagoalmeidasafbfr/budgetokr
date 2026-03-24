@@ -107,6 +107,7 @@ export async function GET(req: NextRequest) {
         .select('id,tipo,data_lancamento,numero_transacao,numero_conta_contabil,nome_conta_contabil,centro_custo,debito_credito,observacao,fonte,num_transacao,id_cc_cc,nome_conta_contrapartida')
         .order('data_lancamento', { ascending: true })
         .order('numero_conta_contabil', { ascending: true })
+        .order('id', { ascending: true })
         .range(page * PAGE, page * PAGE + PAGE - 1)
 
       if (tipo !== 'ambos')         q = q.eq('tipo', tipo)
