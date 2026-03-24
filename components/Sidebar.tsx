@@ -84,7 +84,6 @@ const nav: NavItem[] = [
     icon: Briefcase,
     label: 'Unidades de Negócio',
     sublabel: 'Visão Real vs Orçado por unidade de negócio',
-    masterOnly: true,
   },
   {
     type: 'link', href: '/plano-contas',

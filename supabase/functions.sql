@@ -169,8 +169,8 @@ DECLARE
 BEGIN
   -- Filtros dept e período via parâmetros posicionais ($1, $2) — evita
   -- problemas de charset com quote_literal em EXECUTE dinâmico.
-  v_cond := array_append(v_cond, '(cardinality($1) = 0 OR cc.nome_departamento = ANY($1))');
-  v_cond := array_append(v_cond, '(cardinality($2) = 0 OR to_char(l.data_lancamento, ''YYYY-MM'') = ANY($2))');
+  v_cond := array_append(v_cond, '(array_length($1, 1) IS NULL OR cc.nome_departamento = ANY($1))');
+  v_cond := array_append(v_cond, '(array_length($2, 1) IS NULL OR to_char(l.data_lancamento, ''YYYY-MM'') = ANY($2))');
 
   -- Filtros customizados (p_filters) ainda usam _build_where com literais
   v_extra := _build_where(p_filters, 'AND');
@@ -243,9 +243,9 @@ CREATE OR REPLACE FUNCTION get_dre(
     FROM lancamentos l
     LEFT JOIN centros_custo    cc ON l.centro_custo          = cc.centro_custo
     LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil
-    WHERE (cardinality(p_periodos)      = 0 OR to_char(l.data_lancamento, 'YYYY-MM') = ANY(p_periodos))
-      AND (cardinality(p_departamentos) = 0 OR cc.nome_departamento                  = ANY(p_departamentos))
-      AND (cardinality(p_centros)       = 0 OR l.centro_custo                        = ANY(p_centros))
+    WHERE (array_length(p_periodos,      1) IS NULL OR to_char(l.data_lancamento, 'YYYY-MM') = ANY(p_periodos))
+      AND (array_length(p_departamentos, 1) IS NULL OR cc.nome_departamento                  = ANY(p_departamentos))
+      AND (array_length(p_centros,       1) IS NULL OR l.centro_custo                        = ANY(p_centros))
     GROUP BY ca.dre, ca.agrupamento_arvore, to_char(l.data_lancamento, 'YYYY-MM')
     ORDER BY COALESCE(MIN(ca.ordem_dre), 999), ca.dre, ca.agrupamento_arvore, to_char(l.data_lancamento, 'YYYY-MM')
   ) t;
@@ -270,9 +270,9 @@ CREATE OR REPLACE FUNCTION get_dre_by_account(
     FROM lancamentos l
     LEFT JOIN centros_custo    cc ON l.centro_custo          = cc.centro_custo
     LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil
-    WHERE (cardinality(p_periodos)      = 0 OR to_char(l.data_lancamento, 'YYYY-MM') = ANY(p_periodos))
-      AND (cardinality(p_departamentos) = 0 OR cc.nome_departamento                  = ANY(p_departamentos))
-      AND (cardinality(p_centros)       = 0 OR l.centro_custo                        = ANY(p_centros))
+    WHERE (array_length(p_periodos,      1) IS NULL OR to_char(l.data_lancamento, 'YYYY-MM') = ANY(p_periodos))
+      AND (array_length(p_departamentos, 1) IS NULL OR cc.nome_departamento                  = ANY(p_departamentos))
+      AND (array_length(p_centros,       1) IS NULL OR l.centro_custo                        = ANY(p_centros))
     GROUP BY ca.dre, ca.agrupamento_arvore, l.numero_conta_contabil, to_char(l.data_lancamento, 'YYYY-MM')
     ORDER BY ca.dre, ca.agrupamento_arvore, l.numero_conta_contabil, to_char(l.data_lancamento, 'YYYY-MM')
   ) t;
@@ -646,9 +646,9 @@ CREATE OR REPLACE FUNCTION get_unidades_negocio_analise(
   FROM lancamentos l
   JOIN  unidades_negocio  u  ON l.id_cc_cc    = u.id_cc_cc
   LEFT JOIN centros_custo cc ON l.centro_custo = cc.centro_custo
-  WHERE (cardinality(p_periodos)      = 0 OR TO_CHAR(l.data_lancamento, 'YYYY-MM') = ANY(p_periodos))
-    AND (cardinality(p_unidades)      = 0 OR u.unidade = ANY(p_unidades))
-    AND (cardinality(p_departamentos) = 0 OR cc.nome_departamento = ANY(p_departamentos))
+  WHERE (array_length(p_periodos,      1) IS NULL OR TO_CHAR(l.data_lancamento, 'YYYY-MM') = ANY(p_periodos))
+    AND (array_length(p_unidades,      1) IS NULL OR u.unidade = ANY(p_unidades))
+    AND (array_length(p_departamentos, 1) IS NULL OR cc.nome_departamento = ANY(p_departamentos))
   GROUP BY u.unidade, TO_CHAR(l.data_lancamento, 'YYYY-MM')
   ORDER BY u.unidade, TO_CHAR(l.data_lancamento, 'YYYY-MM');
 $$;
@@ -668,9 +668,9 @@ DECLARE
   v_result JSONB;
 BEGIN
   -- Usa $1/$2/$3 como parâmetros posicionais no EXECUTE (evita quote_literal com acentos)
-  v_cond := array_append(v_cond, '(cardinality($1) = 0 OR TO_CHAR(l.data_lancamento, ''YYYY-MM'') = ANY($1))');
-  v_cond := array_append(v_cond, '(cardinality($2) = 0 OR COALESCE(u.unidade, ''Sem Unidade'') = ANY($2))');
-  v_cond := array_append(v_cond, '(cardinality($3) = 0 OR cc.nome_departamento = ANY($3))');
+  v_cond := array_append(v_cond, '(array_length($1, 1) IS NULL OR TO_CHAR(l.data_lancamento, ''YYYY-MM'') = ANY($1))');
+  v_cond := array_append(v_cond, '(array_length($2, 1) IS NULL OR COALESCE(u.unidade, ''Sem Unidade'') = ANY($2))');
+  v_cond := array_append(v_cond, '(array_length($3, 1) IS NULL OR cc.nome_departamento = ANY($3))');
 
   v_sql :=
     'SELECT
@@ -739,11 +739,11 @@ DECLARE
   v_result JSONB;
 BEGIN
   -- Filtros via $1/$2/$3 (parâmetros posicionais no EXECUTE USING — evita quote_literal com acentos)
-  v_cond := array_append(v_cond, '(cardinality($1) = 0 OR COALESCE(u.unidade, ''Sem Unidade'') = ANY($1))');
-  v_cond := array_append(v_cond, '(cardinality($2) = 0 OR TO_CHAR(l.data_lancamento, ''YYYY-MM'') = ANY($2))');
-  v_cond := array_append(v_cond, '(cardinality($3) = 0 OR cc.nome_departamento = ANY($3))');
+  v_cond := array_append(v_cond, '(array_length($1, 1) IS NULL OR COALESCE(u.unidade, ''Sem Unidade'') = ANY($1))');
+  v_cond := array_append(v_cond, '(array_length($2, 1) IS NULL OR TO_CHAR(l.data_lancamento, ''YYYY-MM'') = ANY($2))');
+  v_cond := array_append(v_cond, '(array_length($3, 1) IS NULL OR cc.nome_departamento = ANY($3))');
   -- Sem filtro de unidade nem dept: restringir a lançamentos com id_cc_cc preenchido
-  IF cardinality(p_unidades) = 0 AND cardinality(p_departamentos) = 0 THEN
+  IF array_length(p_unidades, 1) IS NULL AND array_length(p_departamentos, 1) IS NULL THEN
     v_cond := array_append(v_cond, 'l.id_cc_cc IS NOT NULL');
   END IF;
 
