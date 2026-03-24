@@ -35,7 +35,15 @@ export async function GET(req: NextRequest) {
       .map(([periodo, vals]) => ({ periodo, ...vals }))
       .sort((a, b) => a.periodo.localeCompare(b.periodo))
 
-    const razaoData: TimePoint[]  = series.map(s => ({ period: s.periodo, value: s.razao }))
+    // For razão: only use data up to the last closed month (month - 1) so the
+    // trend line doesn't start from an incomplete current-month figure.
+    const now = new Date()
+    const prevM = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const lastClosed = `${prevM.getFullYear()}-${String(prevM.getMonth() + 1).padStart(2, '0')}`
+
+    const razaoData: TimePoint[]  = series
+      .filter(s => s.periodo <= lastClosed)
+      .map(s => ({ period: s.periodo, value: s.razao }))
     const budgetData: TimePoint[] = series.map(s => ({ period: s.periodo, value: s.budget }))
 
     const razaoForecast  = razaoData.length >= 12  ? seasonalForecast(razaoData,  fMonths) : forecast(razaoData,  fMonths)

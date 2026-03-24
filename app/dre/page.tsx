@@ -188,7 +188,8 @@ export default function DREPage() {
       if (urlView) setViewMode(urlView)
 
       const now = new Date()
-      const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+      const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      const curMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
 
       // Determine initial depts (sessionStorage > URL > dept-user forced)
       const dlDepts = dl.depts?.length ? dl.depts : []
@@ -357,7 +358,8 @@ export default function DREPage() {
     setSelYear(year)
     if (!year) { setSelPeriods([]); return }
     const now = new Date()
-    const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const curMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
     const ytd = periodos.filter(p => p.startsWith(year) && p <= curMonth)
     const newPeriods = ytd.length > 0 ? ytd : periodos.filter(p => p.startsWith(year))
     setSelPeriods(newPeriods)
