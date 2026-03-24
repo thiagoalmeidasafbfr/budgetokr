@@ -151,6 +151,8 @@ END;
 $$;
 
 -- ─── get_analise: análise comparativa por departamento/período ───────────────
+-- Usa SQL parametrizado ($1, $2) para filtros de dept/período para evitar
+-- problemas de codificação com nomes acentuados em EXECUTE com quote_literal.
 CREATE OR REPLACE FUNCTION get_analise(
   p_filters       JSONB    DEFAULT '[]',
   p_departamentos TEXT[]   DEFAULT '{}',
@@ -158,24 +160,21 @@ CREATE OR REPLACE FUNCTION get_analise(
   p_group_by_cc   BOOLEAN  DEFAULT FALSE
 ) RETURNS JSONB LANGUAGE plpgsql AS $$
 DECLARE
-  v_where    TEXT;
+  v_extra    TEXT;
   v_cond     TEXT[] := '{}';
   v_select   TEXT;
   v_group    TEXT;
   v_sql      TEXT;
   v_result   JSONB;
 BEGIN
-  v_where := _build_where(p_filters, 'AND');
-  IF v_where != '' THEN v_cond := array_append(v_cond, v_where); END IF;
+  -- Filtros dept e período via parâmetros posicionais ($1, $2) — evita
+  -- problemas de charset com quote_literal em EXECUTE dinâmico.
+  v_cond := array_append(v_cond, '(cardinality($1) = 0 OR cc.nome_departamento = ANY($1))');
+  v_cond := array_append(v_cond, '(cardinality($2) = 0 OR to_char(l.data_lancamento, ''YYYY-MM'') = ANY($2))');
 
-  IF array_length(p_departamentos, 1) > 0 THEN
-    v_cond := array_append(v_cond,
-      format('cc.nome_departamento = ANY(%s)', quote_literal(p_departamentos::TEXT)));
-  END IF;
-  IF array_length(p_periodos, 1) > 0 THEN
-    v_cond := array_append(v_cond,
-      format('to_char(l.data_lancamento, ''YYYY-MM'') = ANY(%s)', quote_literal(p_periodos::TEXT)));
-  END IF;
+  -- Filtros customizados (p_filters) ainda usam _build_where com literais
+  v_extra := _build_where(p_filters, 'AND');
+  IF v_extra != '' THEN v_cond := array_append(v_cond, v_extra); END IF;
 
   IF p_group_by_cc THEN
     v_select := 'cc.departamento, cc.nome_departamento, l.centro_custo, cc.nome_centro_custo,
@@ -194,12 +193,14 @@ BEGIN
   v_sql := 'SELECT ' || v_select ||
     ' FROM lancamentos l
       LEFT JOIN centros_custo    cc ON l.centro_custo          = cc.centro_custo
-      LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil' ||
-    CASE WHEN array_length(v_cond, 1) > 0 THEN ' WHERE ' || array_to_string(v_cond, ' AND ') ELSE '' END ||
+      LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil
+      WHERE ' || array_to_string(v_cond, ' AND ') ||
     ' GROUP BY ' || v_group ||
     ' ORDER BY ' || v_group;
 
-  EXECUTE 'SELECT jsonb_agg(row_to_json(t)) FROM (' || v_sql || ') t' INTO v_result;
+  EXECUTE 'SELECT jsonb_agg(row_to_json(t)) FROM (' || v_sql || ') t'
+    USING p_departamentos, p_periodos
+    INTO v_result;
   RETURN COALESCE(v_result, '[]'::JSONB);
 END;
 $$;
@@ -224,72 +225,57 @@ RETURNS JSONB LANGUAGE sql AS $$
 $$;
 
 -- ─── get_dre: DRE agrupada por agrupamento_arvore e período ──────────────────
+-- Reescrito como LANGUAGE sql com SQL estático para evitar bugs de codificação
+-- com nomes acentuados (ex: "Jurídico") em EXECUTE dinâmico com quote_literal.
 CREATE OR REPLACE FUNCTION get_dre(
   p_periodos      TEXT[]  DEFAULT '{}',
   p_departamentos TEXT[]  DEFAULT '{}',
   p_centros       TEXT[]  DEFAULT '{}'
-) RETURNS JSONB LANGUAGE plpgsql AS $$
-DECLARE
-  v_cond   TEXT[] := '{}';
-  v_sql    TEXT;
-  v_result JSONB;
-BEGIN
-  IF array_length(p_periodos, 1)      > 0 THEN v_cond := array_append(v_cond, format('to_char(l.data_lancamento, ''YYYY-MM'') = ANY(%s)', quote_literal(p_periodos::TEXT))); END IF;
-  IF array_length(p_departamentos, 1) > 0 THEN v_cond := array_append(v_cond, format('cc.nome_departamento = ANY(%s)', quote_literal(p_departamentos::TEXT))); END IF;
-  IF array_length(p_centros, 1)       > 0 THEN v_cond := array_append(v_cond, format('l.centro_custo = ANY(%s)', quote_literal(p_centros::TEXT))); END IF;
-
-  v_sql := 'SELECT
-      COALESCE(ca.dre, ''Sem classificação'') AS dre,
-      COALESCE(ca.agrupamento_arvore, '''') AS agrupamento_arvore,
-      COALESCE(MIN(ca.ordem_dre), 999) AS ordem_dre,
-      to_char(l.data_lancamento, ''YYYY-MM'') AS periodo,
-      SUM(CASE WHEN l.tipo=''budget'' THEN l.debito_credito ELSE 0 END) AS budget,
-      SUM(CASE WHEN l.tipo=''razao''  THEN l.debito_credito ELSE 0 END) AS razao
+) RETURNS JSONB LANGUAGE sql AS $$
+  SELECT jsonb_agg(row_to_json(t)) FROM (
+    SELECT
+      COALESCE(ca.dre, 'Sem classificação')  AS dre,
+      COALESCE(ca.agrupamento_arvore, '')    AS agrupamento_arvore,
+      COALESCE(MIN(ca.ordem_dre), 999)       AS ordem_dre,
+      to_char(l.data_lancamento, 'YYYY-MM')  AS periodo,
+      SUM(CASE WHEN l.tipo='budget' THEN l.debito_credito ELSE 0 END) AS budget,
+      SUM(CASE WHEN l.tipo='razao'  THEN l.debito_credito ELSE 0 END) AS razao
     FROM lancamentos l
     LEFT JOIN centros_custo    cc ON l.centro_custo          = cc.centro_custo
-    LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil' ||
-    CASE WHEN array_length(v_cond, 1) > 0 THEN ' WHERE ' || array_to_string(v_cond, ' AND ') ELSE '' END ||
-    ' GROUP BY ca.dre, ca.agrupamento_arvore, to_char(l.data_lancamento, ''YYYY-MM'')
-      ORDER BY COALESCE(MIN(ca.ordem_dre), 999), ca.dre, ca.agrupamento_arvore, to_char(l.data_lancamento, ''YYYY-MM'')';
-
-  EXECUTE 'SELECT jsonb_agg(row_to_json(t)) FROM (' || v_sql || ') t' INTO v_result;
-  RETURN COALESCE(v_result, '[]'::JSONB);
-END;
+    LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil
+    WHERE (cardinality(p_periodos)      = 0 OR to_char(l.data_lancamento, 'YYYY-MM') = ANY(p_periodos))
+      AND (cardinality(p_departamentos) = 0 OR cc.nome_departamento                  = ANY(p_departamentos))
+      AND (cardinality(p_centros)       = 0 OR l.centro_custo                        = ANY(p_centros))
+    GROUP BY ca.dre, ca.agrupamento_arvore, to_char(l.data_lancamento, 'YYYY-MM')
+    ORDER BY COALESCE(MIN(ca.ordem_dre), 999), ca.dre, ca.agrupamento_arvore, to_char(l.data_lancamento, 'YYYY-MM')
+  ) t;
 $$;
 
 -- ─── get_dre_by_account: DRE por conta contábil ──────────────────────────────
+-- Reescrito como LANGUAGE sql com SQL estático (mesma razão que get_dre).
 CREATE OR REPLACE FUNCTION get_dre_by_account(
   p_periodos      TEXT[]  DEFAULT '{}',
   p_departamentos TEXT[]  DEFAULT '{}',
   p_centros       TEXT[]  DEFAULT '{}'
-) RETURNS JSONB LANGUAGE plpgsql AS $$
-DECLARE
-  v_cond   TEXT[] := '{}';
-  v_sql    TEXT;
-  v_result JSONB;
-BEGIN
-  IF array_length(p_periodos, 1)      > 0 THEN v_cond := array_append(v_cond, format('to_char(l.data_lancamento, ''YYYY-MM'') = ANY(%s)', quote_literal(p_periodos::TEXT))); END IF;
-  IF array_length(p_departamentos, 1) > 0 THEN v_cond := array_append(v_cond, format('cc.nome_departamento = ANY(%s)', quote_literal(p_departamentos::TEXT))); END IF;
-  IF array_length(p_centros, 1)       > 0 THEN v_cond := array_append(v_cond, format('l.centro_custo = ANY(%s)', quote_literal(p_centros::TEXT))); END IF;
-
-  v_sql := 'SELECT
-      COALESCE(ca.dre, ''Sem classificação'') AS dre,
-      COALESCE(ca.agrupamento_arvore, '''') AS agrupamento_arvore,
+) RETURNS JSONB LANGUAGE sql AS $$
+  SELECT jsonb_agg(row_to_json(t)) FROM (
+    SELECT
+      COALESCE(ca.dre, 'Sem classificação')  AS dre,
+      COALESCE(ca.agrupamento_arvore, '')    AS agrupamento_arvore,
       l.numero_conta_contabil,
-      MAX(COALESCE(ca.nome_conta_contabil, l.nome_conta_contabil, '''')) AS nome_conta_contabil,
-      to_char(l.data_lancamento, ''YYYY-MM'') AS periodo,
-      SUM(CASE WHEN l.tipo=''budget'' THEN l.debito_credito ELSE 0 END) AS budget,
-      SUM(CASE WHEN l.tipo=''razao''  THEN l.debito_credito ELSE 0 END) AS razao
+      MAX(COALESCE(ca.nome_conta_contabil, l.nome_conta_contabil, '')) AS nome_conta_contabil,
+      to_char(l.data_lancamento, 'YYYY-MM')  AS periodo,
+      SUM(CASE WHEN l.tipo='budget' THEN l.debito_credito ELSE 0 END) AS budget,
+      SUM(CASE WHEN l.tipo='razao'  THEN l.debito_credito ELSE 0 END) AS razao
     FROM lancamentos l
     LEFT JOIN centros_custo    cc ON l.centro_custo          = cc.centro_custo
-    LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil' ||
-    CASE WHEN array_length(v_cond, 1) > 0 THEN ' WHERE ' || array_to_string(v_cond, ' AND ') ELSE '' END ||
-    ' GROUP BY ca.dre, ca.agrupamento_arvore, l.numero_conta_contabil, to_char(l.data_lancamento, ''YYYY-MM'')
-      ORDER BY ca.dre, ca.agrupamento_arvore, l.numero_conta_contabil, to_char(l.data_lancamento, ''YYYY-MM'')';
-
-  EXECUTE 'SELECT jsonb_agg(row_to_json(t)) FROM (' || v_sql || ') t' INTO v_result;
-  RETURN COALESCE(v_result, '[]'::JSONB);
-END;
+    LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil
+    WHERE (cardinality(p_periodos)      = 0 OR to_char(l.data_lancamento, 'YYYY-MM') = ANY(p_periodos))
+      AND (cardinality(p_departamentos) = 0 OR cc.nome_departamento                  = ANY(p_departamentos))
+      AND (cardinality(p_centros)       = 0 OR l.centro_custo                        = ANY(p_centros))
+    GROUP BY ca.dre, ca.agrupamento_arvore, l.numero_conta_contabil, to_char(l.data_lancamento, 'YYYY-MM')
+    ORDER BY ca.dre, ca.agrupamento_arvore, l.numero_conta_contabil, to_char(l.data_lancamento, 'YYYY-MM')
+  ) t;
 $$;
 
 -- ─── get_dre_detalhamento: lançamentos individuais para drill-down ────────────
@@ -641,51 +627,50 @@ END;
 $$;
 
 -- ─── Unidades de Negócio via tabela unidades_negocio (id_cc_cc) ───────────────
+DROP FUNCTION IF EXISTS get_unidades_negocio_analise(TEXT[], TEXT[]);
 CREATE OR REPLACE FUNCTION get_unidades_negocio_analise(
-  p_periodos  TEXT[]  DEFAULT '{}',
-  p_unidades  TEXT[]  DEFAULT '{}'
+  p_periodos      TEXT[]  DEFAULT '{}',
+  p_unidades      TEXT[]  DEFAULT '{}',
+  p_departamentos TEXT[]  DEFAULT '{}'
 ) RETURNS TABLE(
   unidade   TEXT,
   periodo   TEXT,
   budget    NUMERIC,
   razao     NUMERIC
-) LANGUAGE plpgsql AS $$
-BEGIN
-  RETURN QUERY
+) LANGUAGE sql STABLE AS $$
   SELECT
     u.unidade,
     TO_CHAR(l.data_lancamento, 'YYYY-MM') AS periodo,
     SUM(CASE WHEN l.tipo = 'budget' THEN l.debito_credito ELSE 0 END) AS budget,
     SUM(CASE WHEN l.tipo = 'razao'  THEN l.debito_credito ELSE 0 END) AS razao
   FROM lancamentos l
-  JOIN unidades_negocio u ON l.id_cc_cc = u.id_cc_cc
-  WHERE (array_length(p_periodos, 1) IS NULL OR TO_CHAR(l.data_lancamento, 'YYYY-MM') = ANY(p_periodos))
-    AND (array_length(p_unidades, 1) IS NULL OR u.unidade = ANY(p_unidades))
+  JOIN  unidades_negocio  u  ON l.id_cc_cc    = u.id_cc_cc
+  LEFT JOIN centros_custo cc ON l.centro_custo = cc.centro_custo
+  WHERE (cardinality(p_periodos)      = 0 OR TO_CHAR(l.data_lancamento, 'YYYY-MM') = ANY(p_periodos))
+    AND (cardinality(p_unidades)      = 0 OR u.unidade = ANY(p_unidades))
+    AND (cardinality(p_departamentos) = 0 OR cc.nome_departamento = ANY(p_departamentos))
   GROUP BY u.unidade, TO_CHAR(l.data_lancamento, 'YYYY-MM')
   ORDER BY u.unidade, TO_CHAR(l.data_lancamento, 'YYYY-MM');
-END;
 $$;
 
 -- ─── get_unidades_negocio_dre: breakdown por unidade > DRE > agrupamento > conta
 -- Retorna JSONB (array único) para evitar limite de linhas do PostgREST
 DROP FUNCTION IF EXISTS get_unidades_negocio_dre(TEXT[], TEXT[]);
+DROP FUNCTION IF EXISTS get_unidades_negocio_dre(TEXT[], TEXT[], TEXT[]);
 CREATE OR REPLACE FUNCTION get_unidades_negocio_dre(
-  p_periodos  TEXT[]  DEFAULT '{}',
-  p_unidades  TEXT[]  DEFAULT '{}'
+  p_periodos      TEXT[]  DEFAULT '{}',
+  p_unidades      TEXT[]  DEFAULT '{}',
+  p_departamentos TEXT[]  DEFAULT '{}'
 ) RETURNS JSONB LANGUAGE plpgsql AS $$
 DECLARE
   v_cond   TEXT[] := '{}';
   v_sql    TEXT;
   v_result JSONB;
 BEGIN
-  IF array_length(p_periodos, 1) > 0 THEN
-    v_cond := array_append(v_cond,
-      format('TO_CHAR(l.data_lancamento, ''YYYY-MM'') = ANY(%s)', quote_literal(p_periodos::TEXT)));
-  END IF;
-  IF array_length(p_unidades, 1) > 0 THEN
-    v_cond := array_append(v_cond,
-      format('COALESCE(u.unidade, ''Sem Unidade'') = ANY(%s)', quote_literal(p_unidades::TEXT)));
-  END IF;
+  -- Usa $1/$2/$3 como parâmetros posicionais no EXECUTE (evita quote_literal com acentos)
+  v_cond := array_append(v_cond, '(cardinality($1) = 0 OR TO_CHAR(l.data_lancamento, ''YYYY-MM'') = ANY($1))');
+  v_cond := array_append(v_cond, '(cardinality($2) = 0 OR COALESCE(u.unidade, ''Sem Unidade'') = ANY($2))');
+  v_cond := array_append(v_cond, '(cardinality($3) = 0 OR cc.nome_departamento = ANY($3))');
 
   v_sql :=
     'SELECT
@@ -699,12 +684,10 @@ BEGIN
       SUM(CASE WHEN l.tipo = ''budget'' THEN l.debito_credito ELSE 0 END)  AS budget,
       SUM(CASE WHEN l.tipo = ''razao''  THEN l.debito_credito ELSE 0 END)  AS razao
     FROM lancamentos l
-    LEFT JOIN unidades_negocio u  ON l.id_cc_cc              = u.id_cc_cc
-    LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil' ||
-    CASE WHEN array_length(v_cond, 1) > 0
-      THEN ' WHERE ' || array_to_string(v_cond, ' AND ')
-      ELSE ''
-    END ||
+    LEFT JOIN unidades_negocio  u  ON l.id_cc_cc              = u.id_cc_cc
+    LEFT JOIN contas_contabeis  ca ON l.numero_conta_contabil = ca.numero_conta_contabil
+    LEFT JOIN centros_custo     cc ON l.centro_custo          = cc.centro_custo
+    WHERE ' || array_to_string(v_cond, ' AND ') ||
     ' GROUP BY COALESCE(u.unidade, ''Sem Unidade''), ca.dre, ca.ordem_dre, ca.agrupamento_arvore,
                l.numero_conta_contabil, ca.nome_conta_contabil,
                TO_CHAR(l.data_lancamento, ''YYYY-MM'')
@@ -716,6 +699,7 @@ BEGIN
                TO_CHAR(l.data_lancamento, ''YYYY-MM'')';
 
   EXECUTE 'SELECT COALESCE(jsonb_agg(row_to_json(t)), ''[]''::jsonb) FROM (' || v_sql || ') t'
+    USING p_periodos, p_unidades, p_departamentos
     INTO v_result;
   RETURN v_result;
 END;
@@ -737,28 +721,29 @@ $$;
 -- Usa paginação server-side para evitar explosão de linhas e o limite do PostgREST.
 -- O JOIN é feito no banco, evitando o problema de URL muito longa com .in() no cliente.
 DROP FUNCTION IF EXISTS get_unidades_negocio_lancamentos_detail(TEXT[], TEXT[], TEXT, TEXT, TEXT, TEXT, INT, INT);
+DROP FUNCTION IF EXISTS get_unidades_negocio_lancamentos_detail(TEXT[], TEXT[], TEXT, TEXT, TEXT, TEXT, INT, INT, TEXT[]);
 CREATE OR REPLACE FUNCTION get_unidades_negocio_lancamentos_detail(
-  p_unidades    TEXT[]  DEFAULT '{}',
-  p_periodos    TEXT[]  DEFAULT '{}',
-  p_tipo        TEXT    DEFAULT 'ambos',
-  p_dre         TEXT    DEFAULT '',
-  p_agrupamento TEXT    DEFAULT '',
-  p_conta       TEXT    DEFAULT '',
-  p_offset      INT     DEFAULT 0,
-  p_limit       INT     DEFAULT 1000
+  p_unidades      TEXT[]  DEFAULT '{}',
+  p_periodos      TEXT[]  DEFAULT '{}',
+  p_tipo          TEXT    DEFAULT 'ambos',
+  p_dre           TEXT    DEFAULT '',
+  p_agrupamento   TEXT    DEFAULT '',
+  p_conta         TEXT    DEFAULT '',
+  p_offset        INT     DEFAULT 0,
+  p_limit         INT     DEFAULT 1000,
+  p_departamentos TEXT[]  DEFAULT '{}'
 ) RETURNS JSONB LANGUAGE plpgsql STABLE AS $$
 DECLARE
   v_cond   TEXT[] := '{}';
   v_sql    TEXT;
   v_result JSONB;
 BEGIN
-  -- Filtro de unidade via id_cc_cc (dimensão correta para esta visão)
-  IF array_length(p_unidades, 1) > 0 THEN
-    v_cond := array_append(v_cond,
-      format('COALESCE(u.unidade, ''Sem Unidade'') = ANY(%s)',
-             quote_literal(p_unidades::TEXT)));
-  ELSE
-    -- Sem filtro: apenas lançamentos com id_cc_cc preenchido
+  -- Filtros via $1/$2/$3 (parâmetros posicionais no EXECUTE USING — evita quote_literal com acentos)
+  v_cond := array_append(v_cond, '(cardinality($1) = 0 OR COALESCE(u.unidade, ''Sem Unidade'') = ANY($1))');
+  v_cond := array_append(v_cond, '(cardinality($2) = 0 OR TO_CHAR(l.data_lancamento, ''YYYY-MM'') = ANY($2))');
+  v_cond := array_append(v_cond, '(cardinality($3) = 0 OR cc.nome_departamento = ANY($3))');
+  -- Sem filtro de unidade nem dept: restringir a lançamentos com id_cc_cc preenchido
+  IF cardinality(p_unidades) = 0 AND cardinality(p_departamentos) = 0 THEN
     v_cond := array_append(v_cond, 'l.id_cc_cc IS NOT NULL');
   END IF;
 
@@ -780,13 +765,6 @@ BEGIN
       v_cond := array_append(v_cond,
         format('COALESCE(ca.agrupamento_arvore, ''Sem Agrupamento'') = %L', p_agrupamento));
     END IF;
-  END IF;
-
-  -- Filtro de períodos
-  IF array_length(p_periodos, 1) > 0 THEN
-    v_cond := array_append(v_cond,
-      format('TO_CHAR(l.data_lancamento, ''YYYY-MM'') = ANY(%s)',
-             quote_literal(p_periodos::TEXT)));
   END IF;
 
   v_sql :=
@@ -813,15 +791,13 @@ BEGIN
      FROM lancamentos l
      LEFT JOIN unidades_negocio  u  ON l.id_cc_cc              = u.id_cc_cc
      LEFT JOIN contas_contabeis  ca ON l.numero_conta_contabil = ca.numero_conta_contabil
-     LEFT JOIN centros_custo     cc ON l.centro_custo          = cc.centro_custo' ||
-    CASE WHEN array_length(v_cond, 1) > 0
-      THEN ' WHERE ' || array_to_string(v_cond, ' AND ')
-      ELSE ''
-    END ||
+     LEFT JOIN centros_custo     cc ON l.centro_custo          = cc.centro_custo
+     WHERE ' || array_to_string(v_cond, ' AND ') ||
     format(' ORDER BY l.data_lancamento, l.numero_conta_contabil, l.id
      LIMIT %s OFFSET %s', p_limit, p_offset);
 
   EXECUTE 'SELECT COALESCE(jsonb_agg(row_to_json(t)), ''[]''::jsonb) FROM (' || v_sql || ') t'
+    USING p_unidades, p_periodos, p_departamentos
     INTO v_result;
   RETURN v_result;
 END;

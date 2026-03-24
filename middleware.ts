@@ -5,7 +5,7 @@ import { getSessionFromRequest, COOKIE_NAME } from '@/lib/session'
 const PUBLIC_PATHS = ['/login', '/logout', '/api/auth/login', '/api/auth/logout']
 
 // Rotas que usuários de dept podem acessar
-const DEPT_ALLOWED_PATHS = ['/dept', '/dre', '/analise', '/capex', '/api/dept-dashboard', '/api/dept-medidas', '/api/analise', '/api/dre', '/api/capex', '/api/kpis', '/api/kpis/valores', '/api/medidas', '/api/me', '/api/auth/logout', '/api/dimensoes', '/api/favorites']
+const DEPT_ALLOWED_PATHS = ['/dept', '/dre', '/analise', '/capex', '/unidades-negocio', '/api/dept-dashboard', '/api/dept-medidas', '/api/analise', '/api/dre', '/api/capex', '/api/kpis', '/api/kpis/valores', '/api/lancamentos', '/api/medidas', '/api/me', '/api/auth/logout', '/api/dimensoes', '/api/favorites', '/api/unidades-negocio']
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
