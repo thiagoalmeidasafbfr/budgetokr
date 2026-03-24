@@ -360,6 +360,7 @@ export default function UnidadesNegocioPage() {
         <DetalhamentoModal
           ctx={detModal}
           onClose={() => setDetModal(null)}
+          endpoint="/api/unidades-negocio/detalhamento"
         />
       )}
 
