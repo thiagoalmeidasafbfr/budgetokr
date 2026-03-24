@@ -51,6 +51,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       series,
+      lastClosed,
       forecast: {
         razao:  razaoForecast.map(f  => ({ periodo: f.period, value: f.value })),
         budget: budgetForecast.map(f => ({ periodo: f.period, value: f.value })),
