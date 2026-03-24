@@ -1,9 +1,10 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Filter, X, BarChart3, Table2, Download, RefreshCw, Target, ChevronDown, Printer } from 'lucide-react'
+import { BarChart3, Table2, Download, Target, ChevronDown, Printer } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { FilterSidebar } from '@/components/FilterSidebar'
 import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
 import dynamic from 'next/dynamic'
 import type { Medida } from '@/lib/types'
@@ -50,6 +51,8 @@ export default function AnalisePage() {
   const [periodos,      setPeriodos]      = useState<string[]>([])
   const [selDepts,      setSelDepts]      = useState<string[]>([])
   const [selPeriods,    setSelPeriods]    = useState<string[]>([])
+  const [selCentros,    setSelCentros]    = useState<string[]>([])
+  const [centrosDisp,   setCentrosDisp]   = useState<Array<{ cc: string; nome: string }>>([])
   const [selYear,       setSelYear]       = useState<string | null>('2026')
   // medida view state
   const [selMedida,        setSelMedida]        = useState<number | null>(null)
@@ -93,6 +96,17 @@ export default function AnalisePage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selYear, periodos])
+
+  // Fetch cost centers when departments are selected
+  useEffect(() => {
+    if (!selDepts.length) { setCentrosDisp([]); return }
+    const p = new URLSearchParams({ type: 'centros', departamentos: selDepts.join(',') })
+    fetch(`/api/dre?${p}`).then(r => r.json()).then(d => {
+      const avail = Array.isArray(d) ? (d as Array<{ cc: string; nome: string }>) : []
+      setCentrosDisp(avail)
+      setSelCentros(prev => prev.filter(c => avail.some(a => a.cc === c)))
+    })
+  }, [selDepts])
 
   // Auto-apply filters whenever selection or groupBy changes
   useEffect(() => {
@@ -148,8 +162,13 @@ export default function AnalisePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [medidaGroupBy, medidaSelPeriods])
 
+  // Apply CC client-side filter
+  const filteredData = selCentros.length > 0
+    ? data.filter(row => selCentros.includes(row.centro_custo ?? ''))
+    : data
+
   // Aggregate by groupBy key
-  const grouped = data.reduce<Record<string, { budget: number; razao: number; variacao: number; sub: Set<string>; codigo: string; dept?: string }>>((acc, row) => {
+  const grouped = filteredData.reduce<Record<string, { budget: number; razao: number; variacao: number; sub: Set<string>; codigo: string; dept?: string }>>((acc, row) => {
     let key: string
     if (groupBy === 'departamento') {
       key = (row.nome_departamento && row.nome_departamento.trim())
@@ -261,49 +280,18 @@ export default function AnalisePage() {
       <div className="flex gap-4">
         {/* Sidebar filters */}
         <div className="w-52 flex-shrink-0 space-y-3">
-          <Card>
-            <CardContent className="p-3 space-y-3">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
-                <Filter size={11} /> Filtros
-              </p>
-              {deptUser ? (
-                <div>
-                  <p className="text-xs font-medium text-gray-600 mb-1">Departamento</p>
-                  <p className="text-xs text-indigo-700 font-semibold px-1 py-0.5 bg-indigo-50 rounded">{deptUser.department}</p>
-                </div>
-              ) : (
-                <div>
-                  <p className="text-xs font-medium text-gray-600 mb-1">Departamentos</p>
-                  <div className="space-y-0.5 max-h-40 overflow-y-auto">
-                    {departamentos.map(d => (
-                      <label key={d} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
-                        <input type="checkbox" checked={selDepts.includes(d)}
-                          onChange={e => setSelDepts(prev => e.target.checked ? [...prev, d] : prev.filter(x => x !== d))}
-                          className="w-3 h-3 accent-indigo-600" />
-                        <span className="text-xs text-gray-600 truncate">{d || '—'}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div>
-                <p className="text-xs font-medium text-gray-600 mb-1">Períodos</p>
-                <div className="space-y-0.5 max-h-32 overflow-y-auto">
-                  {periodos.map(p => (
-                    <label key={p} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
-                      <input type="checkbox" checked={selPeriods.includes(p)}
-                        onChange={e => setSelPeriods(prev => e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}
-                        className="w-3 h-3 accent-indigo-600" />
-                      <span className="text-xs text-gray-600">{formatPeriodo(p)}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              {(selDepts.length > 0 || selPeriods.length > 0) && (
-                <Button size="sm" variant="outline" onClick={() => { setSelDepts([]); setSelPeriods([]) }} className="w-full h-7 text-xs"><X size={10} /> Limpar filtros</Button>
-              )}
-            </CardContent>
-          </Card>
+          <FilterSidebar
+            deptUser={deptUser}
+            departamentos={departamentos}
+            selDepts={selDepts}
+            onDeptsChange={setSelDepts}
+            centrosDisp={centrosDisp}
+            selCentros={selCentros}
+            onCentrosChange={setSelCentros}
+            periodos={periodos}
+            selPeriods={selPeriods}
+            onPeriodsChange={setSelPeriods}
+          />
 
           {medidas.length > 0 && (
             <Card>

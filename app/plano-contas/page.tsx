@@ -1,8 +1,10 @@
 'use client'
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronRight, ChevronDown, Filter, X, Download, Upload, RefreshCw, ChevronsUpDown, Pencil } from 'lucide-react'
+import { ChevronRight, ChevronDown, Download, Upload, RefreshCw, ChevronsUpDown, Pencil } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
+import { FilterSidebar } from '@/components/FilterSidebar'
+import { YearFilter } from '@/components/YearFilter'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
@@ -36,6 +38,7 @@ export default function PlanoContasPage() {
   const [expanded, setExpanded]     = useState<Set<string>>(new Set())
   const [selDepts, setSelDepts]     = useState<string[]>([])
   const [selPeriods, setSelPeriods] = useState<string[]>([])
+  const [selYear, setSelYear]       = useState<string | null>('2026')
   const [expandLevel, setExpandLevel] = useState(1)
   const [search, setSearch]         = useState('')
   const [editingNumero, setEditingNumero] = useState<string | null>(null)
@@ -64,9 +67,22 @@ export default function PlanoContasPage() {
     })
   }, [router])
 
-  useEffect(() => { loadData([], []) }, [loadData])
+  // Auto-apply on filter change
+  useEffect(() => { loadData(selDepts, selPeriods) }, [selDepts, selPeriods, loadData])
 
-  const applyFilters = () => loadData(selDepts, selPeriods)
+  // Year quick-select
+  useEffect(() => {
+    if (selYear && data) {
+      const now = new Date()
+      const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      const curMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
+      const ytd = data.periodos.filter(p => p.startsWith(selYear) && p <= curMonth)
+      setSelPeriods(ytd.length > 0 ? ytd : data.periodos.filter(p => p.startsWith(selYear)))
+    } else if (!selYear) {
+      setSelPeriods([])
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selYear])
 
   // Expand/collapse
   const toggle = (numero: string) => {
@@ -264,7 +280,7 @@ export default function PlanoContasPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Plano de Contas</h1>
           <p className="text-gray-500 text-sm mt-0.5">
@@ -272,7 +288,8 @@ export default function PlanoContasPage() {
             {data && <span className="ml-2 text-gray-400">· {data.totalContas} contas · {data.maxLevel} níveis</span>}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-3 flex-wrap">
+          <YearFilter periodos={data?.periodos ?? []} selYear={selYear} onChange={setSelYear} />
           <Button variant="outline" size="sm" onClick={() => loadData(selDepts, selPeriods)}>
             <RefreshCw size={13} /> Atualizar
           </Button>
@@ -332,56 +349,14 @@ export default function PlanoContasPage() {
             </CardContent>
           </Card>
 
-          {/* Department filter */}
-          {data && (data.departamentos?.length ?? 0) > 0 && (
-            <Card>
-              <CardContent className="p-3 space-y-2">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
-                  <Filter size={11} /> Departamentos
-                </p>
-                <div className="space-y-0.5 max-h-36 overflow-y-auto">
-                  {data.departamentos.map((d, i) => (
-                    <label key={`${d}-${i}`} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
-                      <input type="checkbox" checked={selDepts.includes(d)}
-                        onChange={e => setSelDepts(prev => e.target.checked ? [...prev, d] : prev.filter(x => x !== d))}
-                        className="w-3 h-3 accent-indigo-600" />
-                      <span className="text-xs text-gray-600 truncate">{d}</span>
-                    </label>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Period filter */}
-          {data && (data.periodos?.length ?? 0) > 0 && (
-            <Card>
-              <CardContent className="p-3 space-y-2">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Períodos</p>
-                <div className="space-y-0.5 max-h-48 overflow-y-auto">
-                  {data.periodos.map(p => (
-                    <label key={p} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
-                      <input type="checkbox" checked={selPeriods.includes(p)}
-                        onChange={e => setSelPeriods(prev => e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}
-                        className="w-3 h-3 accent-indigo-600" />
-                      <span className="text-xs text-gray-600">{formatPeriodo(p)}</span>
-                    </label>
-                  ))}
-                </div>
-                {(selDepts.length > 0 || selPeriods.length > 0) && (
-                  <div className="flex gap-1 pt-1">
-                    <Button size="sm" className="flex-1 text-xs h-7" onClick={applyFilters}>
-                      Aplicar
-                    </Button>
-                    <Button size="sm" variant="outline" className="text-xs h-7"
-                      onClick={() => { setSelDepts([]); setSelPeriods([]); loadData([], []) }}>
-                      Limpar
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+          <FilterSidebar
+            departamentos={data?.departamentos ?? []}
+            selDepts={selDepts}
+            onDeptsChange={setSelDepts}
+            periodos={data?.periodos ?? []}
+            selPeriods={selPeriods}
+            onPeriodsChange={setSelPeriods}
+          />
         </div>
 
         {/* Main content */}

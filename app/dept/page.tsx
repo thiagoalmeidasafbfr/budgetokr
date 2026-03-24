@@ -1136,6 +1136,7 @@ export default function DeptDashboardPage() {
   const [selDept,          setSelDept]          = useState<string>('')
   const [selPeriods,       setSelPeriods]       = useState<string[]>([])
   const [selYear,          setSelYear]          = useState<string | null>('2026')
+  const [expandedYears,    setExpandedYears]    = useState<Set<string>>(new Set(['2026']))
   const [dashData,         setDashData]         = useState<DashboardData | null>(null)
   const [loading,          setLoading]          = useState(false)
   const [kpis,             setKpis]             = useState<KpiManual[]>([])
@@ -1323,29 +1324,56 @@ export default function DeptDashboardPage() {
           </div>
         )}
 
-        {/* Períodos — sempre visível */}
+        {/* Períodos — agrupados por ano */}
         <div className="px-3 py-2 border-t border-gray-100">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Períodos</p>
-          <div className="space-y-0.5 max-h-48 overflow-y-auto">
-            {allPeriodos.map(p => (
-              <label key={p} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
-                <input
-                  type="checkbox"
-                  checked={selPeriods.includes(p)}
-                  onChange={e => setSelPeriods(prev =>
-                    e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}
-                  className="w-3 h-3 accent-indigo-600"
-                />
-                <span className="text-xs text-gray-600">{formatPeriodo(p)}</span>
-              </label>
-            ))}
+          <div className="space-y-0.5 max-h-52 overflow-y-auto">
+            {Object.entries(
+              allPeriodos.reduce<Record<string, string[]>>((acc, p) => {
+                const y = p.substring(0, 4); if (!acc[y]) acc[y] = []; acc[y].push(p); return acc
+              }, {})
+            ).sort().map(([year, months]) => {
+              const selInYear = months.filter(m => selPeriods.includes(m))
+              const allSel = selInYear.length === months.length
+              const someSel = selInYear.length > 0
+              const isOpen = expandedYears.has(year)
+              return (
+                <div key={year}>
+                  <div
+                    className="flex items-center gap-1 py-0.5 px-1 rounded hover:bg-gray-50 cursor-pointer select-none"
+                    onClick={() => setExpandedYears(prev => { const s = new Set(prev); s.has(year) ? s.delete(year) : s.add(year); return s })}>
+                    {isOpen ? <ChevronDown size={10} className="text-gray-400 flex-shrink-0" /> : <ChevronRight size={10} className="text-gray-400 flex-shrink-0" />}
+                    <input type="checkbox"
+                      checked={allSel}
+                      ref={el => { if (el) el.indeterminate = someSel && !allSel }}
+                      onClick={e => e.stopPropagation()}
+                      onChange={e => setSelPeriods(prev =>
+                        e.target.checked ? [...new Set([...prev, ...months])] : prev.filter(p => !months.includes(p))
+                      )}
+                      className="w-3 h-3 accent-indigo-600 flex-shrink-0" />
+                    <span className="text-xs font-semibold text-gray-700">{year}</span>
+                    {someSel && <span className="ml-auto text-[10px] text-indigo-500 tabular-nums">{selInYear.length}/{months.length}</span>}
+                  </div>
+                  {isOpen && (
+                    <div className="ml-4 space-y-0.5">
+                      {months.map(m => (
+                        <label key={m} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                          <input type="checkbox" checked={selPeriods.includes(m)}
+                            onChange={e => setSelPeriods(prev => e.target.checked ? [...prev, m] : prev.filter(x => x !== m))}
+                            className="w-3 h-3 accent-indigo-600" />
+                          <span className="text-xs text-gray-600">{formatPeriodo(m)}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
           {selPeriods.length > 0 && (
-            <button
-              onClick={() => setSelPeriods([])}
-              className="mt-1 text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"
-            >
-              <X size={9} />Limpar
+            <button onClick={() => setSelPeriods([])}
+              className="mt-1 text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
+              <X size={9} /> Limpar
             </button>
           )}
         </div>

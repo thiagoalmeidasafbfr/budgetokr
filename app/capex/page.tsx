@@ -1,9 +1,10 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Filter, X, Table2, Download, BarChart3, ChevronDown } from 'lucide-react'
+import { Table2, Download, BarChart3, ChevronDown } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { FilterSidebar } from '@/components/FilterSidebar'
 import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
 import { YearFilter } from '@/components/YearFilter'
 import dynamic from 'next/dynamic'
@@ -37,6 +38,8 @@ export default function CapexPage() {
   const [selDepts,      setSelDepts]      = useState<string[]>([])
   const [selPeriods,    setSelPeriods]    = useState<string[]>([])
   const [selProjetos,   setSelProjetos]   = useState<string[]>([])
+  const [selCentros,    setSelCentros]    = useState<string[]>([])
+  const [centrosDisp,   setCentrosDisp]   = useState<Array<{ cc: string; nome: string }>>([])
   const [selYear,       setSelYear]       = useState<string | null>(null)
   const [viewMode,      setViewMode]      = useState<ViewMode>('table')
   const [groupBy,       setGroupBy]       = useState<GroupBy>('projeto')
@@ -69,6 +72,17 @@ export default function CapexPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selYear])
 
+  // Fetch cost centers when departments are selected
+  useEffect(() => {
+    if (!selDepts.length) { setCentrosDisp([]); return }
+    const p = new URLSearchParams({ type: 'centros', departamentos: selDepts.join(',') })
+    fetch(`/api/dre?${p}`).then(r => r.json()).then(d => {
+      const avail = Array.isArray(d) ? (d as Array<{ cc: string; nome: string }>) : []
+      setCentrosDisp(avail)
+      setSelCentros(prev => prev.filter(c => avail.some(a => a.cc === c)))
+    })
+  }, [selDepts])
+
   useEffect(() => {
     loadData(selDepts, selPeriods, selProjetos, groupBy)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -87,8 +101,13 @@ export default function CapexPage() {
     setLoading(false)
   }, [])
 
+  // Apply CC client-side filter
+  const filteredData = selCentros.length > 0
+    ? data.filter(row => selCentros.includes(row.centro_custo ?? ''))
+    : data
+
   // Aggregate by groupBy key
-  const grouped = data.reduce<Record<string, { budget: number; razao: number; variacao: number; sub: Set<string>; projeto?: string; dept?: string; cc?: string }>>((acc, row) => {
+  const grouped = filteredData.reduce<Record<string, { budget: number; razao: number; variacao: number; sub: Set<string>; projeto?: string; dept?: string; cc?: string }>>((acc, row) => {
     let key: string
     if (groupBy === 'projeto') {
       key = row.nome_projeto || '—'
@@ -149,13 +168,18 @@ export default function CapexPage() {
       <div className="flex gap-4">
         {/* Sidebar filters */}
         <div className="w-52 flex-shrink-0 space-y-3">
-          <Card>
-            <CardContent className="p-3 space-y-3">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
-                <Filter size={11} /> Filtros
-              </p>
-
-              {/* Projetos */}
+          <FilterSidebar
+            deptUser={deptUser}
+            departamentos={departamentos}
+            selDepts={selDepts}
+            onDeptsChange={setSelDepts}
+            centrosDisp={centrosDisp}
+            selCentros={selCentros}
+            onCentrosChange={setSelCentros}
+            periodos={periodos}
+            selPeriods={selPeriods}
+            onPeriodsChange={setSelPeriods}
+            extraBefore={projetos.length > 0 ? (
               <div>
                 <p className="text-xs font-medium text-gray-600 mb-1">Projetos</p>
                 <div className="space-y-0.5 max-h-40 overflow-y-auto">
@@ -169,51 +193,8 @@ export default function CapexPage() {
                   ))}
                 </div>
               </div>
-
-              {/* Departamentos */}
-              {deptUser ? (
-                <div>
-                  <p className="text-xs font-medium text-gray-600 mb-1">Departamento</p>
-                  <p className="text-xs text-indigo-700 font-semibold px-1 py-0.5 bg-indigo-50 rounded">{deptUser.department}</p>
-                </div>
-              ) : (
-                <div>
-                  <p className="text-xs font-medium text-gray-600 mb-1">Departamentos</p>
-                  <div className="space-y-0.5 max-h-32 overflow-y-auto">
-                    {departamentos.map(d => (
-                      <label key={d} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
-                        <input type="checkbox" checked={selDepts.includes(d)}
-                          onChange={e => setSelDepts(prev => e.target.checked ? [...prev, d] : prev.filter(x => x !== d))}
-                          className="w-3 h-3 accent-indigo-600" />
-                        <span className="text-xs text-gray-600 truncate">{d || '—'}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Períodos */}
-              <div>
-                <p className="text-xs font-medium text-gray-600 mb-1">Períodos</p>
-                <div className="space-y-0.5 max-h-32 overflow-y-auto">
-                  {periodos.map(p => (
-                    <label key={p} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
-                      <input type="checkbox" checked={selPeriods.includes(p)}
-                        onChange={e => setSelPeriods(prev => e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}
-                        className="w-3 h-3 accent-indigo-600" />
-                      <span className="text-xs text-gray-600">{formatPeriodo(p)}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {(selDepts.length > 0 || selPeriods.length > 0 || selProjetos.length > 0) && (
-                <Button size="sm" variant="outline" onClick={() => { setSelDepts([]); setSelPeriods([]); setSelProjetos([]) }} className="w-full h-7 text-xs">
-                  <X size={10} /> Limpar filtros
-                </Button>
-              )}
-            </CardContent>
-          </Card>
+            ) : undefined}
+          />
         </div>
 
         {/* Main */}
