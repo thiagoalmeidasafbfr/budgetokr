@@ -94,6 +94,53 @@ export async function PUT(req: NextRequest) {
   }
 }
 
+// Shared helper: build a tree from flat conta rows + lancamentos aggregation.
+// Works both when data comes from the RPC (flat array) and from the fallback
+// (direct contas_contabeis query).
+interface TNode {
+  numero: string; nome: string; nivel: number
+  budget: number; razao: number; variacao: number; variacao_pct: number
+  contaCount: number; agrupamento: string; dre: string
+  children: TNode[]
+}
+
+function buildContaTree(
+  rows: { numero_conta_contabil: string; nome_conta_contabil: string; nivel: number; agrupamento_arvore: string; dre: string; budget: number; razao: number }[]
+): TNode[] {
+  const byNum = new Map<string, TNode>()
+  for (const c of rows) {
+    const budget   = c.budget   ?? 0
+    const razao    = c.razao    ?? 0
+    const variacao = razao - budget
+    byNum.set(c.numero_conta_contabil, {
+      numero:      c.numero_conta_contabil,
+      nome:        c.nome_conta_contabil ?? c.numero_conta_contabil,
+      nivel:       c.nivel ?? 1,
+      budget, razao, variacao,
+      variacao_pct: budget !== 0 ? variacao / Math.abs(budget) * 100 : 0,
+      contaCount:  1,
+      agrupamento: c.agrupamento_arvore ?? '',
+      dre:         c.dre ?? '',
+      children:    [],
+    })
+  }
+  const roots: TNode[] = []
+  for (const [num, node] of byNum) {
+    const parts = num.split('.')
+    let placed = false
+    for (let i = parts.length - 1; i > 0; i--) {
+      const parentNum = parts.slice(0, i).join('.')
+      if (byNum.has(parentNum)) {
+        byNum.get(parentNum)!.children.push(node)
+        placed = true
+        break
+      }
+    }
+    if (!placed) roots.push(node)
+  }
+  return roots
+}
+
 export async function GET(req: NextRequest) {
   const user = getUserFromHeaders(req)
   if (user?.role !== 'master') {
@@ -104,65 +151,17 @@ export async function GET(req: NextRequest) {
     const sp = new URL(req.url).searchParams
     const tipo = sp.get('tipo') ?? 'ambos'
     const periodosRaw = sp.get('periodos')
-    const deptosRaw = sp.get('departamentos')
+    const deptosRaw   = sp.get('departamentos')
     const periodos = periodosRaw ? periodosRaw.split(',').filter(Boolean) : []
-    const deptos = deptosRaw ? deptosRaw.split(',').filter(Boolean) : []
+    const deptos   = deptosRaw   ? deptosRaw.split(',').filter(Boolean)   : []
 
-    const { data, error } = await supabase.rpc('get_plano_contas_valores', {
-      p_tipo:         tipo,
-      p_periodos:     periodos,
-      p_departamentos: deptos,
-    })
-    if (error) throw new Error(error.message)
-
-    const result = data as {
-      tree: unknown[]
-      maxLevel: number
-      totalContas: number
-      departamentos: string[]
-      periodos: string[]
-    } | null
-
-    if (result) {
-      // A RPC pode não incluir departamentos/periodos — garantir que sempre existam
-      const needsMeta = !result.departamentos || !result.periodos
-      if (needsMeta) {
-        const [{ data: deptsData }, { data: periodosData }] = await Promise.all([
-          supabase.from('centros_custo')
-            .select('nome_departamento')
-            .not('nome_departamento', 'is', null)
-            .neq('nome_departamento', '')
-            .order('nome_departamento'),
-          supabase.from('lancamentos')
-            .select('data_lancamento')
-            .not('data_lancamento', 'is', null),
-        ])
-        const periodSet = new Set<string>()
-        for (const r of periodosData ?? []) {
-          if (r.data_lancamento) {
-            const d = new Date(r.data_lancamento)
-            if (!isNaN(d.getTime())) {
-              periodSet.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-            }
-          }
-        }
-        result.departamentos = result.departamentos ??
-          (deptsData ?? []).map((d: { nome_departamento: string }) => d.nome_departamento)
-        result.periodos = result.periodos ?? [...periodSet].sort()
-      }
-      return NextResponse.json(result)
-    }
-
-    // Fallback: build tree from contas_contabeis + aggregate lancamentos values
-    const [
-      { data: contasData, error: contasError },
-      { data: deptsData },
-      { data: periodosData },
-      { data: lancData },
-    ] = await Promise.all([
-      supabase.from('contas_contabeis')
-        .select('numero_conta_contabil, nome_conta_contabil, agrupamento_arvore, dre, nivel')
-        .order('numero_conta_contabil'),
+    // Fetch meta (departamentos + periodos) in parallel with the main data query
+    const [rpcRes, deptsRes, periodosRes] = await Promise.all([
+      supabase.rpc('get_plano_contas_valores', {
+        p_tipo:          tipo,
+        p_periodos:      periodos,
+        p_departamentos: deptos,
+      }),
       supabase.from('centros_custo')
         .select('nome_departamento')
         .not('nome_departamento', 'is', null)
@@ -171,30 +170,11 @@ export async function GET(req: NextRequest) {
       supabase.from('lancamentos')
         .select('data_lancamento')
         .not('data_lancamento', 'is', null),
-      // Aggregate lancamentos by conta/tipo (filtered by request params)
-      (() => {
-        let q = supabase.from('lancamentos')
-          .select('numero_conta_contabil, tipo, debito_credito')
-        if (periodos.length) {
-          // Filter by period using .in() with computed YYYY-MM values is not directly
-          // possible; use a subfilter on data_lancamento range for the first/last period
-          // (approximate). Values will be computed precisely by the RPC once deployed.
-        }
-        if (deptos.length) {
-          // No simple way to filter by dept here without a join; skip for fallback
-        }
-        return q
-      })(),
     ])
-    if (contasError) throw new Error(contasError.message)
 
-    const contas = (contasData ?? []) as ContaRow[]
-    const maxLevel = contas.reduce((max, c) => Math.max(max, c.nivel ?? 0), 0)
-    const totalContas = contas.length
-
-    // Build period list
+    // Build period list from lancamentos
     const periodSet = new Set<string>()
-    for (const r of periodosData ?? []) {
+    for (const r of periodosRes.data ?? []) {
       if (r.data_lancamento) {
         const d = new Date(r.data_lancamento)
         if (!isNaN(d.getTime())) {
@@ -202,64 +182,48 @@ export async function GET(req: NextRequest) {
         }
       }
     }
+    const departamentos = (deptsRes.data ?? []).map((d: { nome_departamento: string }) => d.nome_departamento)
+    const periodosAll   = [...periodSet].sort()
 
-    // Aggregate lancamentos by numero_conta_contabil / tipo
-    type LancAgg = { budget: number; razao: number }
-    const lancByContta = new Map<string, LancAgg>()
-    for (const l of (lancData ?? []) as { numero_conta_contabil: string; tipo: string; debito_credito: number }[]) {
-      const key = l.numero_conta_contabil
-      if (!lancByContta.has(key)) lancByContta.set(key, { budget: 0, razao: 0 })
-      const agg = lancByContta.get(key)!
-      if (l.tipo === 'budget') agg.budget += l.debito_credito ?? 0
-      else if (l.tipo === 'razao') agg.razao += l.debito_credito ?? 0
+    // The RPC returns a flat JSONB array of rows — build the tree here
+    type RpcRow = {
+      numero_conta_contabil: string
+      nome_conta_contabil:   string
+      nivel:                 number
+      agrupamento_arvore:    string
+      dre:                   string
+      budget:                number
+      razao:                 number
+    }
+    const rpcRows = Array.isArray(rpcRes.data) ? (rpcRes.data as RpcRow[]) : null
+
+    if (rpcRows !== null && !rpcRes.error) {
+      const tree     = buildContaTree(rpcRows)
+      const maxLevel = rpcRows.reduce((m, r) => Math.max(m, r.nivel ?? 0), 0)
+      return NextResponse.json({ tree, maxLevel, totalContas: rpcRows.length, departamentos, periodos: periodosAll })
     }
 
-    // Build tree from account number hierarchy (prefix matching via dot-segments)
-    interface TNode {
-      numero: string; nome: string; nivel: number
-      budget: number; razao: number; variacao: number; variacao_pct: number
-      contaCount: number; agrupamento: string; dre: string
-      children: TNode[]
-    }
-    const byNum = new Map<string, TNode>()
-    for (const c of contas) {
-      const agg = lancByContta.get(c.numero_conta_contabil) ?? { budget: 0, razao: 0 }
-      const variacao = agg.razao - agg.budget
-      byNum.set(c.numero_conta_contabil, {
-        numero: c.numero_conta_contabil,
-        nome: c.nome_conta_contabil ?? c.numero_conta_contabil,
-        nivel: c.nivel ?? 1,
-        budget: agg.budget, razao: agg.razao,
-        variacao, variacao_pct: agg.budget !== 0 ? variacao / Math.abs(agg.budget) * 100 : 0,
-        contaCount: 1,
-        agrupamento: c.agrupamento_arvore ?? '',
-        dre: c.dre ?? '',
-        children: [],
-      })
-    }
+    // Fallback: RPC unavailable — query contas_contabeis directly (no value aggregation)
+    if (rpcRes.error) console.warn('[plano-contas] RPC error:', rpcRes.error.message)
 
-    const roots: TNode[] = []
-    for (const [num, node] of byNum) {
-      const parts = num.split('.')
-      let placed = false
-      for (let i = parts.length - 1; i > 0; i--) {
-        const parentNum = parts.slice(0, i).join('.')
-        if (byNum.has(parentNum)) {
-          byNum.get(parentNum)!.children.push(node)
-          placed = true
-          break
-        }
-      }
-      if (!placed) roots.push(node)
-    }
+    const { data: contasData, error: contasError } = await supabase
+      .from('contas_contabeis')
+      .select('numero_conta_contabil, nome_conta_contabil, agrupamento_arvore, dre, nivel')
+      .order('numero_conta_contabil')
+    if (contasError) throw new Error(contasError.message)
 
-    return NextResponse.json({
-      tree: roots,
-      maxLevel,
-      totalContas,
-      departamentos: (deptsData ?? []).map((d: { nome_departamento: string }) => d.nome_departamento),
-      periodos: [...periodSet].sort(),
-    })
+    const contas = (contasData ?? []) as ContaRow[]
+    const fallbackRows = contas.map(c => ({
+      numero_conta_contabil: c.numero_conta_contabil,
+      nome_conta_contabil:   c.nome_conta_contabil,
+      nivel:                 c.nivel ?? 1,
+      agrupamento_arvore:    c.agrupamento_arvore ?? '',
+      dre:                   c.dre ?? '',
+      budget: 0, razao: 0,
+    }))
+    const tree     = buildContaTree(fallbackRows)
+    const maxLevel = contas.reduce((m, c) => Math.max(m, c.nivel ?? 0), 0)
+    return NextResponse.json({ tree, maxLevel, totalContas: contas.length, departamentos, periodos: periodosAll })
   } catch (e) {
     console.error('[plano-contas GET]', e)
     return NextResponse.json({ error: String(e) }, { status: 500 })
