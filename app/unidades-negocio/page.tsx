@@ -316,18 +316,18 @@ export default function UnidadesNegocioPage() {
   }) => (
     <>
       <td
-        className={cn('px-5 py-2.5 text-right tabular-nums', bold ? 'font-semibold text-gray-800' : 'text-gray-600')}
+        className={cn('px-5 py-2.5 text-right tabular-nums whitespace-nowrap', bold ? 'font-semibold text-gray-800' : 'text-gray-600')}
         onContextMenu={onCtx?.('budget')}
       >
         {n.budget !== 0 ? formatCurrency(n.budget) : <span className="text-gray-300">—</span>}
       </td>
       <td
-        className={cn('px-5 py-2.5 text-right tabular-nums', bold ? 'font-semibold text-gray-800' : 'text-gray-600')}
+        className={cn('px-5 py-2.5 text-right tabular-nums whitespace-nowrap', bold ? 'font-semibold text-gray-800' : 'text-gray-600')}
         onContextMenu={onCtx?.('razao')}
       >
         {n.razao !== 0 ? formatCurrency(n.razao) : <span className="text-gray-300">—</span>}
       </td>
-      <td className={cn('px-5 py-2.5 text-right tabular-nums', bold ? 'font-semibold' : '', n.variacao !== 0 ? colorForVariance(n.variacao_pct) : 'text-gray-300')}>
+      <td className={cn('px-5 py-2.5 text-right tabular-nums whitespace-nowrap', bold ? 'font-semibold' : '', n.variacao !== 0 ? colorForVariance(n.variacao_pct) : 'text-gray-300')}>
         {n.variacao !== 0 ? formatCurrency(n.variacao) : '—'}
       </td>
       <td className="px-5 py-2.5 text-right">

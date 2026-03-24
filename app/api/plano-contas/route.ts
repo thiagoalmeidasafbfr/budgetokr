@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { getUserFromHeaders } from '@/lib/session'
+import { getDistinctValues } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
 
@@ -168,8 +169,8 @@ export async function GET(req: NextRequest) {
     const periodos = periodosRaw ? periodosRaw.split(',').filter(Boolean) : []
     const deptos   = deptosRaw   ? deptosRaw.split(',').filter(Boolean)   : []
 
-    // Fetch meta (departamentos + periodos) in parallel with the main data query
-    const [rpcRes, deptsRes, periodosRes] = await Promise.all([
+    // Fetch meta (departamentos + all distinct periods) in parallel with the main data query
+    const [rpcRes, deptsRes, rawDates] = await Promise.all([
       supabase.rpc('get_plano_contas_valores', {
         p_tipo:          tipo,
         p_periodos:      periodos,
@@ -180,23 +181,12 @@ export async function GET(req: NextRequest) {
         .not('nome_departamento', 'is', null)
         .neq('nome_departamento', '')
         .order('nome_departamento'),
-      supabase.from('lancamentos')
-        .select('data_lancamento')
-        .not('data_lancamento', 'is', null),
+      // Use the same RPC as DRE/Análise to get all distinct periods without row-limit issues
+      getDistinctValues('data_lancamento'),
     ])
 
-    // Build period list from lancamentos
-    const periodSet = new Set<string>()
-    for (const r of periodosRes.data ?? []) {
-      if (r.data_lancamento) {
-        const d = new Date(r.data_lancamento)
-        if (!isNaN(d.getTime())) {
-          periodSet.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-        }
-      }
-    }
     const departamentos = [...new Set((deptsRes.data ?? []).map((d: { nome_departamento: string }) => d.nome_departamento))]
-    const periodosAll   = [...periodSet].sort()
+    const periodosAll   = [...new Set(rawDates.map(d => d.substring(0, 7)).filter(Boolean))].sort()
 
     // The RPC returns a flat JSONB array of rows — build the tree here
     type RpcRow = {

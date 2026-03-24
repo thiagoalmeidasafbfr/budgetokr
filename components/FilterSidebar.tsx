@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ChevronRight, ChevronDown, Filter, X } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { formatPeriodo } from '@/lib/utils'
@@ -36,6 +36,18 @@ export function FilterSidebar({
 }: FilterSidebarProps) {
   const currentYear = new Date().getFullYear().toString()
   const [expandedYears, setExpandedYears] = useState<Set<string>>(new Set([currentYear]))
+
+  // When periods load, make sure the most recent year with data is expanded
+  useEffect(() => {
+    if (periodos.length === 0) return
+    setExpandedYears(prev => {
+      const hasVisibleYear = periodos.some(p => prev.has(p.substring(0, 4)))
+      if (hasVisibleYear) return prev
+      // No expanded year has data — expand the latest available year
+      const latestYear = periodos[periodos.length - 1].substring(0, 4)
+      return new Set([latestYear])
+    })
+  }, [periodos])
 
   const periodsByYear = Object.entries(
     periodos.reduce<Record<string, string[]>>((acc, p) => {
