@@ -138,6 +138,19 @@ function buildContaTree(
     }
     if (!placed) roots.push(node)
   }
+
+  // Roll up children sums into parent nodes
+  function rollup(node: TNode): void {
+    for (const child of node.children) rollup(child)
+    if (node.children.length > 0) {
+      node.budget = node.children.reduce((s, c) => s + c.budget, 0)
+      node.razao  = node.children.reduce((s, c) => s + c.razao,  0)
+      node.variacao = node.razao - node.budget
+      node.variacao_pct = node.budget !== 0 ? node.variacao / Math.abs(node.budget) * 100 : 0
+    }
+  }
+  for (const r of roots) rollup(r)
+
   return roots
 }
 
