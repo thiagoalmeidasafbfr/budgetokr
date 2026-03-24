@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 import {
   LANCAMENTO_COLUMNS, CENTRO_CUSTO_COLUMNS, CONTA_CONTABIL_COLUMNS, DRE_LINHAS_COLUMNS,
-  CAPEX_COLUMNS, type UploadTipo
+  CAPEX_COLUMNS, UNIDADE_NEGOCIO_COLUMNS, type UploadTipo
 } from '@/lib/types'
 
 type Step = 'choose' | 'upload' | 'mapping' | 'importing' | 'done'
@@ -21,6 +21,7 @@ const TIPO_OPTIONS: Array<{ value: UploadTipo; label: string; desc: string; colo
   { value: 'centros_custo',       label: 'Centros de Custo',           desc: 'Dimensão: CC → Departamento → Área',              color: 'amber' },
   { value: 'contas_contabeis',    label: 'Contas Contábeis',           desc: 'Dimensão: Conta → Agrupamento → DRE (com ordem)', color: 'purple' },
   { value: 'dre_linhas',          label: 'Estrutura da DRE',           desc: 'Ordem, subtotais e sinais da DRE gerencial',      color: 'rose' },
+  { value: 'unidades_negocio',    label: 'Unidades de Negócio',        desc: 'Dimensão: ID CC- CC → Unidade de Negócio',        color: 'orange' },
 ]
 
 function getColumns(tipo: UploadTipo) {
@@ -28,6 +29,7 @@ function getColumns(tipo: UploadTipo) {
   if (tipo === 'capex_budget' || tipo === 'capex_razao') return CAPEX_COLUMNS
   if (tipo === 'centros_custo')   return CENTRO_CUSTO_COLUMNS
   if (tipo === 'dre_linhas')      return DRE_LINHAS_COLUMNS
+  if (tipo === 'unidades_negocio') return UNIDADE_NEGOCIO_COLUMNS
   return CONTA_CONTABIL_COLUMNS
 }
 
@@ -199,8 +201,9 @@ export default function UploadPage() {
                 opt.color === 'amber' && 'bg-amber-500',
                 opt.color === 'purple' && 'bg-purple-500',
                 opt.color === 'rose' && 'bg-rose-500',
+                opt.color === 'orange' && 'bg-orange-500',
               )}>
-                {opt.value === 'lancamentos_budget' ? 'B' : opt.value === 'lancamentos_razao' ? 'R' : opt.value === 'capex_budget' ? 'CB' : opt.value === 'capex_razao' ? 'CR' : opt.value === 'centros_custo' ? 'CC' : opt.value === 'dre_linhas' ? 'DRE' : 'CA'}
+                {opt.value === 'lancamentos_budget' ? 'B' : opt.value === 'lancamentos_razao' ? 'R' : opt.value === 'capex_budget' ? 'CB' : opt.value === 'capex_razao' ? 'CR' : opt.value === 'centros_custo' ? 'CC' : opt.value === 'dre_linhas' ? 'DRE' : opt.value === 'unidades_negocio' ? 'UN' : 'CA'}
               </div>
               <p className="font-semibold text-gray-900 text-sm">{opt.label}</p>
               <p className="text-xs text-gray-400 mt-0.5">{opt.desc}</p>

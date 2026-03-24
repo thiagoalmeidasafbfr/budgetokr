@@ -1,26 +1,124 @@
 'use client'
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { ChevronRight, ChevronDown } from 'lucide-react'
-import { YearFilter } from '@/components/YearFilter'
-import { formatCurrency, formatPct, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
-import { buildTreeFromLinhas, flattenTree } from '@/lib/dre-utils'
-import type { DRERow, DREAccountRow, TreeNode, DRELinha } from '@/lib/dre-utils'
-import dynamic from 'next/dynamic'
-import type { ContextMenuState } from '@/components/DreDetalhamentoModal'
-import type { PorUnidadeRow } from '@/lib/query'
+import React, { useState, useEffect, useCallback } from 'react'
+import { ChevronRight, ChevronDown, RefreshCw, Download, X, Filter, Calendar } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
 
-const DetalhamentoModal = dynamic(() => import('@/components/DreDetalhamentoModal'), { ssr: false })
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+interface PorUnidadeRow {
+  unidade: string
+  dre: string
+  agrupamento: string
+  conta: string
+  nome_conta: string
+  ordem_dre: number
+  budget: number
+  razao: number
+}
 
-interface Hierarchy { agrupamento_arvore: string; dre: string; ordem_dre: number }
+type NodeLevel = 'unit' | 'dre' | 'agrupamento' | 'conta'
+
+interface TreeNode {
+  key: string
+  label: string
+  level: NodeLevel
+  budget: number
+  razao: number
+  variacao: number
+  variacao_pct: number
+  children: TreeNode[]
+}
+
+// ─── Tree builder ─────────────────────────────────────────────────────────────
+
+function buildTree(rows: PorUnidadeRow[]): TreeNode[] {
+  type ContaBucket  = { budget: number; razao: number; nome: string }
+  type AgrupBucket  = { budget: number; razao: number; contas: Map<string, ContaBucket> }
+  type DREBucket    = { budget: number; razao: number; ordem_dre: number; agrupamentos: Map<string, AgrupBucket> }
+  type UnitBucket   = { budget: number; razao: number; dres: Map<string, DREBucket> }
+
+  const unitMap = new Map<string, UnitBucket>()
+
+  for (const r of rows) {
+    if (!unitMap.has(r.unidade)) unitMap.set(r.unidade, { budget: 0, razao: 0, dres: new Map() })
+    const u = unitMap.get(r.unidade)!
+    u.budget += r.budget
+    u.razao  += r.razao
+
+    if (!u.dres.has(r.dre)) u.dres.set(r.dre, { budget: 0, razao: 0, ordem_dre: r.ordem_dre, agrupamentos: new Map() })
+    const d = u.dres.get(r.dre)!
+    d.budget += r.budget
+    d.razao  += r.razao
+    if (r.ordem_dre < d.ordem_dre) d.ordem_dre = r.ordem_dre
+
+    const agrupKey = r.agrupamento || '(sem agrupamento)'
+    if (!d.agrupamentos.has(agrupKey)) d.agrupamentos.set(agrupKey, { budget: 0, razao: 0, contas: new Map() })
+    const a = d.agrupamentos.get(agrupKey)!
+    a.budget += r.budget
+    a.razao  += r.razao
+
+    if (!a.contas.has(r.conta)) a.contas.set(r.conta, { budget: 0, razao: 0, nome: r.nome_conta || r.conta })
+    const c = a.contas.get(r.conta)!
+    c.budget += r.budget
+    c.razao  += r.razao
+  }
+
+  const makeNode = (label: string, level: NodeLevel, key: string, budget: number, razao: number, children: TreeNode[]): TreeNode => {
+    const variacao     = razao - budget
+    const variacao_pct = budget ? (variacao / Math.abs(budget)) * 100 : 0
+    return { key, label, level, budget, razao, variacao, variacao_pct, children }
+  }
+
+  return [...unitMap.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([unitKey, u]) =>
+      makeNode(unitKey, 'unit', `u:${unitKey}`, u.budget, u.razao,
+        [...u.dres.entries()]
+          .sort((a, b) => a[1].ordem_dre - b[1].ordem_dre || a[0].localeCompare(b[0]))
+          .map(([dreKey, d]) =>
+            makeNode(dreKey, 'dre', `u:${unitKey}|d:${dreKey}`, d.budget, d.razao,
+              [...d.agrupamentos.entries()]
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .map(([agrupKey, a]) =>
+                  makeNode(agrupKey, 'agrupamento', `u:${unitKey}|d:${dreKey}|a:${agrupKey}`, a.budget, a.razao,
+                    [...a.contas.entries()]
+                      .sort((a, b) => a[0].localeCompare(b[0]))
+                      .map(([conta, c]) =>
+                        makeNode(c.nome, 'conta', `u:${unitKey}|d:${dreKey}|a:${agrupKey}|c:${conta}`, c.budget, c.razao, [])
+                      )
+                  )
+                )
+            )
+          )
+      )
+    )
+}
+
+// ─── Flatten visible rows ─────────────────────────────────────────────────────
+
+function flattenVisible(
+  nodes: TreeNode[],
+  depth: number,
+  expanded: Set<string>
+): Array<TreeNode & { depth: number; isExpanded: boolean }> {
+  const result: Array<TreeNode & { depth: number; isExpanded: boolean }> = []
+  for (const node of nodes) {
+    const isExpanded = expanded.has(node.key)
+    result.push({ ...node, depth, isExpanded })
+    if (isExpanded && node.children.length > 0) {
+      result.push(...flattenVisible(node.children, depth + 1, expanded))
+    }
+  }
+  return result
+}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PorUnidadePage() {
-  const [rawData,     setRawData]     = useState<PorUnidadeRow[]>([])
-  const [dreLinhas,   setDreLinhas]   = useState<DRELinha[]>([])
-  const [hierarchy,   setHierarchy]   = useState<Hierarchy[]>([])
+  const [allRows,     setAllRows]     = useState<PorUnidadeRow[]>([])
+  const [tree,        setTree]        = useState<TreeNode[]>([])
   const [unidades,    setUnidades]    = useState<string[]>([])
   const [periodos,    setPeriodos]    = useState<string[]>([])
   const [selUnidades, setSelUnidades] = useState<string[]>([])
@@ -28,464 +126,352 @@ export default function PorUnidadePage() {
   const [selYear,     setSelYear]     = useState<string | null>('2026')
   const [expanded,    setExpanded]    = useState<Set<string>>(new Set())
   const [loading,     setLoading]     = useState(false)
-  const [viewMode,    setViewMode]    = useState<'total' | 'periodo'>('total')
+  const [initialized, setInitialized] = useState(false)
 
-  const [ctxMenu,  setCtxMenu]  = useState<ContextMenuState | null>(null)
-  const [detModal, setDetModal] = useState<ContextMenuState | null>(null)
-  const ctxRef = useRef<HTMLDivElement>(null)
-
-  // Close context menu on click outside
-  useEffect(() => {
-    if (!ctxMenu) return
-    const h = () => setCtxMenu(null)
-    window.addEventListener('click', h)
-    return () => window.removeEventListener('click', h)
-  }, [ctxMenu])
-
-  // ─── Load static config once ──────────────────────────────────────────────
-
+  // ── Init: fetch distinct unidades + periods ──────────────────────────────
   useEffect(() => {
     async function init() {
-      const [distRes, hierRes, linhasRes] = await Promise.all([
-        fetch('/api/por-unidade?type=distinct').then(r => r.json()),
-        fetch('/api/dre?type=hierarchy').then(r => r.json()),
-        fetch('/api/dre?type=linhas').then(r => r.json()),
-      ])
-
-      const uns: string[]  = distRes.unidades ?? []
-      const pers: string[] = distRes.periodos  ?? []
-      setUnidades(uns)
-      setPeriodos(pers)
-      setHierarchy(Array.isArray(hierRes) ? hierRes : [])
-      setDreLinhas(Array.isArray(linhasRes) ? linhasRes : [])
-
-      // Default: YTD of current year
-      const now = new Date()
-      const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-      const ytd = pers.filter(p => p.startsWith('2026') && p <= curMonth)
-      const initPeriods = ytd.length > 0 ? ytd : pers.filter(p => p.startsWith('2026'))
-      setSelPeriods(initPeriods)
-
-      if (initPeriods.length > 0) {
-        loadData(uns.length > 0 ? uns : [], initPeriods)
+      try {
+        const res = await fetch('/api/por-unidade?type=distinct', { cache: 'no-store' })
+        if (res.ok) {
+          const d = await res.json()
+          setUnidades(Array.isArray(d.unidades) ? d.unidades : [])
+          setPeriodos(Array.isArray(d.periodos) ? d.periodos : [])
+        }
+      } finally {
+        setInitialized(true)
       }
     }
     init()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ─── Reload data when filters change ──────────────────────────────────────
-
-  function loadData(units: string[], periods: string[]) {
-    setLoading(true)
-    const p = new URLSearchParams()
-    if (periods.length) p.set('periodos', periods.join(','))
-    if (units.length)   p.set('unidades', units.join(','))
-    fetch(`/api/por-unidade?${p}`)
-      .then(r => r.json())
-      .then(data => { setRawData(Array.isArray(data.rows) ? data.rows : []); setLoading(false) })
-      .catch(() => setLoading(false))
-  }
-
-  const handlePeriodChange = useCallback((periods: string[]) => {
-    setSelPeriods(periods)
-    loadData(selUnidades, periods)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selUnidades])
-
-  const handleUnidadeToggle = useCallback((u: string) => {
-    const next = selUnidades.includes(u)
-      ? selUnidades.filter(x => x !== u)
-      : [...selUnidades, u]
-    setSelUnidades(next)
-    loadData(next, selPeriods)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selUnidades, selPeriods])
-
-  const handleYearChange = useCallback((year: string | null) => {
-    setSelYear(year)
-    const filtered = year ? periodos.filter(p => p.startsWith(year)) : periodos
-    setSelPeriods(filtered)
-    loadData(selUnidades, filtered)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [periodos, selUnidades])
-
-  // ─── Build per-unit trees ──────────────────────────────────────────────────
-
-  const unitTrees = useMemo(() => {
-    if (!dreLinhas.length || !rawData.length) return new Map<string, TreeNode[]>()
-
-    // Determine which units to show
-    const activeUnits = selUnidades.length > 0 ? selUnidades : unidades
-    const result = new Map<string, TreeNode[]>()
-
-    for (const unit of activeUnits) {
-      const unitRows = rawData.filter(r => r.unidade === unit)
-      if (!unitRows.length) continue
-
-      // Convert to DRERow[] for buildTreeFromLinhas (aggregate periods per dre||agrup)
-      const dreRows: DRERow[] = unitRows.map(r => ({
-        dre: r.dre,
-        agrupamento_arvore: r.agrupamento,
-        ordem_dre: r.ordem_dre,
-        periodo: r.periodo ?? '',
-        budget: r.budget,
-        razao: r.razao,
-      }))
-
-      // Convert to DREAccountRow[] for account-level detail
-      const acctRows: DREAccountRow[] = unitRows.map(r => ({
-        dre: r.dre,
-        agrupamento_arvore: r.agrupamento,
-        numero_conta_contabil: r.conta,
-        nome_conta_contabil: r.nome_conta,
-        periodo: r.periodo ?? '',
-        budget: r.budget,
-        razao: r.razao,
-      }))
-
-      result.set(unit, buildTreeFromLinhas(dreRows, hierarchy, dreLinhas, acctRows))
-    }
-    return result
-  }, [rawData, hierarchy, dreLinhas, selUnidades, unidades])
-
-  // ─── Sorted period labels for column headers ───────────────────────────────
-
-  const periodCols = useMemo(() => [...selPeriods].sort(), [selPeriods])
-
-  // ─── Context menu ──────────────────────────────────────────────────────────
-
-  const openCtxMenu = useCallback((
-    e: React.MouseEvent,
-    node: TreeNode,
-    unit: string,
-    periodo?: string,
-    tipo: 'budget' | 'razao' | 'ambos' = 'ambos'
-  ) => {
-    e.preventDefault(); e.stopPropagation()
-    setCtxMenu({
-      x: e.clientX, y: e.clientY, node, periodo, tipo,
-      unidades: [unit],
-      periodos: selPeriods.length ? selPeriods : undefined,
-    })
-  }, [selPeriods])
-
-  // ─── Toggle expand ─────────────────────────────────────────────────────────
-
-  const toggle = useCallback((key: string) =>
-    setExpanded(prev => {
-      const s = new Set(prev)
-      s.has(key) ? s.delete(key) : s.add(key)
-      return s
-    }), [])
-
-  // ─── Render helpers ───────────────────────────────────────────────────────
-
-  const years = useMemo(() => [...new Set(periodos.map(p => p.slice(0, 4)))].sort(), [periodos])
-
-  function renderValueCell(val: number, className = '') {
-    return (
-      <td className={cn('px-2 py-0.5 text-right tabular-nums text-xs whitespace-nowrap', className)}>
-        {formatCurrency(val)}
-      </td>
-    )
-  }
-
-  function renderVariationCell(budget: number, razao: number) {
-    const v = razao - budget
-    const pct = budget ? (v / Math.abs(budget)) * 100 : 0
-    return (
-      <>
-        <td className={cn('px-2 py-0.5 text-right tabular-nums text-xs whitespace-nowrap', colorForVariance(v))}>
-          {formatCurrency(v)}
-        </td>
-        <td className={cn('px-2 py-0.5 text-right tabular-nums text-xs whitespace-nowrap', colorForVariance(v))}>
-          {formatPct(pct)}
-        </td>
-      </>
-    )
-  }
-
-  // Renders a DRE tree node row (and recursively its children if expanded)
-  function renderNode(node: TreeNode, unit: string, depth = 0): React.ReactNode {
-    if (node.isSeparator) return <tr key={`sep-${node.name}-${unit}`}><td colSpan={100} className="h-px bg-gray-200 dark:bg-slate-600 py-0" /></tr>
-
-    const key = `${unit}||${node.name}`
-    const isExp = expanded.has(key)
-    const hasChildren = node.children.length > 0
-    const indent = depth * 16 + 8
-
-    const rowClass = cn(
-      'hover:bg-gray-50 dark:hover:bg-slate-700 cursor-default',
-      node.isSubtotal ? 'bg-gray-50 dark:bg-slate-700/50' : '',
-      node.isBold ? 'font-semibold' : '',
-    )
-
-    const labelCell = (
-      <td
-        className="px-2 py-0.5 text-xs max-w-[260px] whitespace-nowrap"
-        style={{ paddingLeft: indent }}
-      >
-        <div className="flex items-center gap-1">
-          {hasChildren
-            ? <button onClick={() => toggle(key)} className="flex-shrink-0 text-gray-400 hover:text-gray-700 dark:hover:text-white">
-                {isExp ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-              </button>
-            : <span style={{ width: 16, display: 'inline-block' }} />}
-          <span className={cn('truncate', node.isBold ? 'font-semibold text-gray-800 dark:text-slate-100' : 'text-gray-700 dark:text-slate-300')}>
-            {node.name}
-          </span>
-        </div>
-      </td>
-    )
-
-    const rows: React.ReactNode[] = []
-
-    if (viewMode === 'total') {
-      rows.push(
-        <tr key={key} className={rowClass}
-          onContextMenu={e => openCtxMenu(e, node, unit, undefined, 'ambos')}>
-          {labelCell}
-          {renderValueCell(node.budget, 'text-gray-600 dark:text-slate-400')}
-          {renderValueCell(node.razao)}
-          {renderVariationCell(node.budget, node.razao)}
-        </tr>
-      )
+  // ── Default periods: YTD for selected year ───────────────────────────────
+  useEffect(() => {
+    if (!initialized || periodos.length === 0) return
+    if (selYear) {
+      const now      = new Date()
+      const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+      const ytd      = periodos.filter(p => p.startsWith(selYear) && p <= curMonth)
+      setSelPeriods(ytd.length > 0 ? ytd : periodos.filter(p => p.startsWith(selYear)))
     } else {
-      rows.push(
-        <tr key={key} className={rowClass}>
-          {labelCell}
-          {periodCols.map(p => {
-            const pv = node.byPeriod[p] ?? { budget: 0, razao: 0 }
-            return (
-              <React.Fragment key={p}>
-                <td className="px-2 py-0.5 text-right tabular-nums text-xs whitespace-nowrap text-gray-500 dark:text-slate-400"
-                  onContextMenu={e => openCtxMenu(e, node, unit, p, 'budget')}>
-                  {formatCurrency(pv.budget)}
-                </td>
-                <td className="px-2 py-0.5 text-right tabular-nums text-xs whitespace-nowrap"
-                  onContextMenu={e => openCtxMenu(e, node, unit, p, 'razao')}>
-                  {formatCurrency(pv.razao)}
-                </td>
-              </React.Fragment>
-            )
-          })}
-        </tr>
-      )
+      // "Todos" — select all periods
+      setSelPeriods([...periodos])
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selYear, initialized])
 
-    if (isExp && hasChildren) {
-      for (const child of node.children) {
-        rows.push(...React.Children.toArray(
-          [renderNode(child, unit, depth + 1)].flat()
-        ))
+  // ── Load data ─────────────────────────────────────────────────────────────
+  const loadData = useCallback(async (units: string[], prds: string[]) => {
+    if (prds.length === 0) {
+      setAllRows([])
+      setTree([])
+      return
+    }
+    setLoading(true)
+    try {
+      const params = new URLSearchParams()
+      params.set('periodos', prds.join(','))
+      if (units.length > 0) params.set('unidades', units.join(','))
+      const res = await fetch(`/api/por-unidade?${params}`, { cache: 'no-store' })
+      if (res.ok) {
+        const data: PorUnidadeRow[] = await res.json()
+        setAllRows(data)
+        setTree(buildTree(data))
+        setExpanded(new Set()) // collapse all on new data
       }
+    } finally {
+      setLoading(false)
     }
+  }, [])
 
-    return rows
+  useEffect(() => {
+    if (!initialized) return
+    loadData(selUnidades, selPeriods)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selUnidades, selPeriods, initialized])
+
+  // ── Toggle expand ─────────────────────────────────────────────────────────
+  const toggle = (key: string) =>
+    setExpanded(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+
+  // ── Derived data ──────────────────────────────────────────────────────────
+  const visibleRows = flattenVisible(tree, 0, expanded)
+
+  const totals = tree.reduce(
+    (a, n) => ({ budget: a.budget + n.budget, razao: a.razao + n.razao }),
+    { budget: 0, razao: 0 }
+  )
+  const totalVariacao = totals.razao - totals.budget
+  const totalPct      = totals.budget ? (totalVariacao / Math.abs(totals.budget)) * 100 : 0
+
+  const years = [...new Set(periodos.map(p => p.substring(0, 4)).filter(Boolean))].sort()
+  const visiblePeriods = selYear ? periodos.filter(p => p.startsWith(selYear)) : periodos
+
+  // ── Export CSV ────────────────────────────────────────────────────────────
+  const exportCSV = () => {
+    const header = ['Unidade', 'DRE', 'Agrupamento', 'Conta', 'VLR Orçado', 'VLR Realizado', 'Variação', '%']
+    const dataRows = allRows.map(r => {
+      const variacao = r.razao - r.budget
+      const pct      = r.budget ? (variacao / Math.abs(r.budget)) * 100 : 0
+      return [r.unidade, r.dre, r.agrupamento, r.nome_conta || r.conta, r.budget, r.razao, variacao, pct.toFixed(2)]
+    })
+    const csv  = [header, ...dataRows].map(row => row.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')).join('\n')
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a'); a.href = url; a.download = 'por-unidade.csv'; a.click()
   }
 
-  // ─── Render ───────────────────────────────────────────────────────────────
-
-  const activeUnits = selUnidades.length > 0 ? selUnidades : unidades
-
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-screen overflow-hidden">
-      {/* ── Left sidebar ─────────────────────────────────────────────────── */}
-      <aside className="w-56 flex-shrink-0 border-r border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 flex flex-col overflow-y-auto">
-        <div className="px-3 pt-3 pb-2 border-b border-gray-100 dark:border-slate-700">
-          <h2 className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-widest">Filtros</h2>
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Por Unidade de Negócio</h1>
+          <p className="text-gray-500 text-sm mt-0.5">
+            Budget vs Realizado · Expansível por DRE → Agrupamento → Conta
+          </p>
         </div>
-
-        {/* Year */}
-        <div className="px-3 pt-3 pb-2">
-          <p className="text-[10px] font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">Ano</p>
-          <YearFilter years={years} selected={selYear} onChange={handleYearChange} />
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => loadData(selUnidades, selPeriods)} disabled={loading}>
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Atualizar
+          </Button>
+          <Button variant="outline" size="sm" onClick={exportCSV} disabled={allRows.length === 0}>
+            <Download size={13} /> Exportar CSV
+          </Button>
         </div>
+      </div>
 
-        {/* Periods */}
-        <div className="px-3 pt-2 pb-2 border-t border-gray-50 dark:border-slate-700/50">
-          <p className="text-[10px] font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">Períodos</p>
-          <div className="space-y-0.5 max-h-48 overflow-y-auto">
-            {periodos.filter(p => !selYear || p.startsWith(selYear)).map(p => (
-              <label key={p} className="flex items-center gap-2 cursor-pointer px-1 py-0.5 rounded hover:bg-gray-50 dark:hover:bg-slate-700">
-                <input type="checkbox" className="w-3 h-3 accent-indigo-600"
-                  checked={selPeriods.includes(p)}
-                  onChange={() => handlePeriodChange(
-                    selPeriods.includes(p) ? selPeriods.filter(x => x !== p) : [...selPeriods, p]
-                  )} />
-                <span className="text-xs text-gray-600 dark:text-slate-300">{p}</span>
-              </label>
-            ))}
-          </div>
-        </div>
+      <div className="flex gap-4">
+        {/* ── Sidebar ─────────────────────────────────────────────────────── */}
+        <div className="w-52 flex-shrink-0">
+          <Card>
+            <CardContent className="p-3 space-y-4">
 
-        {/* Units */}
-        <div className="px-3 pt-2 pb-2 border-t border-gray-50 dark:border-slate-700/50 flex-1">
-          <div className="flex items-center justify-between mb-1.5">
-            <p className="text-[10px] font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-widest">Unidades</p>
-            {selUnidades.length > 0 && (
-              <button onClick={() => { setSelUnidades([]); loadData([], selPeriods) }}
-                className="text-[10px] text-indigo-600 hover:text-indigo-800">
-                Limpar
-              </button>
-            )}
-          </div>
-          <div className="space-y-0.5">
-            {unidades.map(u => (
-              <label key={u} className="flex items-center gap-2 cursor-pointer px-1 py-0.5 rounded hover:bg-gray-50 dark:hover:bg-slate-700">
-                <input type="checkbox" className="w-3 h-3 accent-indigo-600"
-                  checked={selUnidades.length === 0 || selUnidades.includes(u)}
-                  onChange={() => handleUnidadeToggle(u)} />
-                <span className="text-xs text-gray-600 dark:text-slate-300 truncate" title={u}>{u}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-      </aside>
+              {/* ANO */}
+              {years.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1 mb-2">
+                    <Calendar size={11} /> Ano
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {years.length > 1 && (
+                      <button
+                        onClick={() => setSelYear(null)}
+                        className={cn('px-2 py-0.5 rounded text-xs font-medium transition-colors',
+                          selYear === null ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}
+                      >
+                        Todos
+                      </button>
+                    )}
+                    {years.map(y => (
+                      <button key={y} onClick={() => setSelYear(y)}
+                        className={cn('px-2 py-0.5 rounded text-xs font-medium transition-colors',
+                          selYear === y ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}
+                      >
+                        {y}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-      {/* ── Main content ─────────────────────────────────────────────────── */}
-      <main className="flex-1 overflow-auto bg-gray-50 dark:bg-slate-900">
-        {/* Header */}
-        <div className="sticky top-0 z-10 bg-white dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700 px-6 py-3 flex items-center justify-between">
-          <div>
-            <h1 className="text-base font-bold text-gray-900 dark:text-white">Por Unidade de Negócio</h1>
-            <p className="text-xs text-gray-400 dark:text-slate-400 mt-0.5">DRE por unidade · Budget vs Razão · Clique direito para detalhamento</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden text-xs">
-              {(['total', 'periodo'] as const).map(m => (
-                <button key={m}
-                  className={cn('px-3 py-1.5 font-medium transition-colors',
-                    viewMode === m
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'
+              {/* UNIDADES */}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1 mb-1.5">
+                  <Filter size={11} /> Unidades
+                </p>
+                <div className="space-y-0.5 max-h-52 overflow-y-auto">
+                  {unidades.map(u => (
+                    <label key={u} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                      <input
+                        type="checkbox"
+                        checked={selUnidades.includes(u)}
+                        onChange={e =>
+                          setSelUnidades(prev =>
+                            e.target.checked ? [...prev, u] : prev.filter(x => x !== u)
+                          )
+                        }
+                        className="w-3 h-3 accent-indigo-600"
+                      />
+                      <span className="text-xs text-gray-600 truncate" title={u}>{u || '—'}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* PERÍODOS */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Períodos</p>
+                  {selPeriods.length > 0 && (
+                    <button
+                      onClick={() => setSelPeriods([])}
+                      className="text-xs text-red-400 hover:text-red-600 flex items-center gap-0.5"
+                    >
+                      <X size={9} /> Limpar
+                    </button>
                   )}
-                  onClick={() => setViewMode(m)}>
-                  {m === 'total' ? 'Total' : 'Mensal'}
-                </button>
-              ))}
-            </div>
-          </div>
+                </div>
+                <div className="space-y-0.5 max-h-44 overflow-y-auto">
+                  {visiblePeriods.map(p => (
+                    <label key={p} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                      <input
+                        type="checkbox"
+                        checked={selPeriods.includes(p)}
+                        onChange={e =>
+                          setSelPeriods(prev =>
+                            e.target.checked ? [...prev, p] : prev.filter(x => x !== p)
+                          )
+                        }
+                        className="w-3 h-3 accent-indigo-600"
+                      />
+                      <span className="text-xs text-gray-600">{formatPeriodo(p)}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Table */}
-        <div className="px-4 py-4">
+        {/* ── Main table ──────────────────────────────────────────────────── */}
+        <div className="flex-1 min-w-0">
           {loading ? (
-            <div className="space-y-2">
-              {[1,2,3,4,5].map(i => (
-                <div key={i} className="h-8 bg-white dark:bg-slate-800 rounded-lg animate-pulse" />
-              ))}
+            <div className="flex items-center justify-center h-40">
+              <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : (
-            <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 overflow-hidden shadow-sm">
-              <table className="w-full border-collapse text-xs">
-                <thead>
-                  <tr className="bg-gray-50 dark:bg-slate-700/50 border-b border-gray-100 dark:border-slate-600">
-                    <th className="px-2 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 min-w-[220px]">Linha DRE</th>
-                    {viewMode === 'total' ? (
-                      <>
-                        <th className="px-2 py-2 text-right font-semibold text-gray-600 dark:text-slate-300 w-28">Budget</th>
-                        <th className="px-2 py-2 text-right font-semibold text-gray-600 dark:text-slate-300 w-28">Realizado</th>
-                        <th className="px-2 py-2 text-right font-semibold text-gray-600 dark:text-slate-300 w-28">Variação</th>
-                        <th className="px-2 py-2 text-right font-semibold text-gray-600 dark:text-slate-300 w-16">%</th>
-                      </>
-                    ) : periodCols.map(p => (
-                      <React.Fragment key={p}>
-                        <th className="px-2 py-2 text-right font-semibold text-gray-500 dark:text-slate-400 w-24">{p} Bud</th>
-                        <th className="px-2 py-2 text-right font-semibold text-gray-600 dark:text-slate-300 w-24">{p} Real</th>
-                      </React.Fragment>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {activeUnits.map(unit => {
-                    const tree = unitTrees.get(unit)
-                    if (!tree) return null
-                    const unitKey = `unit::${unit}`
-                    const isExpUnit = expanded.has(unitKey)
+            <Card>
+              {selPeriods.length === 0 && !loading ? (
+                <div className="flex items-center justify-center h-32 text-gray-400 text-sm">
+                  Selecione ao menos um período para ver os dados.
+                </div>
+              ) : tree.length === 0 && !loading ? (
+                <div className="flex items-center justify-center h-32 text-gray-400 text-sm">
+                  Nenhum dado encontrado para os filtros selecionados.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100 bg-gray-50">
+                        <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs uppercase tracking-wide">
+                          UNIDADE / DRE / AGRUPAMENTO / CONTA
+                        </th>
+                        <th className="text-right px-4 py-2.5 font-medium text-gray-500 text-xs uppercase tracking-wide whitespace-nowrap">
+                          VLR. ORÇADO
+                        </th>
+                        <th className="text-right px-4 py-2.5 font-medium text-gray-500 text-xs uppercase tracking-wide whitespace-nowrap">
+                          VLR. REALIZADO
+                        </th>
+                        <th className="text-right px-4 py-2.5 font-medium text-gray-500 text-xs uppercase tracking-wide whitespace-nowrap">
+                          VARIAÇÃO
+                        </th>
+                        <th className="text-right px-4 py-2.5 font-medium text-gray-500 text-xs uppercase tracking-wide">
+                          %
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleRows.map(row => {
+                        const isUnit  = row.level === 'unit'
+                        const isConta = row.level === 'conta'
+                        const indent  = 16 + row.depth * 20
 
-                    // Compute unit totals (sum of all DRE grupo nodes excluding subtotals)
-                    const unitBudget = tree.reduce((s, n) => s + (n.isSubtotal ? 0 : n.budget), 0)
-                    const unitRazao  = tree.reduce((s, n) => s + (n.isSubtotal ? 0 : n.razao),  0)
+                        return (
+                          <tr
+                            key={row.key}
+                            className={cn(
+                              'border-b border-gray-50 transition-colors',
+                              isUnit ? 'hover:bg-gray-50 font-semibold' : 'hover:bg-gray-50'
+                            )}
+                          >
+                            <td className="py-2 pr-4" style={{ paddingLeft: `${indent}px` }}>
+                              <div className="flex items-center gap-1.5">
+                                {!isConta && row.children.length > 0 ? (
+                                  <button
+                                    onClick={() => toggle(row.key)}
+                                    className="w-4 h-4 flex items-center justify-center text-gray-400 hover:text-gray-700 flex-shrink-0"
+                                  >
+                                    {row.isExpanded
+                                      ? <ChevronDown size={13} />
+                                      : <ChevronRight size={13} />}
+                                  </button>
+                                ) : (
+                                  <div className="w-4 flex-shrink-0" />
+                                )}
+                                <span className={cn(
+                                  'truncate',
+                                  isUnit               && 'font-semibold text-gray-900',
+                                  row.level === 'dre'  && 'text-gray-800',
+                                  row.level === 'agrupamento' && 'text-gray-600 text-xs',
+                                  isConta              && 'text-gray-500 text-xs',
+                                )}>
+                                  {row.label}
+                                </span>
+                              </div>
+                            </td>
 
-                    return (
-                      <React.Fragment key={unit}>
-                        {/* Unit header row */}
-                        <tr className="bg-indigo-50 dark:bg-indigo-950/30 border-t border-indigo-100 dark:border-indigo-900 cursor-pointer"
-                          onClick={() => toggle(unitKey)}>
-                          <td className="px-2 py-1.5 font-bold text-indigo-700 dark:text-indigo-300">
-                            <div className="flex items-center gap-1.5">
-                              {isExpUnit ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                              {unit}
-                            </div>
-                          </td>
-                          {viewMode === 'total' ? (
-                            <>
-                              <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-gray-500 dark:text-slate-400">{formatCurrency(unitBudget)}</td>
-                              <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-gray-800 dark:text-slate-100">{formatCurrency(unitRazao)}</td>
-                              <td className={cn('px-2 py-1.5 text-right tabular-nums font-semibold', colorForVariance(unitRazao - unitBudget))}>
-                                {formatCurrency(unitRazao - unitBudget)}
-                              </td>
-                              <td className={cn('px-2 py-1.5 text-right tabular-nums font-semibold', colorForVariance(unitRazao - unitBudget))}>
-                                {formatPct(unitBudget ? ((unitRazao - unitBudget) / Math.abs(unitBudget)) * 100 : 0)}
-                              </td>
-                            </>
-                          ) : periodCols.map(p => {
-                            const bud = tree.reduce((s, n) => s + (n.isSubtotal ? 0 : (n.byPeriod[p]?.budget ?? 0)), 0)
-                            const raz = tree.reduce((s, n) => s + (n.isSubtotal ? 0 : (n.byPeriod[p]?.razao  ?? 0)), 0)
-                            return (
-                              <React.Fragment key={p}>
-                                <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-gray-500 dark:text-slate-400">{formatCurrency(bud)}</td>
-                                <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-gray-800 dark:text-slate-100">{formatCurrency(raz)}</td>
-                              </React.Fragment>
-                            )
-                          })}
-                        </tr>
-
-                        {/* DRE rows for this unit */}
-                        {isExpUnit && tree.map(node => renderNode(node, unit, 1))}
-                      </React.Fragment>
-                    )
-                  })}
-                  {activeUnits.length === 0 && (
-                    <tr>
-                      <td colSpan={100} className="px-4 py-8 text-center text-sm text-gray-400">
-                        Nenhuma unidade disponível.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                            <td className="px-4 py-2 text-right text-gray-600 tabular-nums whitespace-nowrap">
+                              {formatCurrency(row.budget)}
+                            </td>
+                            <td className="px-4 py-2 text-right text-gray-600 tabular-nums whitespace-nowrap">
+                              {formatCurrency(row.razao)}
+                            </td>
+                            <td className={cn(
+                              'px-4 py-2 text-right font-medium tabular-nums whitespace-nowrap',
+                              colorForVariance(row.variacao)
+                            )}>
+                              {formatCurrency(row.variacao)}
+                            </td>
+                            <td className="px-4 py-2 text-right whitespace-nowrap">
+                              <span className={cn(
+                                'text-xs px-1.5 py-0.5 rounded-full',
+                                bgColorForVariance(row.variacao)
+                              )}>
+                                {formatPct(row.variacao_pct)}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-900 text-white font-bold">
+                        <td className="px-4 py-3 text-sm">Total Geral</td>
+                        <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap">
+                          {formatCurrency(totals.budget)}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap">
+                          {formatCurrency(totals.razao)}
+                        </td>
+                        <td className={cn(
+                          'px-4 py-3 text-right tabular-nums whitespace-nowrap',
+                          totalVariacao >= 0 ? 'text-emerald-400' : 'text-red-400'
+                        )}>
+                          {formatCurrency(totalVariacao)}
+                        </td>
+                        <td className={cn(
+                          'px-4 py-3 text-right text-sm whitespace-nowrap',
+                          totalVariacao >= 0 ? 'text-emerald-400' : 'text-red-400'
+                        )}>
+                          {formatPct(totalPct)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </Card>
           )}
         </div>
-      </main>
-
-      {/* ── Context menu ─────────────────────────────────────────────────── */}
-      {ctxMenu && (
-        <div ref={ctxRef}
-          className="fixed z-50 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl shadow-2xl py-1.5 w-52"
-          style={{ top: ctxMenu.y, left: ctxMenu.x }}>
-          <div className="px-3 py-1.5 border-b border-gray-100 dark:border-slate-700">
-            <p className="text-xs font-semibold text-gray-700 dark:text-slate-200 truncate">{ctxMenu.node.name}</p>
-            {ctxMenu.unidades?.[0] && (
-              <p className="text-[10px] text-gray-400 dark:text-slate-500 truncate">{ctxMenu.unidades[0]}</p>
-            )}
-          </div>
-          <button
-            className="w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-indigo-950 flex items-center gap-2"
-            onClick={() => { setDetModal(ctxMenu); setCtxMenu(null) }}>
-            <ChevronRight size={11} className="text-indigo-500" />
-            Ver lançamentos
-          </button>
-        </div>
-      )}
-
-      {/* ── Detalhamento modal ───────────────────────────────────────────── */}
-      {detModal && (
-        <DetalhamentoModal ctx={detModal} onClose={() => setDetModal(null)} />
-      )}
+      </div>
     </div>
   )
 }

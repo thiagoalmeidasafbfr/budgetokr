@@ -6,7 +6,7 @@ import {
   LayoutDashboard, TrendingUp, LineChart, GitCompare,
   Target, Layers, FileText, Database, Upload,
   ChevronRight, Building2, BookOpen, LayoutList, Gauge,
-  LogOut, User, ListTree, Shield, Landmark, Moon, Sun, History, MessageSquare,
+  LogOut, User, ListTree, Shield, Landmark, Moon, Sun, History, MessageSquare, BarChart2, Briefcase,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/components/ThemeProvider'
@@ -46,6 +46,12 @@ const nav: NavItem[] = [
     sublabel: 'Budget vs Realizado',
   },
   {
+    type: 'link', href: '/por-unidade',
+    icon: BarChart2,
+    label: 'Por Unidade de Negócio',
+    sublabel: 'Budget vs Realizado por área',
+  },
+  {
     type: 'link', href: '/dept',
     icon: Layers,
     label: 'Por Departamento',
@@ -62,6 +68,13 @@ const nav: NavItem[] = [
     icon: Layers,
     label: 'Por Unidade',
     sublabel: 'DRE por unidade de negócio',
+    masterOnly: true,
+  },
+  {
+    type: 'link', href: '/unidades-negocio',
+    icon: Briefcase,
+    label: 'Unidades de Negócio',
+    sublabel: 'Budget vs Realizado · ID CC-CC',
     masterOnly: true,
   },
   {
@@ -107,9 +120,10 @@ const nav: NavItem[] = [
   {
     type: 'group', icon: Database, label: 'Dimensões', masterOnly: true,
     children: [
-      { href: '/dimensoes/centros-custo',    label: 'Centros de Custo',   icon: Building2  },
-      { href: '/dimensoes/contas-contabeis', label: 'Contas Contábeis',   icon: BookOpen   },
-      { href: '/dimensoes/dre',              label: 'Estrutura DRE',      icon: LayoutList },
+      { href: '/dimensoes/centros-custo',      label: 'Centros de Custo',      icon: Building2  },
+      { href: '/dimensoes/contas-contabeis',  label: 'Contas Contábeis',      icon: BookOpen   },
+      { href: '/dimensoes/dre',               label: 'Estrutura DRE',         icon: LayoutList },
+      { href: '/dimensoes/unidades-negocio',  label: 'Unidades de Negócio',   icon: Briefcase  },
     ],
   },
   {

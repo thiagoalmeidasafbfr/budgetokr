@@ -329,14 +329,20 @@ BEGIN
   IF array_length(p_centros, 1) > 0 THEN
     v_cond := array_append(v_cond, format('l.centro_custo = ANY(%s)', quote_literal(p_centros::TEXT)));
   END IF;
+  IF array_length(p_unidades, 1) > 0 THEN
+    v_cond := array_append(v_cond, format('COALESCE(un.unidade, ''Sem Unidade'') = ANY(%s)', quote_literal(p_unidades::TEXT)));
+  END IF;
 
-  v_sql := 'SELECT l.id, l.tipo, l.data_lancamento, l.numero_conta_contabil,
-      l.nome_conta_contabil, l.centro_custo, cc.nome_centro_custo,
+  v_sql := 'SELECT l.id, l.tipo, l.data_lancamento, l.numero_transacao,
+      l.numero_conta_contabil, l.nome_conta_contabil,
+      l.centro_custo, cc.nome_centro_custo, cc.nome_area,
       ca.agrupamento_arvore, ca.dre, l.nome_conta_contrapartida,
-      l.debito_credito, l.observacao, l.fonte
+      l.debito_credito, l.observacao, l.fonte, l.num_transacao,
+      l.id_cc_cc, un.unidade
     FROM lancamentos l
     LEFT JOIN centros_custo    cc ON l.centro_custo          = cc.centro_custo
-    LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil' ||
+    LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil
+    LEFT JOIN unidades_negocio un ON l.id_cc_cc              = un.id_cc_cc' ||
     CASE WHEN array_length(v_cond, 1) > 0 THEN ' WHERE ' || array_to_string(v_cond, ' AND ') ELSE '' END ||
     ' ORDER BY l.data_lancamento, l.numero_conta_contabil
       LIMIT 200000';
@@ -567,21 +573,101 @@ BEGIN
 END;
 $$;
 
--- ─── get_unidades_distintas: lista de unidades de negócio disponíveis ─────────
+-- ─── get_unidades_distintas: lista de unidades de negócio via nome_departamento ─
 CREATE OR REPLACE FUNCTION get_unidades_distintas()
 RETURNS JSONB LANGUAGE sql AS $$
-  SELECT jsonb_agg(row_to_json(t))
+  SELECT COALESCE(jsonb_agg(unidade ORDER BY unidade), '[]'::JSONB)
   FROM (
     SELECT DISTINCT COALESCE(cc.nome_departamento, 'Sem Unidade') AS unidade
     FROM lancamentos l
     LEFT JOIN centros_custo cc ON l.centro_custo = cc.centro_custo
     WHERE cc.nome_departamento IS NOT NULL AND cc.nome_departamento <> ''
-    ORDER BY unidade
   ) t;
 $$;
 
--- ─── get_por_unidade: DRE agrupada por unidade de negócio ─────────────────────
+-- ─── get_por_unidade: DRE agrupada por unidade (via centros_custo.nome_departamento)
 CREATE OR REPLACE FUNCTION get_por_unidade(
+  p_periodos TEXT[] DEFAULT '{}',
+  p_unidades TEXT[] DEFAULT '{}'
+) RETURNS JSONB LANGUAGE plpgsql AS $$
+DECLARE
+  v_cond   TEXT[] := '{}';
+  v_sql    TEXT;
+  v_result JSONB;
+BEGIN
+  IF array_length(p_periodos, 1) > 0 THEN
+    v_cond := array_append(v_cond,
+      format('to_char(l.data_lancamento, ''YYYY-MM'') = ANY(%s)', quote_literal(p_periodos::TEXT)));
+  END IF;
+  IF array_length(p_unidades, 1) > 0 THEN
+    v_cond := array_append(v_cond,
+      format('COALESCE(cc.nome_departamento, ''Sem Unidade'') = ANY(%s)', quote_literal(p_unidades::TEXT)));
+  END IF;
+
+  v_sql :=
+    'SELECT
+      COALESCE(cc.nome_departamento, ''Sem Unidade'') AS unidade,
+      COALESCE(ca.dre, ''Sem classificação'') AS dre,
+      COALESCE(ca.agrupamento_arvore, '''') AS agrupamento,
+      l.numero_conta_contabil AS conta,
+      MAX(COALESCE(ca.nome_conta_contabil, l.nome_conta_contabil, l.numero_conta_contabil, '''')) AS nome_conta,
+      COALESCE(MIN(ca.ordem_dre), 999) AS ordem_dre,
+      SUM(CASE WHEN l.tipo=''budget'' THEN l.debito_credito ELSE 0 END) AS budget,
+      SUM(CASE WHEN l.tipo=''razao''  THEN l.debito_credito ELSE 0 END) AS razao
+    FROM lancamentos l
+    LEFT JOIN centros_custo    cc ON l.centro_custo          = cc.centro_custo
+    LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil' ||
+    CASE WHEN array_length(v_cond, 1) > 0
+      THEN ' WHERE ' || array_to_string(v_cond, ' AND ')
+      ELSE ''
+    END ||
+    ' GROUP BY
+        COALESCE(cc.nome_departamento, ''Sem Unidade''),
+        COALESCE(ca.dre, ''Sem classificação''),
+        COALESCE(ca.agrupamento_arvore, ''''),
+        l.numero_conta_contabil
+      ORDER BY
+        COALESCE(cc.nome_departamento, ''Sem Unidade''),
+        COALESCE(MIN(ca.ordem_dre), 999),
+        COALESCE(ca.dre, ''Sem classificação''),
+        COALESCE(ca.agrupamento_arvore, ''''),
+        l.numero_conta_contabil';
+
+  EXECUTE 'SELECT jsonb_agg(row_to_json(t)) FROM (' || v_sql || ') t' INTO v_result;
+  RETURN COALESCE(v_result, '[]'::JSONB);
+END;
+$$;
+
+-- ─── Unidades de Negócio via tabela unidades_negocio (id_cc_cc) ───────────────
+CREATE OR REPLACE FUNCTION get_unidades_negocio_analise(
+  p_periodos  TEXT[]  DEFAULT '{}',
+  p_unidades  TEXT[]  DEFAULT '{}'
+) RETURNS TABLE(
+  unidade   TEXT,
+  periodo   TEXT,
+  budget    NUMERIC,
+  razao     NUMERIC
+) LANGUAGE plpgsql AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    u.unidade,
+    TO_CHAR(l.data_lancamento, 'YYYY-MM') AS periodo,
+    SUM(CASE WHEN l.tipo = 'budget' THEN l.debito_credito ELSE 0 END) AS budget,
+    SUM(CASE WHEN l.tipo = 'razao'  THEN l.debito_credito ELSE 0 END) AS razao
+  FROM lancamentos l
+  JOIN unidades_negocio u ON l.id_cc_cc = u.id_cc_cc
+  WHERE (array_length(p_periodos, 1) IS NULL OR TO_CHAR(l.data_lancamento, 'YYYY-MM') = ANY(p_periodos))
+    AND (array_length(p_unidades, 1) IS NULL OR u.unidade = ANY(p_unidades))
+  GROUP BY u.unidade, TO_CHAR(l.data_lancamento, 'YYYY-MM')
+  ORDER BY u.unidade, TO_CHAR(l.data_lancamento, 'YYYY-MM');
+END;
+$$;
+
+-- ─── get_unidades_negocio_dre: breakdown por unidade > DRE > agrupamento > conta
+-- Retorna JSONB (array único) para evitar limite de linhas do PostgREST
+DROP FUNCTION IF EXISTS get_unidades_negocio_dre(TEXT[], TEXT[]);
+CREATE OR REPLACE FUNCTION get_unidades_negocio_dre(
   p_periodos  TEXT[]  DEFAULT '{}',
   p_unidades  TEXT[]  DEFAULT '{}'
 ) RETURNS JSONB LANGUAGE plpgsql AS $$
@@ -591,40 +677,63 @@ DECLARE
   v_result JSONB;
 BEGIN
   IF array_length(p_periodos, 1) > 0 THEN
-    v_cond := array_append(v_cond, format('to_char(l.data_lancamento, ''YYYY-MM'') = ANY(%s)', quote_literal(p_periodos::TEXT)));
+    v_cond := array_append(v_cond,
+      format('TO_CHAR(l.data_lancamento, ''YYYY-MM'') = ANY(%s)', quote_literal(p_periodos::TEXT)));
   END IF;
   IF array_length(p_unidades, 1) > 0 THEN
-    v_cond := array_append(v_cond, format('COALESCE(cc.nome_departamento, ''Sem Unidade'') = ANY(%s)', quote_literal(p_unidades::TEXT)));
+    v_cond := array_append(v_cond,
+      format('COALESCE(u.unidade, ''Sem Unidade'') = ANY(%s)', quote_literal(p_unidades::TEXT)));
   END IF;
 
-  v_sql := 'SELECT
-      COALESCE(cc.nome_departamento, ''Sem Unidade'') AS unidade,
-      COALESCE(ca.dre, ''Sem DRE'') AS dre,
-      COALESCE(ca.agrupamento_arvore, ''Sem Agrupamento'') AS agrupamento,
-      l.numero_conta_contabil AS conta,
-      MAX(COALESCE(ca.nome_conta_contabil, l.nome_conta_contabil)) AS nome_conta,
-      MAX(COALESCE(ca.ordem_dre, 9999)) AS ordem_dre,
-      to_char(l.data_lancamento, ''YYYY-MM'') AS periodo,
-      SUM(CASE WHEN l.tipo = ''budget'' THEN l.debito_credito ELSE 0 END) AS budget,
-      SUM(CASE WHEN l.tipo = ''razao''  THEN l.debito_credito ELSE 0 END) AS razao
+  v_sql :=
+    'SELECT
+      COALESCE(u.unidade, ''Sem Unidade'')                                 AS unidade,
+      COALESCE(ca.dre, ''Sem Classificação'')                              AS dre,
+      COALESCE(ca.ordem_dre, 999)                                          AS ordem_dre,
+      COALESCE(ca.agrupamento_arvore, ''Sem Agrupamento'')                 AS agrupamento_arvore,
+      l.numero_conta_contabil,
+      COALESCE(ca.nome_conta_contabil, l.numero_conta_contabil)            AS nome_conta_contabil,
+      TO_CHAR(l.data_lancamento, ''YYYY-MM'')                              AS periodo,
+      SUM(CASE WHEN l.tipo = ''budget'' THEN l.debito_credito ELSE 0 END)  AS budget,
+      SUM(CASE WHEN l.tipo = ''razao''  THEN l.debito_credito ELSE 0 END)  AS razao
     FROM lancamentos l
-    LEFT JOIN centros_custo    cc ON l.centro_custo          = cc.centro_custo
+    LEFT JOIN unidades_negocio u  ON l.id_cc_cc              = u.id_cc_cc
     LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil' ||
-    CASE WHEN array_length(v_cond, 1) > 0 THEN ' WHERE ' || array_to_string(v_cond, ' AND ') ELSE '' END ||
-    ' GROUP BY
-        COALESCE(cc.nome_departamento, ''Sem Unidade''),
-        COALESCE(ca.dre, ''Sem DRE''),
-        COALESCE(ca.agrupamento_arvore, ''Sem Agrupamento''),
-        l.numero_conta_contabil,
-        to_char(l.data_lancamento, ''YYYY-MM'')
-      ORDER BY
-        COALESCE(cc.nome_departamento, ''Sem Unidade''),
-        MAX(COALESCE(ca.ordem_dre, 9999)),
-        COALESCE(ca.agrupamento_arvore, ''Sem Agrupamento''),
-        l.numero_conta_contabil,
-        to_char(l.data_lancamento, ''YYYY-MM'')';
+    CASE WHEN array_length(v_cond, 1) > 0
+      THEN ' WHERE ' || array_to_string(v_cond, ' AND ')
+      ELSE ''
+    END ||
+    ' GROUP BY COALESCE(u.unidade, ''Sem Unidade''), ca.dre, ca.ordem_dre, ca.agrupamento_arvore,
+               l.numero_conta_contabil, ca.nome_conta_contabil,
+               TO_CHAR(l.data_lancamento, ''YYYY-MM'')
+      ORDER BY COALESCE(u.unidade, ''Sem Unidade''),
+               COALESCE(ca.ordem_dre, 999),
+               COALESCE(ca.dre, ''Sem Classificação''),
+               COALESCE(ca.agrupamento_arvore, ''Sem Agrupamento''),
+               l.numero_conta_contabil,
+               TO_CHAR(l.data_lancamento, ''YYYY-MM'')';
 
-  EXECUTE 'SELECT jsonb_agg(row_to_json(t)) FROM (' || v_sql || ') t' INTO v_result;
-  RETURN COALESCE(v_result, '[]'::JSONB);
+  EXECUTE 'SELECT COALESCE(jsonb_agg(row_to_json(t)), ''[]''::jsonb) FROM (' || v_sql || ') t'
+    INTO v_result;
+  RETURN v_result;
 END;
+$$;
+
+-- ─── get_distinct_unidades: unidades com lançamentos via unidades_negocio ─────
+CREATE OR REPLACE FUNCTION get_distinct_unidades()
+RETURNS TABLE(unidade TEXT) LANGUAGE sql STABLE AS $$
+  SELECT DISTINCT COALESCE(u.unidade, 'Sem Unidade') AS unidade
+  FROM lancamentos l
+  LEFT JOIN unidades_negocio u ON l.id_cc_cc = u.id_cc_cc
+  WHERE l.id_cc_cc IS NOT NULL
+  ORDER BY 1;
+$$;
+
+-- ─── get_distinct_periodos: lista de períodos YYYY-MM disponíveis ─────────────
+CREATE OR REPLACE FUNCTION get_distinct_periodos()
+RETURNS TABLE(periodo TEXT) LANGUAGE sql STABLE AS $$
+  SELECT DISTINCT TO_CHAR(data_lancamento, 'YYYY-MM') AS periodo
+  FROM lancamentos
+  WHERE data_lancamento IS NOT NULL
+  ORDER BY 1;
 $$;
