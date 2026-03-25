@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Users, Plus, Pencil, Trash2, X, Check, Eye, EyeOff, RefreshCw } from 'lucide-react'
+import { Users, Plus, Pencil, Trash2, X, Check, Eye, EyeOff, RefreshCw, ShieldCheck, Briefcase } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 
@@ -31,6 +31,364 @@ interface FormState {
 
 const emptyForm = (): FormState => ({ username: '', password: '', role: 'dept', department: '' })
 
+// ─── Modal de Permissões de Centros de Custo ─────────────────────────────────
+interface CentrosModalProps {
+  user: AppUser
+  onClose: () => void
+}
+
+function CentrosModal({ user, onClose }: CentrosModalProps) {
+  const [allCentros, setAllCentros]   = useState<Array<{ cc: string; nome: string }>>([])
+  const [selected,   setSelected]     = useState<Set<string>>(new Set())
+  const [configured, setConfigured]   = useState(false)
+  const [loading,    setLoading]      = useState(true)
+  const [saving,     setSaving]       = useState(false)
+  const [error,      setError]        = useState('')
+  const [search,     setSearch]       = useState('')
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      setError('')
+      try {
+        const dept = user.department
+        const [centrosRes, permRes] = await Promise.all([
+          dept
+            ? fetch(`/api/dre?type=centros&departamentos=${encodeURIComponent(dept)}`)
+            : Promise.resolve(null),
+          fetch(`/api/admin/users/centros?username=${encodeURIComponent(user.username)}`),
+        ])
+        const centrosList = centrosRes?.ok
+          ? (await centrosRes.json() as Array<{ cc: string; nome: string }>)
+          : []
+        setAllCentros(centrosList)
+
+        if (permRes.ok) {
+          const perm = await permRes.json() as { centros: string[]; configured: boolean }
+          setConfigured(perm.configured)
+          setSelected(new Set(perm.centros))
+        }
+      } catch (e) {
+        setError(String(e))
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [user])
+
+  const filtered = allCentros.filter(c =>
+    !search || c.nome.toLowerCase().includes(search.toLowerCase()) || c.cc.toLowerCase().includes(search.toLowerCase())
+  )
+
+  const allChecked = allCentros.length > 0 && allCentros.every(c => selected.has(c.cc))
+  const someChecked = allCentros.some(c => selected.has(c.cc))
+
+  function toggleAll() {
+    if (allChecked) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(allCentros.map(c => c.cc)))
+    }
+  }
+
+  function toggle(cc: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(cc)) next.delete(cc)
+      else next.add(cc)
+      return next
+    })
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    setError('')
+    try {
+      const res = await fetch('/api/admin/users/centros', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: user.username, centros: [...selected] }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Erro ao salvar')
+      setConfigured(json.configured)
+      onClose()
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function handleRemoveAll() {
+    setSelected(new Set())
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <Card className="w-full max-w-lg max-h-[80vh] flex flex-col">
+        <CardContent className="p-5 flex flex-col gap-3 min-h-0">
+          {/* Header */}
+          <div className="flex items-center justify-between flex-shrink-0">
+            <div>
+              <h2 className="font-semibold text-gray-900 flex items-center gap-1.5">
+                <ShieldCheck size={15} className="text-indigo-500" />
+                Permissões de Centros de Custo
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Usuário: <span className="font-medium text-gray-700">{user.username}</span>
+                {user.department && <> &middot; Dept: <span className="font-medium text-gray-700">{user.department}</span></>}
+              </p>
+            </div>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+          </div>
+
+          {/* Info box */}
+          <div className="text-xs bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 text-indigo-700 flex-shrink-0">
+            {configured
+              ? `Restrição ativa: usuário vê apenas ${selected.size} centro(s) selecionado(s).`
+              : 'Sem restrição configurada: usuário vê todos os centros do departamento.'}
+            {' '}Desmarque todos para remover restrições.
+          </div>
+
+          {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1 flex-shrink-0">{error}</p>}
+
+          {loading ? (
+            <div className="space-y-2">
+              {[1,2,3,4].map(i => <div key={i} className="h-8 bg-gray-100 rounded animate-pulse" />)}
+            </div>
+          ) : allCentros.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-6">
+              {user.department ? 'Nenhum centro de custo encontrado para este departamento.' : 'Usuário sem departamento definido.'}
+            </p>
+          ) : (
+            <>
+              {/* Search + select-all */}
+              <div className="flex gap-2 flex-shrink-0">
+                <input
+                  type="text"
+                  placeholder="Buscar centro..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="flex-1 text-xs border rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-indigo-300"
+                />
+                <button
+                  onClick={toggleAll}
+                  className="text-xs px-2.5 py-1.5 border rounded-lg hover:bg-gray-50 text-gray-600 whitespace-nowrap"
+                >
+                  {allChecked ? 'Desmarcar todos' : 'Selecionar todos'}
+                </button>
+              </div>
+
+              {/* Checkboxes list */}
+              <div className="overflow-y-auto flex-1 border rounded-lg divide-y min-h-0">
+                {filtered.map(c => (
+                  <label
+                    key={c.cc}
+                    className="flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected.has(c.cc)}
+                      onChange={() => toggle(c.cc)}
+                      className="accent-indigo-600 w-3.5 h-3.5 flex-shrink-0"
+                    />
+                    <span className="text-sm text-gray-800 flex-1">{c.nome}</span>
+                    <span className="text-[10px] text-gray-400 font-mono">{c.cc}</span>
+                  </label>
+                ))}
+                {filtered.length === 0 && (
+                  <p className="text-xs text-gray-400 text-center py-4">Nenhum resultado para &ldquo;{search}&rdquo;</p>
+                )}
+              </div>
+
+              {/* Counter */}
+              <p className="text-xs text-gray-500 flex-shrink-0">
+                {selected.size === 0
+                  ? 'Nenhum selecionado — acesso a todos os centros do departamento'
+                  : `${selected.size} de ${allCentros.length} centros selecionados`}
+              </p>
+            </>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-2 flex-shrink-0 pt-1">
+            {selected.size > 0 && (
+              <button onClick={handleRemoveAll} disabled={saving}
+                className="px-3 py-2 text-xs border rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50">
+                Remover restrições
+              </button>
+            )}
+            <button onClick={onClose} disabled={saving}
+              className="flex-1 py-2 text-sm border rounded-lg hover:bg-gray-50 text-gray-600">
+              Cancelar
+            </button>
+            <button onClick={handleSave} disabled={saving || loading}
+              className="flex-1 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-60 flex items-center justify-center gap-1.5">
+              {saving ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />}
+              Salvar
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// ─── Modal de Permissões de Unidades de Negócio ───────────────────────────────
+interface UnidadesModalProps {
+  user: AppUser
+  onClose: () => void
+}
+
+function UnidadesModal({ user, onClose }: UnidadesModalProps) {
+  const [allUnidades, setAllUnidades] = useState<string[]>([])
+  const [selected,    setSelected]    = useState<Set<string>>(new Set())
+  const [configured,  setConfigured]  = useState(false)
+  const [loading,     setLoading]     = useState(true)
+  const [saving,      setSaving]      = useState(false)
+  const [error,       setError]       = useState('')
+  const [search,      setSearch]      = useState('')
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true); setError('')
+      try {
+        const [unRes, permRes] = await Promise.all([
+          fetch('/api/unidades-negocio?type=distinct_unidades'),
+          fetch(`/api/admin/users/unidades?username=${encodeURIComponent(user.username)}`),
+        ])
+        const unis = unRes.ok ? (await unRes.json() as string[]) : []
+        setAllUnidades(unis)
+        if (permRes.ok) {
+          const perm = await permRes.json() as { unidades: string[]; configured: boolean }
+          setConfigured(perm.configured)
+          setSelected(new Set(perm.unidades))
+        }
+      } catch (e) {
+        setError(String(e))
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [user])
+
+  const filtered = allUnidades.filter(u => !search || u.toLowerCase().includes(search.toLowerCase()))
+  const allChecked = allUnidades.length > 0 && allUnidades.every(u => selected.has(u))
+
+  function toggle(u: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(u) ? next.delete(u) : next.add(u)
+      return next
+    })
+  }
+
+  async function handleSave() {
+    setSaving(true); setError('')
+    try {
+      const res = await fetch('/api/admin/users/unidades', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: user.username, unidades: [...selected] }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Erro ao salvar')
+      setConfigured(json.configured)
+      onClose()
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <Card className="w-full max-w-lg max-h-[80vh] flex flex-col">
+        <CardContent className="p-5 flex flex-col gap-3 min-h-0">
+          <div className="flex items-center justify-between flex-shrink-0">
+            <div>
+              <h2 className="font-semibold text-gray-900 flex items-center gap-1.5">
+                <Briefcase size={15} className="text-indigo-500" />
+                Permissões de Unidades de Negócio
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Usuário: <span className="font-medium text-gray-700">{user.username}</span>
+                {user.department && <> &middot; Dept: <span className="font-medium text-gray-700">{user.department}</span></>}
+              </p>
+            </div>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+          </div>
+
+          <div className="text-xs bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-amber-700 flex-shrink-0">
+            {configured
+              ? `Restrição ativa: usuário vê apenas ${selected.size} unidade(s) e não pode acessar detalhamento de lançamentos.`
+              : 'Sem restrição: usuário vê todas as unidades do departamento e pode acessar detalhamento.'}
+            {' '}Desmarque todos para remover restrições.
+          </div>
+
+          {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1 flex-shrink-0">{error}</p>}
+
+          {loading ? (
+            <div className="space-y-2">{[1,2,3,4].map(i => <div key={i} className="h-8 bg-gray-100 rounded animate-pulse" />)}</div>
+          ) : allUnidades.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-6">Nenhuma unidade de negócio encontrada.</p>
+          ) : (
+            <>
+              <div className="flex gap-2 flex-shrink-0">
+                <input type="text" placeholder="Buscar unidade..." value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="flex-1 text-xs border rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-indigo-300" />
+                <button onClick={() => setSelected(allChecked ? new Set() : new Set(allUnidades))}
+                  className="text-xs px-2.5 py-1.5 border rounded-lg hover:bg-gray-50 text-gray-600 whitespace-nowrap">
+                  {allChecked ? 'Desmarcar todos' : 'Selecionar todos'}
+                </button>
+              </div>
+
+              <div className="overflow-y-auto flex-1 border rounded-lg divide-y min-h-0">
+                {filtered.map(u => (
+                  <label key={u} className="flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" checked={selected.has(u)} onChange={() => toggle(u)}
+                      className="accent-indigo-600 w-3.5 h-3.5 flex-shrink-0" />
+                    <span className="text-sm text-gray-800 flex-1">{u}</span>
+                  </label>
+                ))}
+                {filtered.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Sem resultados</p>}
+              </div>
+
+              <p className="text-xs text-gray-500 flex-shrink-0">
+                {selected.size === 0
+                  ? 'Nenhuma selecionada — acesso a todas as unidades + detalhamento liberado'
+                  : `${selected.size} de ${allUnidades.length} unidades selecionadas — detalhamento bloqueado`}
+              </p>
+            </>
+          )}
+
+          <div className="flex gap-2 flex-shrink-0 pt-1">
+            {selected.size > 0 && (
+              <button onClick={() => setSelected(new Set())} disabled={saving}
+                className="px-3 py-2 text-xs border rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50">
+                Remover restrições
+              </button>
+            )}
+            <button onClick={onClose} disabled={saving}
+              className="flex-1 py-2 text-sm border rounded-lg hover:bg-gray-50 text-gray-600">Cancelar</button>
+            <button onClick={handleSave} disabled={saving || loading}
+              className="flex-1 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-60 flex items-center justify-center gap-1.5">
+              {saving ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />}
+              Salvar
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// ─── Página principal ─────────────────────────────────────────────────────────
 export default function UsersPage() {
   const [users,       setUsers]      = useState<AppUser[]>([])
   const [depts,       setDepts]      = useState<string[]>([])
@@ -42,6 +400,8 @@ export default function UsersPage() {
   const [form,        setForm]       = useState<FormState>(emptyForm())
   const [showPwd,     setShowPwd]    = useState(false)
   const [confirmDel,  setConfirmDel] = useState<number | null>(null)
+  const [centrosUser,   setCentrosUser]   = useState<AppUser | null>(null)
+  const [unidadesUser,  setUnidadesUser]  = useState<AppUser | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -163,6 +523,9 @@ export default function UsersPage() {
         <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>
       )}
 
+      {centrosUser  && <CentrosModal   user={centrosUser}  onClose={() => setCentrosUser(null)}  />}
+      {unidadesUser && <UnidadesModal  user={unidadesUser} onClose={() => setUnidadesUser(null)} />}
+
       {/* Modal / Form */}
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -280,7 +643,8 @@ export default function UsersPage() {
                 {masters.map(u => (
                   <UserRow key={u.id} user={u} onEdit={openEdit}
                     confirmDel={confirmDel} setConfirmDel={setConfirmDel}
-                    onDelete={handleDelete} saving={saving} />
+                    onDelete={handleDelete} saving={saving}
+                    onCentros={null} onUnidades={null} />
                 ))}
               </div>
             </div>
@@ -294,7 +658,9 @@ export default function UsersPage() {
                 {deptUsers.map(u => (
                   <UserRow key={u.id} user={u} onEdit={openEdit}
                     confirmDel={confirmDel} setConfirmDel={setConfirmDel}
-                    onDelete={handleDelete} saving={saving} />
+                    onDelete={handleDelete} saving={saving}
+                    onCentros={() => setCentrosUser(u)}
+                    onUnidades={() => setUnidadesUser(u)} />
                 ))}
               </div>
             </div>
@@ -308,13 +674,15 @@ export default function UsersPage() {
     </div>
   )
 
-  function UserRow({ user, onEdit, confirmDel, setConfirmDel, onDelete, saving }: {
+  function UserRow({ user, onEdit, confirmDel, setConfirmDel, onDelete, saving, onCentros, onUnidades }: {
     user: AppUser
     onEdit: (u: AppUser) => void
     confirmDel: number | null
     setConfirmDel: (id: number | null) => void
     onDelete: (id: number) => void
     saving: boolean
+    onCentros: (() => void) | null
+    onUnidades?: (() => void) | null
   }) {
     return (
       <div className="flex items-center gap-3 px-4 py-3 bg-white border rounded-lg hover:border-indigo-200 transition-colors">
@@ -349,6 +717,18 @@ export default function UsersPage() {
           </div>
         ) : (
           <div className="flex items-center gap-1 flex-shrink-0">
+            {onCentros && (
+              <button onClick={onCentros} title="Permissões de centros de custo"
+                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors">
+                <ShieldCheck size={13} />
+              </button>
+            )}
+            {onUnidades && (
+              <button onClick={onUnidades} title="Permissões de unidades de negócio"
+                className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors">
+                <Briefcase size={13} />
+              </button>
+            )}
             <button onClick={() => onEdit(user)} title="Editar"
               className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors">
               <Pencil size={13} />

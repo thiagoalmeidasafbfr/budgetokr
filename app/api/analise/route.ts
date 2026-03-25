@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAnalise, getMedidaResultados, getDistinctValues, getSummary, getRazaoPeriods } from '@/lib/query'
+import { getAnalise, getMedidaResultados, getDistinctValues, getSummary, getRazaoPeriods, getUserCentros } from '@/lib/query'
 import { getSession } from '@/lib/session'
 import type { FilterCondition, FilterColumn } from '@/lib/types'
 
@@ -13,6 +13,11 @@ export async function GET(req: NextRequest) {
 
     const user = await getSession()
     const forcedDept = user?.role === 'dept' ? user.department : undefined
+
+    // Permissões individuais de centros de custo
+    const userCentros = (user?.role === 'dept' && user.userId)
+      ? await getUserCentros(user.userId)
+      : null
 
     if (type === 'summary') {
       return NextResponse.json(await getSummary())
@@ -57,7 +62,15 @@ export async function GET(req: NextRequest) {
     const filtros: FilterCondition[] = filtersRaw ? JSON.parse(filtersRaw) : []
     const groupByCentro  = sp.get('groupByCentro') === 'true'
 
-    const data = await getAnalise(filtros, departamentos, periodos, groupByCentro)
+    // Aplica permissões individuais de centros
+    let centros = sp.get('centros')?.split(',').filter(Boolean)
+    if (userCentros !== null) {
+      centros = centros?.length
+        ? centros.filter(c => userCentros.includes(c))
+        : userCentros
+    }
+
+    const data = await getAnalise(filtros, departamentos, periodos, groupByCentro, centros)
     return NextResponse.json(data)
   } catch (e) {
     console.error(e)
