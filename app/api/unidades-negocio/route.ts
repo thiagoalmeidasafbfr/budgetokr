@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
-import { getUserFromHeaders } from '@/lib/session'
+import { getSession } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     const supabase = getSupabase()
 
     // Forçar filtro de departamento para usuários dept
-    const user           = getUserFromHeaders(req)
+    const user           = await getSession()
     const forcedDept     = user?.role === 'dept' ? user.department : undefined
     const departamentos  = forcedDept ? [forcedDept] : []
 
