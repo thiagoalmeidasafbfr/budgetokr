@@ -370,11 +370,6 @@ export default function UsersPage() {
         <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>
       )}
 
-      {/* Modal de permissões de centros */}
-      {centrosUser && (
-        <CentrosModal user={centrosUser} onClose={() => setCentrosUser(null)} />
-      )}
-
       {/* Modal / Form */}
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -460,6 +455,19 @@ export default function UsersPage() {
                     )}
                   </div>
                 )}
+
+                {/* Centros de custo — só aparece ao editar usuário dept existente */}
+                {editUser && form.role === 'dept' && (
+                  <div className="pt-1 border-t border-gray-100">
+                    <button
+                      type="button"
+                      onClick={() => setCentrosUser(editUser)}
+                      className="w-full py-2 text-xs font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 flex items-center justify-center gap-1.5 transition-colors"
+                    >
+                      <ShieldCheck size={13} /> Configurar Centros de Custo
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-2 pt-1">
@@ -476,6 +484,11 @@ export default function UsersPage() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* Modal de permissões de centros — renderizado após o form para aparecer acima (mesmo z-index, DOM posterior) */}
+      {centrosUser && (
+        <CentrosModal user={centrosUser} onClose={() => setCentrosUser(null)} />
       )}
 
       {loading ? (

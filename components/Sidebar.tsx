@@ -189,6 +189,7 @@ export function Sidebar() {
 
   useEffect(() => {
     if (pathname === '/login' || pathname === '/logout') {
+      setUser(null)   // limpa estado ao sair — garante re-fetch no próximo login
       setLoaded(true)
       return
     }
