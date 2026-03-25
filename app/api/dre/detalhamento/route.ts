@@ -231,6 +231,7 @@ export async function GET(req: NextRequest) {
           centro_custo:             l.centro_custo,
           nome_centro_custo:        cc?.nome_centro_custo  ?? '',
           nome_area:                cc?.nome_area          ?? '',
+          nome_departamento:        cc?.nome_departamento  ?? '',
           agrupamento_arvore:       ca?.agrupamento_arvore ?? 'Sem Agrupamento',
           dre:                      ca?.dre                ?? 'Sem Classificação',
           nome_conta_contrapartida: l.nome_conta_contrapartida,
