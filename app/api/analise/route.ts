@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAnalise, getMedidaResultados, getDistinctValues, getSummary, getRazaoPeriods } from '@/lib/query'
-import { getUserFromHeaders } from '@/lib/session'
+import { getSession } from '@/lib/session'
 import type { FilterCondition, FilterColumn } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     const type     = sp.get('type') ?? 'analise'
     const medidaId = sp.get('medidaId')
 
-    const user = getUserFromHeaders(req)
+    const user = await getSession()
     const forcedDept = user?.role === 'dept' ? user.department : undefined
 
     if (type === 'summary') {

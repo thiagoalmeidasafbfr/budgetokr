@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDRE, getDREByAccount, getDREHierarchy, getDRELinhas, getDistinctValues, getCentrosByDepartamentos } from '@/lib/query'
-import { getUserFromHeaders } from '@/lib/session'
+import { getSession } from '@/lib/session'
 import type { FilterColumn } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     const sp   = new URL(req.url).searchParams
     const type = sp.get('type') ?? 'dre'
 
-    const user = getUserFromHeaders(req)
+    const user = await getSession()
     const forcedDept = user?.role === 'dept' ? user.department : undefined
 
     if (type === 'hierarchy') {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAnalise, getDRE, getMedidas, getDRELinhas, getDeptMedidas, getMedidaResultados, getCentrosByDepartamentos } from '@/lib/query'
 import { getSupabase } from '@/lib/supabase'
-import { getUserFromHeaders } from '@/lib/session'
+import { getSession } from '@/lib/session'
 import type { Medida } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     const periodosRaw = sp.get('periodos')
     const periodos = periodosRaw ? periodosRaw.split(',').filter(Boolean) : undefined
 
-    const user = getUserFromHeaders(req)
+    const user = await getSession()
     const forcedDept = user?.role === 'dept' ? user.department : undefined
 
     const departamento = forcedDept || sp.get('departamento')
