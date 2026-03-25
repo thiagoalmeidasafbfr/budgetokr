@@ -661,20 +661,23 @@ $$;
 -- Retorna JSONB (array único) para evitar limite de linhas do PostgREST
 DROP FUNCTION IF EXISTS get_unidades_negocio_dre(TEXT[], TEXT[]);
 DROP FUNCTION IF EXISTS get_unidades_negocio_dre(TEXT[], TEXT[], TEXT[]);
+DROP FUNCTION IF EXISTS get_unidades_negocio_dre(TEXT[], TEXT[], TEXT[], TEXT[]);
 CREATE OR REPLACE FUNCTION get_unidades_negocio_dre(
   p_periodos      TEXT[]  DEFAULT '{}',
   p_unidades      TEXT[]  DEFAULT '{}',
-  p_departamentos TEXT[]  DEFAULT '{}'
+  p_departamentos TEXT[]  DEFAULT '{}',
+  p_centros       TEXT[]  DEFAULT '{}'
 ) RETURNS JSONB LANGUAGE plpgsql AS $$
 DECLARE
   v_cond   TEXT[] := '{}';
   v_sql    TEXT;
   v_result JSONB;
 BEGIN
-  -- Usa $1/$2/$3 como parâmetros posicionais no EXECUTE (evita quote_literal com acentos)
+  -- Usa $1/$2/$3/$4 como parâmetros posicionais no EXECUTE (evita quote_literal com acentos)
   v_cond := array_append(v_cond, '(array_length($1, 1) IS NULL OR TO_CHAR(l.data_lancamento, ''YYYY-MM'') = ANY($1))');
   v_cond := array_append(v_cond, '(array_length($2, 1) IS NULL OR COALESCE(u.unidade, ''Sem Unidade'') = ANY($2))');
   v_cond := array_append(v_cond, '(array_length($3, 1) IS NULL OR cc.nome_departamento = ANY($3))');
+  v_cond := array_append(v_cond, '(array_length($4, 1) IS NULL OR l.centro_custo = ANY($4))');
 
   v_sql :=
     'SELECT
@@ -703,7 +706,7 @@ BEGIN
                TO_CHAR(l.data_lancamento, ''YYYY-MM'')';
 
   EXECUTE 'SELECT COALESCE(jsonb_agg(row_to_json(t)), ''[]''::jsonb) FROM (' || v_sql || ') t'
-    USING p_periodos, p_unidades, p_departamentos
+    USING p_periodos, p_unidades, p_departamentos, p_centros
     INTO v_result;
   RETURN v_result;
 END;
@@ -726,6 +729,7 @@ $$;
 -- O JOIN é feito no banco, evitando o problema de URL muito longa com .in() no cliente.
 DROP FUNCTION IF EXISTS get_unidades_negocio_lancamentos_detail(TEXT[], TEXT[], TEXT, TEXT, TEXT, TEXT, INT, INT);
 DROP FUNCTION IF EXISTS get_unidades_negocio_lancamentos_detail(TEXT[], TEXT[], TEXT, TEXT, TEXT, TEXT, INT, INT, TEXT[]);
+DROP FUNCTION IF EXISTS get_unidades_negocio_lancamentos_detail(TEXT[], TEXT[], TEXT, TEXT, TEXT, TEXT, INT, INT, TEXT[], TEXT[]);
 CREATE OR REPLACE FUNCTION get_unidades_negocio_lancamentos_detail(
   p_unidades      TEXT[]  DEFAULT '{}',
   p_periodos      TEXT[]  DEFAULT '{}',
@@ -735,17 +739,19 @@ CREATE OR REPLACE FUNCTION get_unidades_negocio_lancamentos_detail(
   p_conta         TEXT    DEFAULT '',
   p_offset        INT     DEFAULT 0,
   p_limit         INT     DEFAULT 1000,
-  p_departamentos TEXT[]  DEFAULT '{}'
+  p_departamentos TEXT[]  DEFAULT '{}',
+  p_centros       TEXT[]  DEFAULT '{}'
 ) RETURNS JSONB LANGUAGE plpgsql STABLE AS $$
 DECLARE
   v_cond   TEXT[] := '{}';
   v_sql    TEXT;
   v_result JSONB;
 BEGIN
-  -- Filtros via $1/$2/$3 (parâmetros posicionais no EXECUTE USING — evita quote_literal com acentos)
+  -- Filtros via $1/$2/$3/$4 (parâmetros posicionais no EXECUTE USING — evita quote_literal com acentos)
   v_cond := array_append(v_cond, '(array_length($1, 1) IS NULL OR COALESCE(u.unidade, ''Sem Unidade'') = ANY($1))');
   v_cond := array_append(v_cond, '(array_length($2, 1) IS NULL OR TO_CHAR(l.data_lancamento, ''YYYY-MM'') = ANY($2))');
   v_cond := array_append(v_cond, '(array_length($3, 1) IS NULL OR cc.nome_departamento = ANY($3))');
+  v_cond := array_append(v_cond, '(array_length($4, 1) IS NULL OR l.centro_custo = ANY($4))');
   -- Sem filtro de unidade nem dept: restringir a lançamentos com id_cc_cc preenchido
   IF array_length(p_unidades, 1) IS NULL AND array_length(p_departamentos, 1) IS NULL THEN
     v_cond := array_append(v_cond, 'l.id_cc_cc IS NOT NULL');
@@ -801,7 +807,7 @@ BEGIN
      LIMIT %s OFFSET %s', p_limit, p_offset);
 
   EXECUTE 'SELECT COALESCE(jsonb_agg(row_to_json(t)), ''[]''::jsonb) FROM (' || v_sql || ') t'
-    USING p_unidades, p_periodos, p_departamentos
+    USING p_unidades, p_periodos, p_departamentos, p_centros
     INTO v_result;
   RETURN v_result;
 END;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { getSession } from '@/lib/session'
+import { getUserCentros } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,14 +18,21 @@ export async function GET(req: NextRequest) {
     const forcedDept     = user?.role === 'dept' ? user.department : undefined
     const departamentos  = forcedDept ? [forcedDept] : []
 
-    // Distinct unidades — for dept users, only return unidades belonging to their dept
+    // Permissões individuais de centros de custo (null = sem restrição)
+    const userCentros = (user?.role === 'dept' && user.userId)
+      ? await getUserCentros(user.userId)
+      : null
+    const centros = userCentros ?? []
+
+    // Distinct unidades — for dept users, only return unidades belonging to their dept/centros
     if (type === 'distinct_unidades') {
-      if (forcedDept) {
-        // Get unidades filtered by this dept's data
+      if (forcedDept || userCentros !== null) {
+        // Get unidades filtered by dept + individual CC restrictions
         const { data, error } = await supabase.rpc('get_unidades_negocio_dre', {
           p_periodos:      [],
           p_unidades:      [],
-          p_departamentos: [forcedDept],
+          p_departamentos: forcedDept ? [forcedDept] : [],
+          p_centros:       centros,
         })
         if (error) throw new Error(error.message)
         const rows = Array.isArray(data) ? data as Array<{ unidade: string }> : []
@@ -50,6 +58,7 @@ export async function GET(req: NextRequest) {
         p_periodos:      periodos,
         p_unidades:      unidades,
         p_departamentos: departamentos,
+        p_centros:       centros,
       })
       if (error) throw new Error(error.message)
       const rows = Array.isArray(data) ? data as Array<{
@@ -76,6 +85,7 @@ export async function GET(req: NextRequest) {
         p_offset:        Number(sp.get('offset') ?? 0),
         p_limit:         Number(sp.get('limit')  ?? 1000),
         p_departamentos: departamentos,
+        p_centros:       centros,
       })
       if (error) throw new Error(error.message)
       return NextResponse.json(Array.isArray(data) ? data : [])

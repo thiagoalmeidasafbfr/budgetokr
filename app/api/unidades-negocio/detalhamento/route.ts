@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { getSession } from '@/lib/session'
+import { getUserCentros } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,11 +28,13 @@ export async function GET(req: NextRequest) {
   const forcedDept     = sessionUser?.role === 'dept' ? sessionUser.department : undefined
   const departamentos  = forcedDept ? [forcedDept] : []
 
-  try {
-    const user       = await getSession()
-    const forcedDept = user?.role === 'dept' ? user.department : undefined
-    const departamentos = forcedDept ? [forcedDept] : []
+  // Permissões individuais de centros de custo
+  const userCentros = (sessionUser?.role === 'dept' && sessionUser.userId)
+    ? await getUserCentros(sessionUser.userId)
+    : null
+  const centros = userCentros ?? []
 
+  try {
     const supabase = getSupabase()
 
     const PAGE      = 1000
@@ -60,6 +63,7 @@ export async function GET(req: NextRequest) {
         p_offset:        page * PAGE,
         p_limit:         PAGE,
         p_departamentos: departamentos,
+        p_centros:       centros,
       })
 
       if (error) throw new Error(error.message)
