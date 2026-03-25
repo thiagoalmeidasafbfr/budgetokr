@@ -23,19 +23,21 @@ export async function GET(req: NextRequest) {
       ? await getUserUnidades(user.userId)
       : null
 
-    // Distinct unidades — for dept users, only return unidades belonging to their dept
-    // (and further restricted by userUnidades if configured)
+    // Distinct unidades — for dept users, filter by unit permissions (if set) OR by department
     if (type === 'distinct_unidades') {
       if (forcedDept) {
+        // If user has unit restrictions: filter by units only (units ARE the access control)
+        // If no unit restrictions: filter by department
+        const p_unidades_arg      = userUnidades !== null ? userUnidades : []
+        const p_departamentos_arg = userUnidades !== null ? []           : [forcedDept]
         const { data, error } = await supabase.rpc('get_unidades_negocio_dre', {
           p_periodos:      [],
-          p_unidades:      [],
-          p_departamentos: [forcedDept],
+          p_unidades:      p_unidades_arg,
+          p_departamentos: p_departamentos_arg,
         })
         if (error) throw new Error(error.message)
         const rows = Array.isArray(data) ? data as Array<{ unidade: string }> : []
-        let uniqueUnidades = [...new Set(rows.map(r => r.unidade).filter(Boolean))]
-        if (userUnidades !== null) uniqueUnidades = uniqueUnidades.filter(u => userUnidades.includes(u))
+        const uniqueUnidades = [...new Set(rows.map(r => r.unidade).filter(Boolean))]
         return NextResponse.json(uniqueUnidades.sort())
       }
       const { data, error } = await supabase.rpc('get_distinct_unidades')
@@ -57,10 +59,12 @@ export async function GET(req: NextRequest) {
       const filteredUnidades = userUnidades !== null
         ? (unidades.length > 0 ? unidades.filter(u => userUnidades.includes(u)) : userUnidades)
         : unidades
+      // If user has unit restrictions: skip department filter (units ARE the access control)
+      const filteredDepartamentos = userUnidades !== null ? [] : departamentos
       const { data, error } = await supabase.rpc('get_unidades_negocio_dre', {
         p_periodos:      periodos,
         p_unidades:      filteredUnidades,
-        p_departamentos: departamentos,
+        p_departamentos: filteredDepartamentos,
       })
       if (error) throw new Error(error.message)
       const rows = Array.isArray(data) ? data as Array<{
