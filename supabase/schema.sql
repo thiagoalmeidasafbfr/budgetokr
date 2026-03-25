@@ -241,5 +241,21 @@ CREATE TABLE IF NOT EXISTS user_favorites (
 CREATE INDEX IF NOT EXISTS idx_favorites_user ON user_favorites(usuario);
 ALTER TABLE user_favorites DISABLE ROW LEVEL SECURITY;
 
+-- ─── Permissões de Centros de Custo por Usuário (N:N) ────────────────────────
+-- Permite configurar quais centros de custo cada usuário pode visualizar.
+-- Se o usuário não tiver nenhuma linha aqui, ele vê todos os centros do seu
+-- departamento (comportamento atual). Se tiver linhas, vê apenas os listados.
+CREATE TABLE IF NOT EXISTS user_centros_custo (
+  id           BIGSERIAL PRIMARY KEY,
+  username     TEXT        NOT NULL,
+  centro_custo TEXT        NOT NULL,
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(username, centro_custo),
+  CONSTRAINT fk_ucc_user   FOREIGN KEY (username)     REFERENCES app_users(username)     ON DELETE CASCADE,
+  CONSTRAINT fk_ucc_centro FOREIGN KEY (centro_custo) REFERENCES centros_custo(centro_custo) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_ucc_username ON user_centros_custo(username);
+ALTER TABLE user_centros_custo DISABLE ROW LEVEL SECURITY;
+
 -- ─── Usuário inicial (ajuste a senha!) ───────────────────────────────────────
 -- INSERT INTO app_users (username, password, role) VALUES ('admin', 'admin123', 'master');

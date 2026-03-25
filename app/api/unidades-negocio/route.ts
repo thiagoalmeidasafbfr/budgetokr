@@ -17,8 +17,20 @@ export async function GET(req: NextRequest) {
     const forcedDept     = user?.role === 'dept' ? user.department : undefined
     const departamentos  = forcedDept ? [forcedDept] : []
 
-    // Distinct unidades — uses dedicated RPC that returns ~11 rows max
+    // Distinct unidades — for dept users, only return unidades belonging to their dept
     if (type === 'distinct_unidades') {
+      if (forcedDept) {
+        // Get unidades filtered by this dept's data
+        const { data, error } = await supabase.rpc('get_unidades_negocio_dre', {
+          p_periodos:      [],
+          p_unidades:      [],
+          p_departamentos: [forcedDept],
+        })
+        if (error) throw new Error(error.message)
+        const rows = Array.isArray(data) ? data as Array<{ unidade: string }> : []
+        const uniqueUnidades = [...new Set(rows.map(r => r.unidade).filter(Boolean))]
+        return NextResponse.json(uniqueUnidades.sort())
+      }
       const { data, error } = await supabase.rpc('get_distinct_unidades')
       if (error) throw new Error(error.message)
       return NextResponse.json((data ?? []).map((r: { unidade: string }) => r.unidade))

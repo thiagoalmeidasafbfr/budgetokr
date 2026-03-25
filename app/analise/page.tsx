@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { BarChart3, Table2, Download, Target, ChevronDown, Printer, Filter, X } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -64,12 +64,13 @@ export default function AnalisePage() {
   const [groupBy,       setGroupBy]       = useState<GroupBy>('departamento')
   const [loading,       setLoading]       = useState(false)
   const [deptUser,      setDeptUser]      = useState<{ department: string } | null>(null)
+  const isFirstRef = useRef(true)
 
   useEffect(() => {
     async function init() {
       const me = await fetch('/api/me').then(r => r.ok ? r.json() : null).catch(() => null)
       const isDept = me?.role === 'dept' && me.department
-      if (isDept) { setDeptUser({ department: me.department }); setSelDepts([me.department]) }
+
       const medsUrl = isDept ? `/api/medidas?departamento=${encodeURIComponent(me.department)}` : '/api/medidas'
       const [depts, dates, meds] = await Promise.all([
         fetch('/api/analise?type=distinct&col=nome_departamento', { cache: 'no-store' }).then(r => r.json()),
@@ -77,25 +78,48 @@ export default function AnalisePage() {
         fetch(medsUrl, { cache: 'no-store' }).then(r => r.json()),
       ])
       setDepartamentos(Array.isArray(depts) ? depts : [])
-      setPeriodos([...new Set((Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean))].sort() as string[])
+      const allPeriodos = [...new Set((Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean))].sort() as string[]
+      setPeriodos(allPeriodos)
       setMedidas(Array.isArray(meds) ? meds : [])
+
+      // Compute initial filter values and trigger the first load directly,
+      // so the reactive effect (which fires on every change) can skip the
+      // very first render and avoid loading global data before init completes.
+      const now = new Date()
+      const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      const curMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
+      const ytd = allPeriodos.filter(p => p.startsWith('2026') && p <= curMonth)
+      const finalPeriods = ytd.length > 0 ? ytd : allPeriodos.filter(p => p.startsWith('2026'))
+
+      const finalDepts = isDept ? [me.department] : []
+      if (isDept) {
+        setDeptUser({ department: me.department })
+        setSelDepts(finalDepts)
+      }
+      setSelPeriods(finalPeriods)
+
+      // Mark first render as consumed so the reactive effect skips it
+      isFirstRef.current = false
+      loadData(finalDepts, finalPeriods, 'departamento')
     }
     init()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // When year or available periods change, default to YTD (≤ current month)
+  // When year changes (user picks a different year), update period selection
   useEffect(() => {
-    if (selYear && periodos.length > 0) {
+    if (!periodos.length) return   // not yet loaded — init() handles the first load
+    if (selYear) {
       const now = new Date()
       const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
       const curMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
       const ytd = periodos.filter(p => p.startsWith(selYear) && p <= curMonth)
       setSelPeriods(ytd.length > 0 ? ytd : periodos.filter(p => p.startsWith(selYear)))
-    } else if (!selYear) {
+    } else {
       setSelPeriods([])
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selYear, periodos])
+  }, [selYear])
 
   // Fetch cost centers when departments are selected
   useEffect(() => {
@@ -108,8 +132,10 @@ export default function AnalisePage() {
     })
   }, [selDepts])
 
-  // Auto-apply filters whenever selection or groupBy changes
+  // Auto-apply filters whenever selection or groupBy changes.
+  // Skip the very first render — init() calls loadData directly with correct values.
   useEffect(() => {
+    if (isFirstRef.current) return
     loadData(selDepts, selPeriods, groupBy)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selDepts, selPeriods, groupBy])
@@ -117,9 +143,11 @@ export default function AnalisePage() {
   const loadData = useCallback(async (depts: string[], prds: string[], gb: GroupBy) => {
     setLoading(true)
     const params = new URLSearchParams()
-    if (depts.length)        params.set('departamentos', depts.join(','))
-    if (prds.length)         params.set('periodos', prds.join(','))
+    if (depts.length)          params.set('departamentos', depts.join(','))
+    if (prds.length)           params.set('periodos', prds.join(','))
     if (gb === 'centro_custo') params.set('groupByCentro', 'true')
+    // Exclude lancamentos with no DRE classification so totals match the DRE resultado líquido
+    params.set('filtros', JSON.stringify([{ column: 'dre', operator: '!=', value: '' }]))
     const res = await fetch(`/api/analise?${params}`, { cache: 'no-store' })
     if (res.ok) setData(await res.json())
     setLoading(false)
