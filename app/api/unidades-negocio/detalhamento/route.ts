@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
+import { getSession } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +23,10 @@ export async function GET(req: NextRequest) {
   const unidades = unidadesRaw ? unidadesRaw.split(',').filter(Boolean) : []
 
   try {
+    const user       = await getSession()
+    const forcedDept = user?.role === 'dept' ? user.department : undefined
+    const departamentos = forcedDept ? [forcedDept] : []
+
     const supabase = getSupabase()
 
     const PAGE      = 1000
@@ -41,14 +46,15 @@ export async function GET(req: NextRequest) {
 
     for (let page = 0; page < MAX_PAGES; page++) {
       const { data, error } = await supabase.rpc('get_unidades_negocio_lancamentos_detail', {
-        p_unidades:    unidades,
-        p_periodos:    periodos,
-        p_tipo:        tipo,
-        p_dre:         dre,
-        p_agrupamento: agrupamento,
-        p_conta:       conta,
-        p_offset:      page * PAGE,
-        p_limit:       PAGE,
+        p_unidades:      unidades,
+        p_periodos:      periodos,
+        p_tipo:          tipo,
+        p_dre:           dre,
+        p_agrupamento:   agrupamento,
+        p_conta:         conta,
+        p_offset:        page * PAGE,
+        p_limit:         PAGE,
+        p_departamentos: departamentos,
       })
 
       if (error) throw new Error(error.message)
