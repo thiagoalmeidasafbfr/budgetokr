@@ -160,6 +160,7 @@ export default function UnidadesNegocioPage() {
   const [dreLineOrder,  setDreLineOrder]  = useState<Map<string, number>>(new Map())
   const [ctxMenu,       setCtxMenu]       = useState<ContextMenuState | null>(null)
   const [detModal,      setDetModal]      = useState<ContextMenuState | null>(null)
+  const [deptUser,      setDeptUser]      = useState<{ department: string } | null>(null)
   const ctxRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(async (uns: string[], pers: string[]) => {
@@ -183,12 +184,15 @@ export default function UnidadesNegocioPage() {
 
   useEffect(() => {
     async function init() {
-      // Use dedicated lightweight RPCs (few rows each) to populate sidebar filters
-      const [unRes, perRes, linhasRes] = await Promise.all([
+      // Fetch user info alongside filters
+      const [meRes, unRes, perRes, linhasRes] = await Promise.all([
+        fetch('/api/me'),
         fetch('/api/unidades-negocio?type=distinct_unidades'),
         fetch('/api/unidades-negocio?type=distinct_periodos'),
         fetch('/api/dre?type=linhas'),
       ])
+      const me = meRes.ok ? await meRes.json() : null
+      if (me?.role === 'dept' && me.department) setDeptUser({ department: me.department })
       const uns    = unRes.ok    ? await unRes.json()    : []
       const pers   = perRes.ok   ? await perRes.json()   : []
       const linhas = linhasRes.ok ? await linhasRes.json() : []
@@ -270,8 +274,9 @@ export default function UnidadesNegocioPage() {
     } as TreeNode
     setCtxMenu({
       x: e.clientX, y: e.clientY, node, tipo,
-      periodos:  selPeriods.length ? selPeriods : undefined,
-      unidades:  [unidade],
+      periodos:      selPeriods.length ? selPeriods : undefined,
+      unidades:      [unidade],
+      departamentos: deptUser ? [deptUser.department] : undefined,
     })
   }
 

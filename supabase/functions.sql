@@ -157,7 +157,8 @@ CREATE OR REPLACE FUNCTION get_analise(
   p_filters       JSONB    DEFAULT '[]',
   p_departamentos TEXT[]   DEFAULT '{}',
   p_periodos      TEXT[]   DEFAULT '{}',
-  p_group_by_cc   BOOLEAN  DEFAULT FALSE
+  p_group_by_cc   BOOLEAN  DEFAULT FALSE,
+  p_centros       TEXT[]   DEFAULT '{}'
 ) RETURNS JSONB LANGUAGE plpgsql AS $$
 DECLARE
   v_extra    TEXT;
@@ -167,10 +168,11 @@ DECLARE
   v_sql      TEXT;
   v_result   JSONB;
 BEGIN
-  -- Filtros dept e período via parâmetros posicionais ($1, $2) — evita
-  -- problemas de charset com quote_literal em EXECUTE dinâmico.
+  -- Filtros dept, período e centros via parâmetros posicionais ($1, $2, $3) —
+  -- evita problemas de charset com quote_literal em EXECUTE dinâmico.
   v_cond := array_append(v_cond, '(array_length($1, 1) IS NULL OR cc.nome_departamento = ANY($1))');
   v_cond := array_append(v_cond, '(array_length($2, 1) IS NULL OR to_char(l.data_lancamento, ''YYYY-MM'') = ANY($2))');
+  v_cond := array_append(v_cond, '(array_length($3, 1) IS NULL OR l.centro_custo = ANY($3))');
 
   -- Filtros customizados (p_filters) ainda usam _build_where com literais
   v_extra := _build_where(p_filters, 'AND');
@@ -199,7 +201,7 @@ BEGIN
     ' ORDER BY ' || v_group;
 
   EXECUTE 'SELECT jsonb_agg(row_to_json(t)) FROM (' || v_sql || ') t'
-    USING p_departamentos, p_periodos
+    USING p_departamentos, p_periodos, p_centros
     INTO v_result;
   RETURN COALESCE(v_result, '[]'::JSONB);
 END;
@@ -364,16 +366,18 @@ END;
 $$;
 
 -- ─── get_centros_by_departamentos: centros de custo de um departamento ────────
+-- Usa centros_custo como fonte primária (consistente com get_dre e get_analise).
+-- Inclui centros mapeados na dimensão mesmo que ainda não tenham lançamentos,
+-- garantindo que o seletor da DRE exiba os mesmos centros que as demais páginas.
 CREATE OR REPLACE FUNCTION get_centros_by_departamentos(
   p_departamentos TEXT[]
 ) RETURNS JSONB LANGUAGE sql AS $$
   SELECT jsonb_agg(row_to_json(t))
   FROM (
-    SELECT DISTINCT l.centro_custo AS cc,
-      COALESCE(cc2.nome_centro_custo, l.centro_custo) AS nome
-    FROM lancamentos l
-    LEFT JOIN centros_custo cc2 ON l.centro_custo = cc2.centro_custo
-    WHERE cc2.nome_departamento = ANY(p_departamentos)
+    SELECT cc.centro_custo AS cc,
+      COALESCE(cc.nome_centro_custo, cc.centro_custo) AS nome
+    FROM centros_custo cc
+    WHERE cc.nome_departamento = ANY(p_departamentos)
     ORDER BY nome
   ) t;
 $$;
@@ -394,7 +398,7 @@ BEGIN
   IF p_agrupamento IS NOT NULL THEN v_cond := array_append(v_cond, format('ca.agrupamento_arvore = %s', quote_literal(p_agrupamento))); END IF;
   IF p_dre         IS NOT NULL THEN v_cond := array_append(v_cond, format('ca.dre = %s', quote_literal(p_dre))); END IF;
   IF array_length(p_departamentos, 1) > 0 THEN
-    v_cond := array_append(v_cond, format('cc.departamento = ANY(%s)', quote_literal(p_departamentos::TEXT)));
+    v_cond := array_append(v_cond, format('cc.nome_departamento = ANY(%s)', quote_literal(p_departamentos::TEXT)));
   END IF;
 
   v_sql := 'SELECT to_char(l.data_lancamento, ''YYYY-MM'') AS periodo, l.tipo,

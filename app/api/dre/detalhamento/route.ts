@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
+import { getSession } from '@/lib/session'
+import { getUserCentros } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,9 +21,21 @@ export async function GET(req: NextRequest) {
   const unidadesRaw      = searchParams.get('unidades')        ?? ''
 
   const periodos      = periodosRaw      ? periodosRaw.split(',').filter(Boolean)      : []
-  const departamentos = departamentosRaw ? departamentosRaw.split(',').filter(Boolean) : []
+  let   departamentos = departamentosRaw ? departamentosRaw.split(',').filter(Boolean) : []
   const centros       = centrosRaw       ? centrosRaw.split(',').filter(Boolean)       : []
   const unidades      = unidadesRaw      ? unidadesRaw.split(',').filter(Boolean)      : []
+
+  // Enforce dept restriction server-side — dept users can only see their own dept
+  const sessionUser = await getSession()
+  const forcedDept  = sessionUser?.role === 'dept' ? sessionUser.department : undefined
+  if (forcedDept) {
+    departamentos = [forcedDept]
+  }
+
+  // Permissões individuais de centros de custo
+  const userCentros = (sessionUser?.role === 'dept' && sessionUser.userId)
+    ? await getUserCentros(sessionUser.userId)
+    : null
 
   try {
     const supabase = getSupabase()
@@ -83,7 +97,10 @@ export async function GET(req: NextRequest) {
     }
 
     // ── 2. Deriva centrosFiltro de forma segmentada ────────────────────────────
-    let centrosFiltro: string[] = centros.slice()
+    // Aplica permissões individuais: intersecta centros solicitados com os permitidos
+    let centrosFiltro: string[] = userCentros !== null
+      ? (centros.length > 0 ? centros.filter(c => userCentros.includes(c)) : [...userCentros])
+      : centros.slice()
 
     if (unidades.length > 0) {
       // Busca apenas os CCs que pertencem às unidades selecionadas
@@ -99,8 +116,10 @@ export async function GET(req: NextRequest) {
       if (centrosFiltro.length === 0) {
         return NextResponse.json({ rows: [], truncated: false })
       }
-    } else if (departamento || departamentos.length > 0) {
-      const depts = [...departamentos, ...(departamento ? [departamento] : [])]
+    } else if (forcedDept || departamento || departamentos.length > 0) {
+      const depts = forcedDept
+        ? [forcedDept]
+        : [...departamentos, ...(departamento ? [departamento] : [])]
       const res = await supabase.from('centros_custo')
         .select('centro_custo')
         .in('nome_departamento', depts)

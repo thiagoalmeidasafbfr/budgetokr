@@ -230,12 +230,27 @@ async function computeRatioMedida(
   })
 }
 
+// ─── Permissões de centros de custo por usuário ───────────────────────────────
+// Retorna null se o usuário não tiver restrições configuradas (vê tudo do dept).
+// Retorna string[] com os centros permitidos se houver configuração explícita.
+export async function getUserCentros(username: string): Promise<string[] | null> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('user_centros_custo')
+    .select('centro_custo')
+    .eq('username', username)
+  if (error) return null
+  if (!data?.length) return null
+  return data.map((r: { centro_custo: string }) => r.centro_custo)
+}
+
 // ─── Análise geral ────────────────────────────────────────────────────────────
 export async function getAnalise(
   filters: FilterCondition[],
   departamentos?: string[],
   periodos?: string[],
-  groupByCentro = false
+  groupByCentro = false,
+  centros?: string[]
 ) {
   const supabase = getSupabase()
   const { data, error } = await supabase.rpc('get_analise', {
@@ -243,6 +258,7 @@ export async function getAnalise(
     p_departamentos: departamentos ?? [],
     p_periodos:      periodos ?? [],
     p_group_by_cc:   groupByCentro,
+    p_centros:       centros ?? [],
   })
   if (error) throw new Error(error.message)
   return ((data ?? []) as Array<Record<string, unknown>>).map(r => ({
