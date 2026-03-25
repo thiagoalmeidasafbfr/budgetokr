@@ -186,10 +186,12 @@ export default function UnidadesNegocioPage() {
   useEffect(() => {
     async function init() {
       // Fetch user info alongside filters
-      const [meRes, unRes, perRes, linhasRes] = await Promise.all([
+      // Use /api/dre?type=distinct&col=data_lancamento for periods (same reliable
+      // source as DRE page — avoids potential issues with distinct_periodos RPC)
+      const [meRes, unRes, datesRes, linhasRes] = await Promise.all([
         fetch('/api/me'),
         fetch('/api/unidades-negocio?type=distinct_unidades'),
-        fetch('/api/unidades-negocio?type=distinct_periodos'),
+        fetch('/api/dre?type=distinct&col=data_lancamento'),
         fetch('/api/dre?type=linhas'),
       ])
       const me = meRes.ok ? await meRes.json() : null
@@ -202,11 +204,14 @@ export default function UnidadesNegocioPage() {
           if (perm.configured) setCanDetalhamento(false)
         }
       }
-      const uns    = unRes.ok    ? await unRes.json()    : []
-      const pers   = perRes.ok   ? await perRes.json()   : []
+      const uns   = unRes.ok    ? await unRes.json()    : []
+      const dates = datesRes.ok ? await datesRes.json() : []
       const linhas = linhasRes.ok ? await linhasRes.json() : []
-      const allUnidades = Array.isArray(uns)  ? (uns  as string[]).filter(Boolean) : []
-      const allPeriodos = Array.isArray(pers) ? (pers as string[]).filter(Boolean) : []
+      const allUnidades = Array.isArray(uns) ? (uns as string[]).filter(Boolean) : []
+      // Derive YYYY-MM periods from raw dates (same as DRE page)
+      const allPeriodos = ([...new Set(
+        (Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean)
+      )].sort()) as string[]
       setUnidades(allUnidades)
       setPeriodos(allPeriodos)
 
@@ -228,9 +233,12 @@ export default function UnidadesNegocioPage() {
         : allPeriodos.filter(p => p.startsWith(curYear))
       setSelYear(curYear)
       setSelPeriods(defaultPeriods)
+      // Load data directly (don't rely on reactive effect for the initial load)
+      isFirst.current = true
+      await load([], defaultPeriods)
     }
     init()
-  }, [])
+  }, [load])
 
   const isFirst = useRef(true)
   useEffect(() => {
@@ -421,7 +429,7 @@ export default function UnidadesNegocioPage() {
         <div className="w-52 flex-shrink-0 space-y-3">
 
           <FilterSidebar
-            periodos={periodos}
+            periodos={filteredPeriods}
             selPeriods={selPeriods}
             onPeriodsChange={setSelPeriods}
             selDepts={[]}
