@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { getSession } from '@/lib/session'
+import { getUserCentros } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,6 +31,11 @@ export async function GET(req: NextRequest) {
   if (forcedDept) {
     departamentos = [forcedDept]
   }
+
+  // Permissões individuais de centros de custo
+  const userCentros = (sessionUser?.role === 'dept' && sessionUser.userId)
+    ? await getUserCentros(sessionUser.userId)
+    : null
 
   try {
     const supabase = getSupabase()
@@ -91,7 +97,10 @@ export async function GET(req: NextRequest) {
     }
 
     // ── 2. Deriva centrosFiltro de forma segmentada ────────────────────────────
-    let centrosFiltro: string[] = centros.slice()
+    // Aplica permissões individuais: intersecta centros solicitados com os permitidos
+    let centrosFiltro: string[] = userCentros !== null
+      ? (centros.length > 0 ? centros.filter(c => userCentros.includes(c)) : [...userCentros])
+      : centros.slice()
 
     if (unidades.length > 0) {
       // Busca apenas os CCs que pertencem às unidades selecionadas
