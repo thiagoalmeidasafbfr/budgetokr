@@ -23,24 +23,26 @@ interface DetalhamentoLinha {
   numero_transacao: string
   numero_conta_contabil: string; nome_conta_contabil: string
   centro_custo: string; nome_centro_custo: string; nome_area: string
+  nome_departamento: string
   agrupamento_arvore: string; dre: string
   nome_conta_contrapartida: string; debito_credito: number
   observacao: string; fonte: string; num_transacao: string
   id_cc_cc: string; unidade: string
 }
 
-type DetColKey = 'data' | 'tipo' | 'numero_transacao' | 'centro' | 'unidade' | 'dre' | 'agrupamento' | 'conta' | 'valor' | 'contrapartida' | 'obs'
-const DET_COLS: { key: DetColKey; label: string; align?: 'right' }[] = [
-  { key: 'data',             label: 'Data Lançamento' },
-  { key: 'tipo',             label: 'Tipo' },
-  { key: 'numero_transacao', label: 'Nº Transação' },
-  { key: 'centro',           label: 'Centro de Custo' },
-  { key: 'unidade',          label: 'Unidade de Negócio' },
-  { key: 'dre',              label: 'DRE Gerencial' },
-  { key: 'agrupamento',      label: 'Agrupamento' },
-  { key: 'conta',            label: 'Conta Contábil' },
-  { key: 'valor',            label: 'Valor', align: 'right' },
-  { key: 'contrapartida',    label: 'Conta Contrapartida' },
+type DetColKey = 'data' | 'tipo' | 'numero_transacao' | 'centro' | 'departamento' | 'unidade' | 'dre' | 'agrupamento' | 'conta' | 'valor' | 'contrapartida' | 'obs'
+const DET_COLS: { key: DetColKey; label: string; align?: 'right'; w?: number }[] = [
+  { key: 'data',             label: 'Data Lançamento',    w: 92  },
+  { key: 'tipo',             label: 'Tipo',               w: 62  },
+  { key: 'numero_transacao', label: 'Nº Transação',       w: 90  },
+  { key: 'centro',           label: 'Centro de Custo',    w: 170 },
+  { key: 'departamento',     label: 'Departamento',       w: 120 },
+  { key: 'unidade',          label: 'Unidade de Negócio', w: 130 },
+  { key: 'dre',              label: 'DRE Gerencial',      w: 120 },
+  { key: 'agrupamento',      label: 'Agrupamento',        w: 140 },
+  { key: 'conta',            label: 'Conta Contábil',     w: 190 },
+  { key: 'valor',            label: 'Valor',              w: 96,  align: 'right' },
+  { key: 'contrapartida',    label: 'Conta Contrapartida',w: 160 },
   { key: 'obs',              label: 'Observação' },
 ]
 
@@ -50,6 +52,7 @@ function colValue(r: DetalhamentoLinha, key: DetColKey): string | number {
     case 'tipo':             return r.tipo
     case 'numero_transacao': return r.numero_transacao || r.num_transacao || ''
     case 'centro':           return `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}`
+    case 'departamento':     return r.nome_departamento ?? ''
     case 'unidade':          return r.unidade ?? ''
     case 'dre':              return r.dre
     case 'agrupamento':      return r.agrupamento_arvore
@@ -61,12 +64,13 @@ function colValue(r: DetalhamentoLinha, key: DetColKey): string | number {
 }
 
 function exportDetalhamento(rows: DetalhamentoLinha[], title: string) {
-  const header = ['Data', 'Tipo', 'Nº Transação', 'Centro de Custo', 'Unidade de Negócio', 'DRE', 'Agrupamento', 'Conta Contábil', 'Valor', 'Conta Contrapartida', 'Observação']
+  const header = ['Data', 'Tipo', 'Nº Transação', 'Centro de Custo', 'Departamento', 'Unidade de Negócio', 'DRE', 'Agrupamento', 'Conta Contábil', 'Valor', 'Conta Contrapartida', 'Observação']
   const data = rows.map(r => [
     r.data_lancamento,
     r.tipo,
     r.numero_transacao || r.num_transacao || '',
     `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}`,
+    r.nome_departamento ?? '',
     r.unidade ?? '',
     r.dre,
     r.agrupamento_arvore,
@@ -541,6 +545,7 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
                   <th style={{ width: 28, minWidth: 28 }} />
                   {visibleDefs.map(c => (
                     <th key={c.key} onClick={() => toggleSort(c.key)}
+                      style={c.w ? { width: c.w, minWidth: c.w } : { minWidth: 80 }}
                       className={cn('px-3 font-medium whitespace-nowrap cursor-pointer select-none hover:bg-gray-600 transition-colors overflow-hidden text-ellipsis',
                         c.align === 'right' ? 'text-right' : 'text-left')}>
                       <span className="inline-flex items-center gap-1">
