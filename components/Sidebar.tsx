@@ -189,6 +189,8 @@ export function Sidebar() {
 
   useEffect(() => {
     if (pathname === '/login' || pathname === '/logout') {
+      // Clear stale user so the next login loads fresh data
+      setUser(null)
       setLoaded(true)
       return
     }
@@ -237,6 +239,8 @@ export function Sidebar() {
   if (pathname === '/login') return null
 
   async function handleLogout() {
+    setUser(null)
+    setLoaded(false)
     await fetch('/api/auth/logout', { method: 'POST' })
     router.push('/login')
     router.refresh()

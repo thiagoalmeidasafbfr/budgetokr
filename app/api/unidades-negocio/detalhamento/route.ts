@@ -22,14 +22,9 @@ export async function GET(req: NextRequest) {
   if (periodo && !periodos.includes(periodo)) periodos = [periodo, ...periodos]
   const unidades = unidadesRaw ? unidadesRaw.split(',').filter(Boolean) : []
 
-  // Enforce dept restriction server-side
-  const sessionUser    = await getSession()
-  const forcedDept     = sessionUser?.role === 'dept' ? sessionUser.department : undefined
-  const departamentos  = forcedDept ? [forcedDept] : []
-
   try {
-    const user       = await getSession()
-    const forcedDept = user?.role === 'dept' ? user.department : undefined
+    const sessionUser   = await getSession()
+    const forcedDept    = sessionUser?.role === 'dept' ? sessionUser.department : undefined
     const departamentos = forcedDept ? [forcedDept] : []
 
     const supabase = getSupabase()
