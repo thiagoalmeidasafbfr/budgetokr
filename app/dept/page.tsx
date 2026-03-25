@@ -146,7 +146,7 @@ function DetalhamentoModal({ ctx, onClose }: { ctx: DetModalState; onClose: () =
     if (ctx.tipo !== 'ambos') p.set('tipo',         ctx.tipo)
     fetch(`/api/dre/detalhamento?${p}`)
       .then(r => r.json())
-      .then(data => { setRows(data); setLoading(false) })
+      .then(data => { setRows(Array.isArray(data) ? data : (data?.rows ?? [])); setLoading(false) })
   }, [ctx])
 
   const title = [ctx.dre, ctx.agrupamento !== ctx.dre ? ctx.agrupamento : null,
