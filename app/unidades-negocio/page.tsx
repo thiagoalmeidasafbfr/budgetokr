@@ -185,65 +185,71 @@ export default function UnidadesNegocioPage() {
 
   useEffect(() => {
     async function init() {
-      // Fetch user info alongside filters
-      // Use /api/dre?type=distinct&col=data_lancamento for periods (same reliable
-      // source as DRE page — avoids potential issues with distinct_periodos RPC)
-      const [meRes, unRes, datesRes, linhasRes] = await Promise.all([
-        fetch('/api/me'),
-        fetch('/api/unidades-negocio?type=distinct_unidades'),
-        fetch('/api/dre?type=distinct&col=data_lancamento'),
-        fetch('/api/dre?type=linhas'),
-      ])
-      const me = meRes.ok ? await meRes.json() : null
-      if (me?.role === 'dept' && me.department) {
-        setDeptUser({ department: me.department })
-        // Check if user has unit restrictions (blocks detalhamento access)
-        const permRes = await fetch('/api/admin/users/unidades?self=true')
-        if (permRes.ok) {
-          const perm = await permRes.json() as { configured: boolean }
-          if (perm.configured) setCanDetalhamento(false)
+      try {
+        // Use /api/dre?type=distinct&col=data_lancamento for periods (same as DRE page)
+        const [meRes, unRes, datesRes, linhasRes] = await Promise.all([
+          fetch('/api/me'),
+          fetch('/api/unidades-negocio?type=distinct_unidades'),
+          fetch('/api/dre?type=distinct&col=data_lancamento'),
+          fetch('/api/dre?type=linhas'),
+        ])
+        const me = meRes.ok ? await meRes.json() : null
+        if (me?.role === 'dept' && me.department) {
+          setDeptUser({ department: me.department })
+          // Check if user has unit restrictions (blocks detalhamento)
+          try {
+            const permRes = await fetch('/api/admin/users/unidades?self=true')
+            if (permRes.ok) {
+              const perm = await permRes.json() as { configured: boolean }
+              if (perm.configured) setCanDetalhamento(false)
+            }
+          } catch { /* ignore — don't let perm check break init */ }
         }
-      }
-      const uns   = unRes.ok    ? await unRes.json()    : []
-      const dates = datesRes.ok ? await datesRes.json() : []
-      const linhas = linhasRes.ok ? await linhasRes.json() : []
-      const allUnidades = Array.isArray(uns) ? (uns as string[]).filter(Boolean) : []
-      // Derive YYYY-MM periods from raw dates (same as DRE page)
-      const allPeriodos = ([...new Set(
-        (Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean)
-      )].sort()) as string[]
-      setUnidades(allUnidades)
-      setPeriodos(allPeriodos)
+        const uns    = unRes.ok    ? await unRes.json()    : []
+        const dates  = datesRes.ok ? await datesRes.json() : []
+        const linhas = linhasRes.ok ? await linhasRes.json() : []
+        const allUnidades = Array.isArray(uns) ? (uns as string[]).filter(Boolean) : []
+        // Derive YYYY-MM periods from raw dates (same pattern as DRE page)
+        const allPeriodos = ([...new Set(
+          (Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean)
+        )].sort()) as string[]
+        setUnidades(allUnidades)
+        setPeriodos(allPeriodos)
 
-      // Build DRE line order map (tipo=grupo, ordem from dre_linhas)
-      const orderMap = new Map<string, number>()
-      for (const l of (linhas as Array<{ nome: string; tipo: string; ordem: number }>)) {
-        if (l.tipo === 'grupo') orderMap.set(l.nome, l.ordem)
-      }
-      setDreLineOrder(orderMap)
+        // Build DRE line order map
+        const orderMap = new Map<string, number>()
+        for (const l of (linhas as Array<{ nome: string; tipo: string; ordem: number }>)) {
+          if (l.tipo === 'grupo') orderMap.set(l.nome, l.ordem)
+        }
+        setDreLineOrder(orderMap)
 
-      // Auto-select current year YTD so initial tree load is filtered (avoids row limit)
-      const now      = new Date()
-      const prev     = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-      const curYear  = String(now.getFullYear())
-      const curMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
-      const ytd      = allPeriodos.filter(p => p.startsWith(curYear) && p <= curMonth)
-      const defaultPeriods = ytd.length > 0
-        ? ytd
-        : allPeriodos.filter(p => p.startsWith(curYear))
-      setSelYear(curYear)
-      setSelPeriods(defaultPeriods)
-      // Load data directly (don't rely on reactive effect for the initial load)
-      isFirst.current = true
-      await load([], defaultPeriods)
+        // Auto-select current year YTD
+        const now      = new Date()
+        const prev     = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+        const curYear  = String(now.getFullYear())
+        const curMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
+        const ytd      = allPeriodos.filter(p => p.startsWith(curYear) && p <= curMonth)
+        const defaultPeriods = ytd.length > 0
+          ? ytd
+          : allPeriodos.filter(p => p.startsWith(curYear))
+        setSelYear(curYear)
+        setSelPeriods(defaultPeriods)
+        // Direct load call — mirrors DRE page pattern (reactive effect also fires, harmless double call)
+        load([], defaultPeriods)
+      } catch (e) {
+        console.error('[UN] init error:', e)
+        load([], []) // fallback: load all data even if init partially failed
+      }
     }
     init()
-  }, [load])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const isFirst = useRef(true)
   useEffect(() => {
     if (isFirst.current) { isFirst.current = false; return }
-    load(selUnidades, selPeriods)
+    const t = setTimeout(() => load(selUnidades, selPeriods), 150)
+    return () => clearTimeout(t)
   }, [selUnidades, selPeriods, load])
 
   const handleYearChange = (year: string | null) => {
