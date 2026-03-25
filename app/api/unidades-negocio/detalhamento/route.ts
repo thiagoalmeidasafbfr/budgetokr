@@ -28,6 +28,10 @@ export async function GET(req: NextRequest) {
   const departamentos  = forcedDept ? [forcedDept] : []
 
   try {
+    const user       = await getSession()
+    const forcedDept = user?.role === 'dept' ? user.department : undefined
+    const departamentos = forcedDept ? [forcedDept] : []
+
     const supabase = getSupabase()
 
     const PAGE      = 1000
