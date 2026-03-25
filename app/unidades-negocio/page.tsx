@@ -158,9 +158,10 @@ export default function UnidadesNegocioPage() {
   const [expanded,      setExpanded]      = useState<Set<string>>(new Set())
   const [loading,       setLoading]       = useState(false)
   const [dreLineOrder,  setDreLineOrder]  = useState<Map<string, number>>(new Map())
-  const [ctxMenu,       setCtxMenu]       = useState<ContextMenuState | null>(null)
-  const [detModal,      setDetModal]      = useState<ContextMenuState | null>(null)
-  const [deptUser,      setDeptUser]      = useState<{ department: string } | null>(null)
+  const [ctxMenu,          setCtxMenu]          = useState<ContextMenuState | null>(null)
+  const [detModal,         setDetModal]         = useState<ContextMenuState | null>(null)
+  const [deptUser,         setDeptUser]         = useState<{ department: string } | null>(null)
+  const [canDetalhamento,  setCanDetalhamento]  = useState(true)
   const ctxRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(async (uns: string[], pers: string[]) => {
@@ -192,7 +193,15 @@ export default function UnidadesNegocioPage() {
         fetch('/api/dre?type=linhas'),
       ])
       const me = meRes.ok ? await meRes.json() : null
-      if (me?.role === 'dept' && me.department) setDeptUser({ department: me.department })
+      if (me?.role === 'dept' && me.department) {
+        setDeptUser({ department: me.department })
+        // Check if user has unit restrictions (blocks detalhamento access)
+        const permRes = await fetch('/api/admin/users/unidades?self=true')
+        if (permRes.ok) {
+          const perm = await permRes.json() as { configured: boolean }
+          if (perm.configured) setCanDetalhamento(false)
+        }
+      }
       const uns    = unRes.ok    ? await unRes.json()    : []
       const pers   = perRes.ok   ? await perRes.json()   : []
       const linhas = linhasRes.ok ? await linhasRes.json() : []
@@ -368,11 +377,17 @@ export default function UnidadesNegocioPage() {
           className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-xl py-1 min-w-[180px]"
           style={{ left: ctxMenu.x, top: ctxMenu.y }}
           onClick={e => e.stopPropagation()}>
-          <button
-            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2"
-            onClick={() => { setDetModal(ctxMenu); setCtxMenu(null) }}>
-            <ExternalLink size={13} /> Abrir detalhamento
-          </button>
+          {canDetalhamento ? (
+            <button
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2"
+              onClick={() => { setDetModal(ctxMenu); setCtxMenu(null) }}>
+              <ExternalLink size={13} /> Abrir detalhamento
+            </button>
+          ) : (
+            <div className="px-4 py-2 text-sm text-gray-400 flex items-center gap-2 cursor-not-allowed">
+              <ExternalLink size={13} /> Detalhamento não disponível
+            </div>
+          )}
         </div>
       )}
 

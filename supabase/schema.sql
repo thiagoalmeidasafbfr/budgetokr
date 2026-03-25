@@ -257,5 +257,20 @@ CREATE TABLE IF NOT EXISTS user_centros_custo (
 CREATE INDEX IF NOT EXISTS idx_ucc_username ON user_centros_custo(username);
 ALTER TABLE user_centros_custo DISABLE ROW LEVEL SECURITY;
 
+-- ─── Permissões de Unidades de Negócio por Usuário (N:N) ─────────────────────
+-- Se o usuário não tiver nenhuma linha aqui, ele vê todas as unidades do seu
+-- departamento. Se tiver linhas, vê apenas as unidades listadas — mas SEM acesso
+-- ao detalhamento de lançamentos (drill-down bloqueado).
+CREATE TABLE IF NOT EXISTS user_unidades_negocio (
+  id         BIGSERIAL PRIMARY KEY,
+  username   TEXT        NOT NULL,
+  unidade    TEXT        NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(username, unidade),
+  CONSTRAINT fk_uun_user FOREIGN KEY (username) REFERENCES app_users(username) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_uun_username ON user_unidades_negocio(username);
+ALTER TABLE user_unidades_negocio DISABLE ROW LEVEL SECURITY;
+
 -- ─── Usuário inicial (ajuste a senha!) ───────────────────────────────────────
 -- INSERT INTO app_users (username, password, role) VALUES ('admin', 'admin123', 'master');

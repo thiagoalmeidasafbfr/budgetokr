@@ -180,7 +180,11 @@ export async function GET(req: NextRequest) {
     const uniqueCCs    = [...new Set(lancRows.map(l => l.centro_custo).filter(Boolean))]
     const uniqueContas = [...new Set(lancRows.map(l => l.numero_conta_contabil).filter(Boolean))]
 
-    const [ccEnrichRes, caEnrichRes] = await Promise.all([
+    const uniqueIdCcCc = [...new Set(lancRows.map(l => l.id_cc_cc).filter(Boolean))]
+
+    type UnRow = { id_cc_cc: string; unidade: string }
+
+    const [ccEnrichRes, caEnrichRes, unEnrichRes] = await Promise.all([
       uniqueCCs.length > 0
         ? supabase.from('centros_custo')
             .select('centro_custo,nome_centro_custo,nome_area,nome_departamento')
@@ -191,6 +195,11 @@ export async function GET(req: NextRequest) {
             .select('numero_conta_contabil,agrupamento_arvore,dre')
             .in('numero_conta_contabil', uniqueContas)
         : Promise.resolve({ data: [] as CaRow[], error: null }),
+      uniqueIdCcCc.length > 0
+        ? supabase.from('unidades_negocio')
+            .select('id_cc_cc,unidade')
+            .in('id_cc_cc', uniqueIdCcCc)
+        : Promise.resolve({ data: [] as UnRow[], error: null }),
     ])
 
     if (ccEnrichRes.error) throw new Error((ccEnrichRes.error as { message: string }).message)
@@ -198,6 +207,7 @@ export async function GET(req: NextRequest) {
 
     const ccMap = new Map((ccEnrichRes.data ?? []).map((r: CcRow) => [r.centro_custo, r]))
     const caMap = new Map((caEnrichRes.data ?? []).map((r: CaRow) => [r.numero_conta_contabil, r]))
+    const unMap = new Map((unEnrichRes.data ?? []).map((r: UnRow) => [r.id_cc_cc, r.unidade]))
 
     // ── 5. Filtragem exata por período + enriquecimento ────────────────────────
     const rows = lancRows
@@ -229,7 +239,7 @@ export async function GET(req: NextRequest) {
           fonte:                    l.fonte,
           num_transacao:            l.num_transacao,
           id_cc_cc:                 l.id_cc_cc,
-          unidade:                  cc?.nome_departamento  ?? '',
+          unidade:                  unMap.get(l.id_cc_cc)  ?? '',
         }
       })
 

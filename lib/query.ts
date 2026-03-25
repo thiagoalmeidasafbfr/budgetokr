@@ -230,6 +230,20 @@ async function computeRatioMedida(
   })
 }
 
+// ─── Permissões de unidades de negócio por usuário ───────────────────────────
+// null = sem restrição (vê todas as unidades do dept, pode acessar detalhamento).
+// string[] = apenas essas unidades visíveis + detalhamento bloqueado.
+export async function getUserUnidades(username: string): Promise<string[] | null> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('user_unidades_negocio')
+    .select('unidade')
+    .eq('username', username)
+  if (error) return null
+  if (!data?.length) return null
+  return data.map((r: { unidade: string }) => r.unidade)
+}
+
 // ─── Permissões de centros de custo por usuário ───────────────────────────────
 // Retorna null se o usuário não tiver restrições configuradas (vê tudo do dept).
 // Retorna string[] com os centros permitidos se houver configuração explícita.

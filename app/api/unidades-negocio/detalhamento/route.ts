@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { getSession } from '@/lib/session'
+import { getUserUnidades } from '@/lib/query'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,6 +27,17 @@ export async function GET(req: NextRequest) {
     const sessionUser   = await getSession()
     const forcedDept    = sessionUser?.role === 'dept' ? sessionUser.department : undefined
     const departamentos = forcedDept ? [forcedDept] : []
+
+    // Bloqueia detalhamento para usuários com restrição de unidades configurada
+    if (sessionUser?.role === 'dept' && sessionUser.userId) {
+      const userUnidades = await getUserUnidades(sessionUser.userId)
+      if (userUnidades !== null) {
+        return NextResponse.json(
+          { error: 'Acesso ao detalhamento de lançamentos não permitido para este perfil.' },
+          { status: 403 }
+        )
+      }
+    }
 
     const supabase = getSupabase()
 
