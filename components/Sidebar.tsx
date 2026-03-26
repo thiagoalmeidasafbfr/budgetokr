@@ -267,8 +267,8 @@ export function Sidebar() {
       {/* Logo */}
       <div className="px-4 py-4 border-b border-white/5 flex-shrink-0">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center shadow-sm">
-            <TrendingUp size={15} className="text-white" />
+          <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shadow-sm">
+            <img src="/botafogo.png" alt="Botafogo" className="w-full h-full object-contain" />
           </div>
           <div>
             <p className="font-semibold text-slate-100 text-sm leading-tight">Glorioso Finance</p>

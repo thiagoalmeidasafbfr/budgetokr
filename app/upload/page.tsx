@@ -45,6 +45,7 @@ export default function UploadPage() {
   const [sample, setSample]       = useState<Record<string, unknown>[]>([])
   const [totalRows, setTotalRows] = useState(0)
   const [mapping, setMapping]     = useState<Record<string, string>>({})
+  const [analyzing, setAnalyzing] = useState(false)
   const [progress, setProgress]   = useState(0)
   const [result, setResult]       = useState<{ rowCount: number } | null>(null)
 
@@ -64,58 +65,70 @@ export default function UploadPage() {
 
   const analyzeFile = async () => {
     if (!file || !tipo) return
-    const bytes = await file.arrayBuffer()
-    const params = new URLSearchParams({ tipo })
-    const res = await fetch(`/api/upload?${params}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/octet-stream' },
-      body: bytes,
-    })
-    const data = await res.json()
-    if (!res.ok) { setError(data.error); return }
-
-    setColumns(data.columns)
-    setSample(data.sample)
-    setTotalRows(data.total)
-
-    // Normalize: remove accents, lowercase, strip punctuation
-    const norm = (s: string) =>
-      s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[\s_\-./()]/g, '')
-
-    // Count how many sample rows have an actual numeric value in a column
-    const countNumericInSample = (col: string): number =>
-      data.sample.filter((row: Record<string, unknown>) => {
-        const raw = String(row[col] ?? '').trim()
-          .replace(/[^\d,.+\-]/g, '') // keep only numeric chars
-        return raw.length > 0 && raw !== '-' && raw !== '+' && !isNaN(parseFloat(raw.replace(',', '.')))
-      }).length
-
-    const autoMap: Record<string, string> = {}
-    for (const fc of fieldCols) {
-      if (fc.key === 'debito_credito') {
-        // For the value column, pick the candidate with the most actual numeric values in the
-        // sample — this reliably chooses "Valor" over "Débito/ Crédito" (which has "–" dashes)
-        const candidates = data.columns.filter((c: string) => {
-          const n = norm(c)
-          return n.includes('valor') || n.includes('debito') || n.includes('credito') ||
-                 n.includes('amount') || n.includes('montante') || n.includes('debitocredito')
-        })
-        const pool = candidates.length > 0 ? candidates : data.columns
-        const scored = pool
-          .map((c: string) => ({ c, isValor: norm(c).includes('valor'), count: countNumericInSample(c) }))
-          .sort((a: { c: string; isValor: boolean; count: number }, b: { c: string; isValor: boolean; count: number }) => b.count - a.count || (b.isValor ? 1 : 0) - (a.isValor ? 1 : 0))
-        if (scored.length > 0) autoMap[fc.key] = scored[0].c
-        continue
-      }
-      const normKey = norm(fc.key)
-      const match = data.columns.find((c: string) => {
-        const n = norm(c)
-        return n === normKey || n.includes(normKey)
+    setAnalyzing(true)
+    setError('')
+    try {
+      const bytes = await file.arrayBuffer()
+      const params = new URLSearchParams({ tipo })
+      const res = await fetch(`/api/upload?${params}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: bytes,
       })
-      if (match) autoMap[fc.key] = match
+      let data: Record<string, unknown>
+      try {
+        data = await res.json()
+      } catch {
+        setError(`Erro ao processar resposta do servidor (status ${res.status})`)
+        return  // finally still runs
+      }
+      if (!res.ok) { setError(String(data.error ?? `Erro ${res.status}`)); return }
+
+      const cols   = data.columns as string[]
+      const samp   = data.sample  as Record<string, unknown>[]
+      const total  = data.total   as number
+
+      setColumns(cols)
+      setSample(samp)
+      setTotalRows(total)
+
+      // Normalize: remove accents, lowercase, strip punctuation
+      const norm = (s: string) =>
+        s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[\s_\-./()]/g, '')
+
+      // Count how many sample rows have an actual numeric value in a column
+      const countNumericInSample = (col: string): number =>
+        samp.filter((row: Record<string, unknown>) => {
+          const raw = String(row[col] ?? '').trim().replace(/[^\d,.+\-]/g, '')
+          return raw.length > 0 && raw !== '-' && raw !== '+' && !isNaN(parseFloat(raw.replace(',', '.')))
+        }).length
+
+      const autoMap: Record<string, string> = {}
+      for (const fc of fieldCols) {
+        if (fc.key === 'debito_credito') {
+          const candidates = cols.filter((c: string) => {
+            const n = norm(c)
+            return n.includes('valor') || n.includes('debito') || n.includes('credito') ||
+                   n.includes('amount') || n.includes('montante') || n.includes('debitocredito')
+          })
+          const pool = candidates.length > 0 ? candidates : cols
+          const scored = pool
+            .map((c: string) => ({ c, isValor: norm(c).includes('valor'), count: countNumericInSample(c) }))
+            .sort((a: { c: string; isValor: boolean; count: number }, b: { c: string; isValor: boolean; count: number }) => b.count - a.count || (b.isValor ? 1 : 0) - (a.isValor ? 1 : 0))
+          if (scored.length > 0) autoMap[fc.key] = scored[0].c
+          continue
+        }
+        const normKey = norm(fc.key)
+        const match = cols.find((c: string) => { const n = norm(c); return n === normKey || n.includes(normKey) })
+        if (match) autoMap[fc.key] = match
+      }
+      setMapping(autoMap)
+      setStep('mapping')
+    } catch (err) {
+      setError(String(err))
+    } finally {
+      setAnalyzing(false)
     }
-    setMapping(autoMap)
-    setStep('mapping')
   }
 
   const importData = async () => {
@@ -148,7 +161,7 @@ export default function UploadPage() {
 
   const reset = () => {
     setStep('choose'); setTipo(null); setFile(null); setMapping({})
-    setColumns([]); setSample([]); setError(''); setProgress(0); setResult(null)
+    setColumns([]); setSample([]); setError(''); setProgress(0); setResult(null); setAnalyzing(false)
   }
 
   const tipoInfo = TIPO_OPTIONS.find(t => t.value === tipo)
@@ -259,8 +272,10 @@ export default function UploadPage() {
 
               <div className="flex gap-3 mt-4">
                 <Button variant="outline" onClick={reset}>Voltar</Button>
-                <Button onClick={analyzeFile} disabled={!file} className="flex-1">
-                  Analisar Arquivo <ArrowRight size={15} />
+                <Button onClick={analyzeFile} disabled={!file || analyzing} className="flex-1">
+                  {analyzing
+                    ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />Analisando...</>
+                    : <>Analisar Arquivo <ArrowRight size={15} /></>}
                 </Button>
               </div>
             </CardContent>
