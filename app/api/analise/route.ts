@@ -12,7 +12,9 @@ export async function GET(req: NextRequest) {
     const medidaId = sp.get('medidaId')
 
     const user = await getSession()
-    const forcedDept = user?.role === 'dept' ? user.department : undefined
+    const forcedDepts = user?.role === 'dept'
+      ? (user.departments ?? (user.department ? [user.department] : []))
+      : undefined
 
     // Permissões individuais de centros de custo
     const userCentros = (user?.role === 'dept' && user.userId)
@@ -40,9 +42,12 @@ export async function GET(req: NextRequest) {
       const periodosRaw        = sp.get('periodos')
       const periodos           = periodosRaw ? periodosRaw.split(',').filter(Boolean) : []
 
-      const extraFiltros = forcedDept
-        ? [{ column: 'nome_departamento' as FilterColumn, operator: '=' as const, value: forcedDept }]
-        : []
+      const extraFiltros =
+        forcedDepts?.length
+          ? forcedDepts.length === 1
+            ? [{ column: 'nome_departamento' as FilterColumn, operator: '=' as const, value: forcedDepts[0] }]
+            : [{ column: 'nome_departamento' as FilterColumn, operator: 'in' as const, value: forcedDepts.join(',') }]
+          : []
 
       const results = await getMedidaResultados(parseInt(medidaId), {
         groupByDept,
@@ -54,8 +59,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(results)
     }
 
-    const departamentos = forcedDept
-      ? [forcedDept]
+    const departamentos = forcedDepts?.length
+      ? forcedDepts
       : sp.get('departamentos')?.split(',').filter(Boolean)
     const periodos       = sp.get('periodos')?.split(',').filter(Boolean)
     const filtersRaw     = sp.get('filtros')

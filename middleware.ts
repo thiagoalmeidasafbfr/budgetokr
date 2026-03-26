@@ -59,6 +59,8 @@ export async function middleware(request: NextRequest) {
   requestHeaders.set('x-user-role', user.role)
   requestHeaders.set('x-user-id', user.userId)
   requestHeaders.set('x-user-dept', encodeURIComponent(user.department || ''))
+  const allDepts = user.departments ?? (user.department ? [user.department] : [])
+  requestHeaders.set('x-user-depts', encodeURIComponent(allDepts.join(',')))
 
   return NextResponse.next({
     request: { headers: requestHeaders },

@@ -1147,6 +1147,7 @@ export default function DeptDashboardPage() {
   const [detModal,         setDetModal]         = useState<DetModalState | null>(null)
   const [userRole,         setUserRole]         = useState<'master' | 'dept' | null>(null)
   const [forcedDept,       setForcedDept]       = useState<string | null>(null)
+  const [forcedDepts,      setForcedDepts]      = useState<string[]>([])
   const [dreView,          setDreView]          = useState<'resumida' | 'completa'>('resumida')
   const [dreFullData,      setDreFullData]      = useState<DRERow[]>([])
   const [dreHierarchy,     setDreHierarchy]     = useState<Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }>>([])
@@ -1172,10 +1173,14 @@ export default function DeptDashboardPage() {
           setUserRole('master')
         } else {
           setUserRole(u.role)
-          if (u.role === 'dept' && u.department) {
-            setForcedDept(u.department)
-            setSelDept(u.department)
-            dept = u.department
+          if (u.role === 'dept') {
+            const meDepts: string[] = u.departments ?? (u.department ? [u.department] : [])
+            if (meDepts.length > 0) {
+              setForcedDepts(meDepts)
+              setForcedDept(meDepts[0])
+              setSelDept(meDepts[0])
+              dept = meDepts[0]
+            }
           }
         }
 
@@ -1334,11 +1339,23 @@ export default function DeptDashboardPage() {
           </>
         )}
 
-        {/* Para dept users: exibe o nome do departamento fixo */}
-        {!isMaster && forcedDept && (
+        {/* Para dept users: exibe o nome do departamento ou seletor se tiver múltiplos */}
+        {!isMaster && forcedDepts.length > 0 && (
           <div className="p-3 border-b border-gray-100">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Departamento</p>
-            <p className="text-sm font-semibold text-indigo-700 px-1">{forcedDept}</p>
+            {forcedDepts.length === 1 ? (
+              <p className="text-sm font-semibold text-indigo-700 px-1">{forcedDepts[0]}</p>
+            ) : (
+              <select
+                value={selDept}
+                onChange={e => { setSelDept(e.target.value); setForcedDept(e.target.value) }}
+                className="w-full text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-2 py-1 outline-none cursor-pointer"
+              >
+                {forcedDepts.map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            )}
           </div>
         )}
 

@@ -5,8 +5,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { formatPeriodo } from '@/lib/utils'
 
 interface FilterSidebarProps {
-  /** If set, shows a locked dept badge instead of checkboxes */
-  deptUser?: { department: string } | null
+  /** If set, shows locked dept badge(s) instead of checkboxes */
+  deptUser?: { department?: string; departments?: string[] } | null
   departamentos?: string[]
   selDepts: string[]
   onDeptsChange: (depts: string[]) => void
@@ -74,8 +74,16 @@ export function FilterSidebar({
         {hasDeptSection && (
           deptUser ? (
             <div>
-              <p className="text-xs font-medium text-gray-600 mb-1">Departamento</p>
-              <p className="text-xs text-indigo-700 font-semibold px-1 py-0.5 bg-indigo-50 rounded">{deptUser.department}</p>
+              <p className="text-xs font-medium text-gray-600 mb-1">
+                {(deptUser.departments?.length ?? 0) > 1 ? 'Departamentos' : 'Departamento'}
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {(deptUser.departments ?? (deptUser.department ? [deptUser.department] : [])).map(d => (
+                  <span key={d} className="text-xs text-indigo-700 font-semibold px-1.5 py-0.5 bg-indigo-50 rounded">
+                    {d}
+                  </span>
+                ))}
+              </div>
             </div>
           ) : (
             <div>

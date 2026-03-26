@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Users, Plus, Pencil, Trash2, X, Check, Eye, EyeOff, RefreshCw, ShieldCheck, Briefcase } from 'lucide-react'
+import { Users, Plus, Pencil, Trash2, X, Check, Eye, EyeOff, RefreshCw, ShieldCheck, Briefcase, ChevronDown } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 
@@ -9,6 +9,7 @@ interface AppUser {
   username: string
   role: 'master' | 'dept'
   department: string | null
+  departments: string[]
   created_at: string
 }
 
@@ -26,10 +27,102 @@ interface FormState {
   username: string
   password: string
   role: 'master' | 'dept'
-  department: string
+  departments: string[]
 }
 
-const emptyForm = (): FormState => ({ username: '', password: '', role: 'dept', department: '' })
+const emptyForm = (): FormState => ({ username: '', password: '', role: 'dept', departments: [] })
+
+// ─── Multi-Select de Departamentos ───────────────────────────────────────────
+interface DeptMultiSelectProps {
+  allDepts: string[]
+  selected: string[]
+  onChange: (depts: string[]) => void
+}
+
+function DeptMultiSelect({ allDepts, selected, onChange }: DeptMultiSelectProps) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+
+  const filtered = allDepts.filter(d => !search || d.toLowerCase().includes(search.toLowerCase()))
+
+  function toggle(d: string) {
+    if (selected.includes(d)) {
+      onChange(selected.filter(x => x !== d))
+    } else {
+      onChange([...selected, d])
+    }
+  }
+
+  const label = selected.length === 0
+    ? 'Selecione departamentos...'
+    : selected.length === 1
+      ? selected[0]
+      : `${selected.length} departamentos`
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-300 bg-white text-left flex items-center justify-between"
+      >
+        <span className={selected.length === 0 ? 'text-gray-400' : 'text-gray-800'}>{label}</span>
+        <ChevronDown size={14} className={cn('text-gray-400 transition-transform', open && 'rotate-180')} />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg">
+          <div className="p-2 border-b">
+            <input
+              type="text"
+              placeholder="Buscar departamento..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full text-xs border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-indigo-300"
+              autoFocus
+            />
+          </div>
+          <div className="max-h-48 overflow-y-auto divide-y">
+            {filtered.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-3">Nenhum resultado</p>
+            ) : (
+              filtered.map(d => (
+                <label key={d} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(d)}
+                    onChange={() => toggle(d)}
+                    className="accent-indigo-600 w-3.5 h-3.5 flex-shrink-0"
+                  />
+                  <span className="text-sm text-gray-800 truncate">{d}</span>
+                </label>
+              ))
+            )}
+          </div>
+          {selected.length > 0 && (
+            <div className="p-2 border-t flex items-center justify-between">
+              <span className="text-xs text-gray-500">{selected.length} selecionado(s)</span>
+              <button
+                onClick={() => { onChange([]); setOpen(false) }}
+                className="text-xs text-red-500 hover:text-red-700"
+              >
+                Limpar
+              </button>
+            </div>
+          )}
+          <div className="p-2 border-t">
+            <button
+              onClick={() => setOpen(false)}
+              className="w-full text-xs py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+            >
+              Confirmar
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ─── Modal de Permissões de Centros de Custo ─────────────────────────────────
 interface CentrosModalProps {
@@ -51,10 +144,11 @@ function CentrosModal({ user, onClose }: CentrosModalProps) {
       setLoading(true)
       setError('')
       try {
-        const dept = user.department
+        // Busca centros de todos os departamentos do usuário
+        const depts = user.departments
         const [centrosRes, permRes] = await Promise.all([
-          dept
-            ? fetch(`/api/dre?type=centros&departamentos=${encodeURIComponent(dept)}`)
+          depts.length > 0
+            ? fetch(`/api/dre?type=centros&departamentos=${encodeURIComponent(depts.join(','))}`)
             : Promise.resolve(null),
           fetch(`/api/admin/users/centros?username=${encodeURIComponent(user.username)}`),
         ])
@@ -82,7 +176,6 @@ function CentrosModal({ user, onClose }: CentrosModalProps) {
   )
 
   const allChecked = allCentros.length > 0 && allCentros.every(c => selected.has(c.cc))
-  const someChecked = allCentros.some(c => selected.has(c.cc))
 
   function toggleAll() {
     if (allChecked) {
@@ -121,15 +214,10 @@ function CentrosModal({ user, onClose }: CentrosModalProps) {
     }
   }
 
-  function handleRemoveAll() {
-    setSelected(new Set())
-  }
-
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <Card className="w-full max-w-lg max-h-[80vh] flex flex-col">
         <CardContent className="p-5 flex flex-col gap-3 min-h-0">
-          {/* Header */}
           <div className="flex items-center justify-between flex-shrink-0">
             <div>
               <h2 className="font-semibold text-gray-900 flex items-center gap-1.5">
@@ -138,17 +226,18 @@ function CentrosModal({ user, onClose }: CentrosModalProps) {
               </h2>
               <p className="text-xs text-gray-500 mt-0.5">
                 Usuário: <span className="font-medium text-gray-700">{user.username}</span>
-                {user.department && <> &middot; Dept: <span className="font-medium text-gray-700">{user.department}</span></>}
+                {user.departments.length > 0 && (
+                  <> &middot; <span className="font-medium text-gray-700">{user.departments.join(', ')}</span></>
+                )}
               </p>
             </div>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
           </div>
 
-          {/* Info box */}
           <div className="text-xs bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 text-indigo-700 flex-shrink-0">
             {configured
               ? `Restrição ativa: usuário vê apenas ${selected.size} centro(s) selecionado(s).`
-              : 'Sem restrição configurada: usuário vê todos os centros do departamento.'}
+              : 'Sem restrição configurada: usuário vê todos os centros do(s) departamento(s).'}
             {' '}Desmarque todos para remover restrições.
           </div>
 
@@ -160,11 +249,10 @@ function CentrosModal({ user, onClose }: CentrosModalProps) {
             </div>
           ) : allCentros.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-6">
-              {user.department ? 'Nenhum centro de custo encontrado para este departamento.' : 'Usuário sem departamento definido.'}
+              {user.departments.length > 0 ? 'Nenhum centro de custo encontrado.' : 'Usuário sem departamento definido.'}
             </p>
           ) : (
             <>
-              {/* Search + select-all */}
               <div className="flex gap-2 flex-shrink-0">
                 <input
                   type="text"
@@ -181,13 +269,9 @@ function CentrosModal({ user, onClose }: CentrosModalProps) {
                 </button>
               </div>
 
-              {/* Checkboxes list */}
               <div className="overflow-y-auto flex-1 border rounded-lg divide-y min-h-0">
                 {filtered.map(c => (
-                  <label
-                    key={c.cc}
-                    className="flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 cursor-pointer"
-                  >
+                  <label key={c.cc} className="flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={selected.has(c.cc)}
@@ -203,19 +287,17 @@ function CentrosModal({ user, onClose }: CentrosModalProps) {
                 )}
               </div>
 
-              {/* Counter */}
               <p className="text-xs text-gray-500 flex-shrink-0">
                 {selected.size === 0
-                  ? 'Nenhum selecionado — acesso a todos os centros do departamento'
+                  ? 'Nenhum selecionado — acesso a todos os centros'
                   : `${selected.size} de ${allCentros.length} centros selecionados`}
               </p>
             </>
           )}
 
-          {/* Actions */}
           <div className="flex gap-2 flex-shrink-0 pt-1">
             {selected.size > 0 && (
-              <button onClick={handleRemoveAll} disabled={saving}
+              <button onClick={() => setSelected(new Set())} disabled={saving}
                 className="px-3 py-2 text-xs border rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50">
                 Remover restrições
               </button>
@@ -317,7 +399,6 @@ function UnidadesModal({ user, onClose }: UnidadesModalProps) {
               </h2>
               <p className="text-xs text-gray-500 mt-0.5">
                 Usuário: <span className="font-medium text-gray-700">{user.username}</span>
-                {user.department && <> &middot; Dept: <span className="font-medium text-gray-700">{user.department}</span></>}
               </p>
             </div>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
@@ -326,7 +407,7 @@ function UnidadesModal({ user, onClose }: UnidadesModalProps) {
           <div className="text-xs bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-amber-700 flex-shrink-0">
             {configured
               ? `Restrição ativa: usuário vê apenas ${selected.size} unidade(s) e não pode acessar detalhamento de lançamentos.`
-              : 'Sem restrição: usuário vê todas as unidades do departamento e pode acessar detalhamento.'}
+              : 'Sem restrição: usuário vê todas as unidades e pode acessar detalhamento.'}
             {' '}Desmarque todos para remover restrições.
           </div>
 
@@ -436,7 +517,7 @@ export default function UsersPage() {
 
   function openEdit(u: AppUser) {
     setEditUser(u)
-    setForm({ username: u.username, password: '', role: u.role, department: u.department ?? '' })
+    setForm({ username: u.username, password: '', role: u.role, departments: u.departments ?? [] })
     setShowPwd(false)
     setShowForm(true)
   }
@@ -451,14 +532,14 @@ export default function UsersPage() {
     setError('')
     if (!form.username) { setError('Username é obrigatório'); return }
     if (!editUser && !form.password) { setError('Senha é obrigatória para novo usuário'); return }
-    if (form.role === 'dept' && !form.department) { setError('Departamento é obrigatório para usuários de departamento'); return }
+    if (form.role === 'dept' && form.departments.length === 0) { setError('Selecione ao menos um departamento para usuários de departamento'); return }
     setSaving(true)
     try {
       if (editUser) {
         const res = await fetch('/api/admin/users', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: editUser.id, password: form.password || undefined, department: form.department, role: form.role }),
+          body: JSON.stringify({ id: editUser.id, password: form.password || undefined, departments: form.departments, role: form.role }),
         })
         const json = await res.json()
         if (!res.ok) throw new Error(json.error ?? 'Erro ao atualizar')
@@ -466,7 +547,7 @@ export default function UsersPage() {
         const res = await fetch('/api/admin/users', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: form.username, password: form.password, role: form.role, department: form.department }),
+          body: JSON.stringify({ username: form.username, password: form.password, role: form.role, departments: form.departments }),
         })
         const json = await res.json()
         if (!res.ok) throw new Error(json.error ?? 'Erro ao criar')
@@ -581,33 +662,42 @@ export default function UsersPage() {
                   <label className="text-xs font-medium text-gray-600 block mb-1">Perfil</label>
                   <select
                     value={form.role}
-                    onChange={e => setForm(f => ({ ...f, role: e.target.value as 'master' | 'dept', department: '' }))}
+                    onChange={e => setForm(f => ({ ...f, role: e.target.value as 'master' | 'dept', departments: [] }))}
                     className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
                   >
                     {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                   </select>
                 </div>
 
-                {/* Department (only for dept role) */}
+                {/* Departments (only for dept role) — multi-select */}
                 {form.role === 'dept' && (
                   <div>
-                    <label className="text-xs font-medium text-gray-600 block mb-1">Departamento</label>
+                    <label className="text-xs font-medium text-gray-600 block mb-1">
+                      Departamentos
+                      <span className="text-gray-400 font-normal ml-1">(pode selecionar mais de um)</span>
+                    </label>
                     {depts.length > 0 ? (
-                      <select
-                        value={form.department}
-                        onChange={e => setForm(f => ({ ...f, department: e.target.value }))}
-                        className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
-                      >
-                        <option value="">Selecione um departamento...</option>
-                        {depts.map(d => <option key={d} value={d}>{d}</option>)}
-                      </select>
-                    ) : (
-                      <input
-                        value={form.department}
-                        onChange={e => setForm(f => ({ ...f, department: e.target.value }))}
-                        placeholder="Nome do departamento"
-                        className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-300"
+                      <DeptMultiSelect
+                        allDepts={depts}
+                        selected={form.departments}
+                        onChange={departments => setForm(f => ({ ...f, departments }))}
                       />
+                    ) : (
+                      <p className="text-xs text-gray-400">Nenhum departamento disponível</p>
+                    )}
+                    {/* Tags dos selecionados */}
+                    {form.departments.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {form.departments.map(d => (
+                          <span key={d} className="inline-flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full px-2 py-0.5">
+                            {d}
+                            <button type="button" onClick={() => setForm(f => ({ ...f, departments: f.departments.filter(x => x !== d) }))}
+                              className="text-indigo-400 hover:text-indigo-700">
+                              <X size={10} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </div>
                 )}
@@ -684,6 +774,12 @@ export default function UsersPage() {
     onCentros: (() => void) | null
     onUnidades?: (() => void) | null
   }) {
+    const deptLabel = user.departments.length === 0
+      ? 'Sem departamento'
+      : user.departments.length === 1
+        ? user.departments[0]
+        : `${user.departments[0]} +${user.departments.length - 1}`
+
     return (
       <div className="flex items-center gap-3 px-4 py-3 bg-white border rounded-lg hover:border-indigo-200 transition-colors">
         <div className={cn(
@@ -695,11 +791,18 @@ export default function UsersPage() {
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-gray-900">{user.username}</p>
           <p className="text-xs text-gray-500">
-            {user.role === 'master' ? 'Administrador' : (user.department || 'Sem departamento')}
+            {user.role === 'master' ? 'Administrador' : (
+              <span title={user.departments.join(', ')}>{deptLabel}</span>
+            )}
             <span className="text-gray-300 mx-1">·</span>
             <span className="text-gray-400">criado em {formatDate(user.created_at)}</span>
           </p>
         </div>
+        {user.role === 'dept' && user.departments.length > 1 && (
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600 flex-shrink-0">
+            {user.departments.length} depts
+          </span>
+        )}
         <span className={cn(
           'text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0',
           user.role === 'master' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'

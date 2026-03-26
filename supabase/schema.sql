@@ -272,5 +272,19 @@ CREATE TABLE IF NOT EXISTS user_unidades_negocio (
 CREATE INDEX IF NOT EXISTS idx_uun_username ON user_unidades_negocio(username);
 ALTER TABLE user_unidades_negocio DISABLE ROW LEVEL SECURITY;
 
+-- ─── Departamentos por Usuário (N:N) ─────────────────────────────────────────
+-- Permite atribuir múltiplos departamentos a um usuário do tipo 'dept'.
+-- Se não houver linhas aqui, o sistema usa a coluna legacy app_users.department.
+CREATE TABLE IF NOT EXISTS user_departamentos (
+  id           BIGSERIAL PRIMARY KEY,
+  username     TEXT        NOT NULL,
+  departamento TEXT        NOT NULL,
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(username, departamento),
+  CONSTRAINT fk_ud_user FOREIGN KEY (username) REFERENCES app_users(username) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_ud_username ON user_departamentos(username);
+ALTER TABLE user_departamentos DISABLE ROW LEVEL SECURITY;
+
 -- ─── Usuário inicial (ajuste a senha!) ───────────────────────────────────────
 -- INSERT INTO app_users (username, password, role) VALUES ('admin', 'admin123', 'master');

@@ -25,11 +25,11 @@ export async function GET(req: NextRequest) {
 
   try {
     const sessionUser = await getSession()
-    const forcedDept  = sessionUser?.role === 'dept' ? sessionUser.department : undefined
+    const isDeptUser  = sessionUser?.role === 'dept'
 
     // UB is the sole access control — dept/CC filter is never applied here
     let allowedUnidades = unidades
-    if (forcedDept && sessionUser?.userId) {
+    if (isDeptUser && sessionUser?.userId) {
       const userUnidades = await getUserUnidades(sessionUser.userId)
       if (userUnidades === null) {
         // Dept user with no UBs assigned → no access

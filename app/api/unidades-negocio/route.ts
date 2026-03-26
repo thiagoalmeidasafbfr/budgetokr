@@ -14,9 +14,11 @@ export async function GET(req: NextRequest) {
     const supabase = getSupabase()
 
     // Forçar filtro de departamento para usuários dept
-    const user           = await getSession()
-    const forcedDept     = user?.role === 'dept' ? user.department : undefined
-    const departamentos  = forcedDept ? [forcedDept] : []
+    const user        = await getSession()
+    const forcedDepts = user?.role === 'dept'
+      ? (user.departments ?? (user.department ? [user.department] : []))
+      : undefined
+    const departamentos = forcedDepts?.length ? forcedDepts : []
 
     // Permissões de unidades por usuário (N:N)
     const userUnidades = (user?.role === 'dept' && user.userId)
@@ -25,7 +27,7 @@ export async function GET(req: NextRequest) {
 
     // Distinct unidades — for dept users, return ONLY explicitly assigned UBs
     if (type === 'distinct_unidades') {
-      if (forcedDept) {
+      if (forcedDepts?.length) {
         // Dept user with no UBs assigned → no access to UB page
         if (userUnidades === null) return NextResponse.json([])
         // Dept user with UBs assigned → filter strictly by those UBs (UB is the access control, not CC)
@@ -56,7 +58,7 @@ export async function GET(req: NextRequest) {
     // A função retorna JSONB (array único) para contornar o limite de linhas do PostgREST
     if (type === 'dre') {
       // Dept user with no UBs assigned → no data
-      if (forcedDept && userUnidades === null) return NextResponse.json([])
+      if (forcedDepts?.length && userUnidades === null) return NextResponse.json([])
       // Dept user with UBs: intersect requested with assigned (UB is the access control, ignore dept/CC)
       // Master user: use requested unidades as-is with no dept restriction
       const filteredUnidades = userUnidades !== null

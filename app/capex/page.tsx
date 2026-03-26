@@ -44,13 +44,14 @@ export default function CapexPage() {
   const [viewMode,      setViewMode]      = useState<ViewMode>('table')
   const [groupBy,       setGroupBy]       = useState<GroupBy>('projeto')
   const [loading,       setLoading]       = useState(false)
-  const [deptUser,      setDeptUser]      = useState<{ department: string } | null>(null)
+  const [deptUser,      setDeptUser]      = useState<{ department?: string; departments?: string[] } | null>(null)
 
   useEffect(() => {
     async function init() {
       const me = await fetch('/api/me').then(r => r.ok ? r.json() : null).catch(() => null)
-      const isDept = me?.role === 'dept' && me.department
-      if (isDept) { setDeptUser({ department: me.department }); setSelDepts([me.department]) }
+      const meDepts: string[] = me?.departments ?? (me?.department ? [me.department] : [])
+      const isDept = me?.role === 'dept' && meDepts.length > 0
+      if (isDept) { setDeptUser({ department: meDepts[0], departments: meDepts }); setSelDepts(meDepts) }
       const [depts, dates, projs] = await Promise.all([
         fetch('/api/capex?type=distinct&col=nome_departamento', { cache: 'no-store' }).then(r => r.json()),
         fetch('/api/capex?type=distinct&col=data_lancamento', { cache: 'no-store' }).then(r => r.json()),

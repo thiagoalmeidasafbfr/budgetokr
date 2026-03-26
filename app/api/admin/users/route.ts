@@ -10,6 +10,22 @@ function masterOnly(req: NextRequest) {
   return null
 }
 
+// Salva departamentos na tabela N:N e atualiza coluna legada department
+async function saveDepartamentos(supabase: ReturnType<typeof getSupabase>, username: string, departments: string[]) {
+  // Remove entradas anteriores
+  await supabase.from('user_departamentos').delete().eq('username', username)
+  // Insere novas
+  if (departments.length > 0) {
+    await supabase.from('user_departamentos').insert(
+      departments.map(d => ({ username, departamento: d }))
+    )
+  }
+  // Atualiza coluna legada com o primeiro departamento
+  await supabase.from('app_users').update({
+    department: departments[0] ?? null,
+  }).eq('username', username)
+}
+
 // GET /api/admin/users — list all users
 export async function GET(req: NextRequest) {
   const deny = masterOnly(req)
@@ -21,7 +37,29 @@ export async function GET(req: NextRequest) {
       .select('id, username, role, department, created_at')
       .order('created_at', { ascending: false })
     if (error) throw new Error(error.message)
-    return NextResponse.json({ users: data ?? [] })
+
+    const users = data ?? []
+
+    // Busca departamentos da tabela N:N para todos os usuários de uma vez
+    const { data: deptData } = await supabase
+      .from('user_departamentos')
+      .select('username, departamento')
+      .in('username', users.map(u => u.username))
+
+    const deptMap: Record<string, string[]> = {}
+    for (const row of deptData ?? []) {
+      if (!deptMap[row.username]) deptMap[row.username] = []
+      deptMap[row.username].push(row.departamento)
+    }
+
+    const result = users.map(u => ({
+      ...u,
+      departments: deptMap[u.username]?.length
+        ? deptMap[u.username]
+        : (u.department ? [u.department] : []),
+    }))
+
+    return NextResponse.json({ users: result })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
@@ -34,21 +72,28 @@ export async function POST(req: NextRequest) {
   try {
     const supabase = getSupabase()
     const body = await req.json()
-    const { username, password, role, department } = body as {
-      username: string; password: string; role: 'master' | 'dept'; department?: string
+    const { username, password, role, departments } = body as {
+      username: string; password: string; role: 'master' | 'dept'; departments?: string[]
     }
     if (!username || !password || !role) {
       return NextResponse.json({ error: 'username, password e role são obrigatórios' }, { status: 400 })
     }
+    const depts = role === 'dept' ? (departments ?? []) : []
     const { error } = await supabase.from('app_users').insert({
       username: username.trim(),
       password,
       role,
-      department: role === 'dept' ? (department ?? null) : null,
+      department: depts[0] ?? null,
     })
     if (error) {
       if (error.code === '23505') return NextResponse.json({ error: 'Usuário já existe' }, { status: 409 })
       throw new Error(error.message)
+    }
+    // Salva tabela N:N
+    if (depts.length > 0) {
+      await supabase.from('user_departamentos').insert(
+        depts.map(d => ({ username: username.trim(), departamento: d }))
+      )
     }
     return NextResponse.json({ ok: true })
   } catch (e) {
@@ -56,24 +101,43 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PUT /api/admin/users — update user (password and/or department)
+// PUT /api/admin/users — update user
 export async function PUT(req: NextRequest) {
   const deny = masterOnly(req)
   if (deny) return deny
   try {
     const supabase = getSupabase()
     const body = await req.json()
-    const { id, password, department, role } = body as {
-      id: number; password?: string; department?: string; role?: 'master' | 'dept'
+    const { id, password, departments, role } = body as {
+      id: number; password?: string; departments?: string[]; role?: 'master' | 'dept'
     }
     if (!id) return NextResponse.json({ error: 'id é obrigatório' }, { status: 400 })
+
+    // Busca username pelo id
+    const { data: userData } = await supabase
+      .from('app_users')
+      .select('username, role')
+      .eq('id', id)
+      .single()
+    if (!userData) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+
     const update: Record<string, unknown> = {}
     if (password !== undefined && password !== '') update.password = password
-    if (department !== undefined) update.department = department || null
     if (role !== undefined) update.role = role
-    if (Object.keys(update).length === 0) return NextResponse.json({ ok: true })
-    const { error } = await supabase.from('app_users').update(update).eq('id', id)
-    if (error) throw new Error(error.message)
+
+    const effectiveRole = role ?? userData.role
+    if (departments !== undefined) {
+      const depts = effectiveRole === 'dept' ? departments : []
+      update.department = depts[0] ?? null
+      // Atualiza tabela N:N
+      await saveDepartamentos(supabase, userData.username, depts)
+    }
+
+    if (Object.keys(update).length > 0) {
+      const { error } = await supabase.from('app_users').update(update).eq('id', id)
+      if (error) throw new Error(error.message)
+    }
+
     return NextResponse.json({ ok: true })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })

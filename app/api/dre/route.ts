@@ -11,7 +11,9 @@ export async function GET(req: NextRequest) {
     const type = sp.get('type') ?? 'dre'
 
     const user = await getSession()
-    const forcedDept = user?.role === 'dept' ? user.department : undefined
+    const forcedDepts = user?.role === 'dept'
+      ? (user.departments ?? (user.department ? [user.department] : []))
+      : undefined
 
     // Permissões de centros de custo individuais (N:N)
     // null = sem restrição por centro; string[] = lista de centros permitidos
@@ -34,8 +36,8 @@ export async function GET(req: NextRequest) {
     }
 
     if (type === 'centros') {
-      const depts = forcedDept
-        ? [forcedDept]
+      const depts = forcedDepts?.length
+        ? forcedDepts
         : sp.get('departamentos')?.split(',').filter(Boolean) ?? []
       let result = await getCentrosByDepartamentos(depts)
       // Aplica restrição individual de centros se configurada
@@ -46,8 +48,8 @@ export async function GET(req: NextRequest) {
     }
 
     const periodos      = sp.get('periodos')?.split(',').filter(Boolean)
-    const departamentos = forcedDept
-      ? [forcedDept]
+    const departamentos = forcedDepts?.length
+      ? forcedDepts
       : sp.get('departamentos')?.split(',').filter(Boolean)
 
     // Aplica permissões individuais de centros:

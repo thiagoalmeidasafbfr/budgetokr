@@ -13,12 +13,22 @@ export async function GET(req: NextRequest) {
     const periodos = periodosRaw ? periodosRaw.split(',').filter(Boolean) : undefined
 
     const user = await getSession()
-    const forcedDept = user?.role === 'dept' ? user.department : undefined
+    const forcedDepts = user?.role === 'dept'
+      ? (user.departments ?? (user.department ? [user.department] : []))
+      : undefined
 
-    const departamento = forcedDept || sp.get('departamento')
-
-    if (!departamento) {
-      return NextResponse.json({ error: 'departamento required' }, { status: 400 })
+    // Para dept users com múltiplos departamentos: valida que o dept requisitado é permitido
+    const requestedDept = sp.get('departamento')
+    let departamento: string
+    if (forcedDepts?.length) {
+      if (requestedDept && forcedDepts.includes(requestedDept)) {
+        departamento = requestedDept
+      } else {
+        departamento = forcedDepts[0]
+      }
+    } else {
+      if (!requestedDept) return NextResponse.json({ error: 'departamento required' }, { status: 400 })
+      departamento = requestedDept
     }
 
     // Aplica restrição de centros de custo — mesma lógica do /api/dre

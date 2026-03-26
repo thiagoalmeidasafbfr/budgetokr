@@ -19,13 +19,20 @@ export async function GET(req: NextRequest) {
       if (user?.role !== 'master') return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
       // no extra conditions
     } else if (context === 'dept-log') {
-      const dept = user?.role === 'dept' ? user.department : sp.get('dept')
-      if (!dept) return NextResponse.json([])
-      query = query.eq('departamento', dept)
+      const depts = user?.role === 'dept'
+        ? (user.departments ?? (user.department ? [user.department] : []))
+        : sp.get('dept') ? [sp.get('dept')!] : []
+      if (!depts.length) return NextResponse.json([])
+      query = depts.length === 1
+        ? query.eq('departamento', depts[0])
+        : query.in('departamento', depts)
     } else {
       // 'dre' context
       if (user?.role === 'dept') {
-        query = query.eq('departamento', user.department ?? '')
+        const depts = user.departments ?? (user.department ? [user.department] : [])
+        query = depts.length === 1
+          ? query.eq('departamento', depts[0])
+          : query.in('departamento', depts)
       } else {
         query = query.eq('user_role', 'master').is('parent_id', null).is('departamento', null)
       }

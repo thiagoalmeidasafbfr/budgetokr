@@ -160,7 +160,7 @@ export default function UnidadesNegocioPage() {
   const [dreLineOrder,  setDreLineOrder]  = useState<Map<string, number>>(new Map())
   const [ctxMenu,          setCtxMenu]          = useState<ContextMenuState | null>(null)
   const [detModal,         setDetModal]         = useState<ContextMenuState | null>(null)
-  const [deptUser,         setDeptUser]         = useState<{ department: string } | null>(null)
+  const [deptUser,         setDeptUser]         = useState<{ department?: string; departments?: string[] } | null>(null)
   const ctxRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(async (uns: string[], pers: string[]) => {
@@ -193,8 +193,9 @@ export default function UnidadesNegocioPage() {
           fetch('/api/dre?type=linhas'),
         ])
         const me = meRes.ok ? await meRes.json() : null
-        if (me?.role === 'dept' && me.department) {
-          setDeptUser({ department: me.department })
+        if (me?.role === 'dept') {
+          const meDepts: string[] = me.departments ?? (me.department ? [me.department] : [])
+          if (meDepts.length > 0) setDeptUser({ department: meDepts[0], departments: meDepts })
         }
         const uns    = unRes.ok    ? await unRes.json()    : []
         const dates  = datesRes.ok ? await datesRes.json() : []
@@ -290,7 +291,7 @@ export default function UnidadesNegocioPage() {
       x: e.clientX, y: e.clientY, node, tipo,
       periodos:      selPeriods.length ? selPeriods : undefined,
       unidades:      [unidade],
-      departamentos: deptUser ? [deptUser.department] : undefined,
+      departamentos: deptUser ? (deptUser.departments ?? (deptUser.department ? [deptUser.department] : [])) : undefined,
     })
   }
 
