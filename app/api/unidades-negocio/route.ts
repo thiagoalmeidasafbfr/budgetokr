@@ -23,23 +23,23 @@ export async function GET(req: NextRequest) {
       ? await getUserUnidades(user.userId)
       : null
 
-    // Distinct unidades — for dept users, filter by unit permissions (if set) OR by department
+    // Distinct unidades — for dept users, return ONLY explicitly assigned UBs
     if (type === 'distinct_unidades') {
       if (forcedDept) {
-        // If user has unit restrictions: filter by units only (units ARE the access control)
-        // If no unit restrictions: filter by department
-        const p_unidades_arg      = userUnidades !== null ? userUnidades : []
-        const p_departamentos_arg = userUnidades !== null ? []           : [forcedDept]
+        // Dept user with no UBs assigned → no access to UB page
+        if (userUnidades === null) return NextResponse.json([])
+        // Dept user with UBs assigned → filter strictly by those UBs (UB is the access control, not CC)
         const { data, error } = await supabase.rpc('get_unidades_negocio_dre', {
           p_periodos:      [],
-          p_unidades:      p_unidades_arg,
-          p_departamentos: p_departamentos_arg,
+          p_unidades:      userUnidades,
+          p_departamentos: [],
         })
         if (error) throw new Error(error.message)
         const rows = Array.isArray(data) ? data as Array<{ unidade: string }> : []
         const uniqueUnidades = [...new Set(rows.map(r => r.unidade).filter(Boolean))]
         return NextResponse.json(uniqueUnidades.sort())
       }
+      // Master user → show all UBs
       const { data, error } = await supabase.rpc('get_distinct_unidades')
       if (error) throw new Error(error.message)
       return NextResponse.json((data ?? []).map((r: { unidade: string }) => r.unidade))
@@ -55,16 +55,17 @@ export async function GET(req: NextRequest) {
     // DRE breakdown: unidade > dre > agrupamento > periodo
     // A função retorna JSONB (array único) para contornar o limite de linhas do PostgREST
     if (type === 'dre') {
-      // Apply userUnidades restriction: intersect with UI selection (or replace if none)
+      // Dept user with no UBs assigned → no data
+      if (forcedDept && userUnidades === null) return NextResponse.json([])
+      // Dept user with UBs: intersect requested with assigned (UB is the access control, ignore dept/CC)
+      // Master user: use requested unidades as-is with no dept restriction
       const filteredUnidades = userUnidades !== null
         ? (unidades.length > 0 ? unidades.filter(u => userUnidades.includes(u)) : userUnidades)
         : unidades
-      // If user has unit restrictions: skip department filter (units ARE the access control)
-      const filteredDepartamentos = userUnidades !== null ? [] : departamentos
       const { data, error } = await supabase.rpc('get_unidades_negocio_dre', {
         p_periodos:      periodos,
         p_unidades:      filteredUnidades,
-        p_departamentos: filteredDepartamentos,
+        p_departamentos: [],
       })
       if (error) throw new Error(error.message)
       const rows = Array.isArray(data) ? data as Array<{
