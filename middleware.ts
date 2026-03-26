@@ -72,7 +72,8 @@ export const config = {
      * - _next/static (arquivos estáticos)
      * - _next/image (image optimization)
      * - favicon.ico
+     * - api/upload (Edge runtime bufferiza o body → 413 para arquivos grandes)
      */
-    '/((?!_next/static|_next/image|favicon.ico).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api/upload).*)',
   ],
 }
