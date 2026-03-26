@@ -46,7 +46,7 @@ export default function DREPage() {
   const [compMode,      setCompMode]      = useState<'mes' | 'trimestre' | 'ano'>('trimestre')
   const [compA,         setCompA]         = useState<string>('')
   const [compB,         setCompB]         = useState<string>('')
-  const [periodView,    setPeriodView]    = useState<'compact' | 'full'>('compact')
+  const [periodView,    setPeriodView]    = useState<'compact' | 'full'>('full')
   const [ctxMenu,       setCtxMenu]       = useState<ContextMenuState | null>(null)
   const [detModal,      setDetModal]      = useState<ContextMenuState | null>(null)
   const [deptUser,      setDeptUser]      = useState<{ department: string } | null>(null)
@@ -1219,6 +1219,12 @@ export default function DREPage() {
             const quarterOptions = sortQuarterLabels([...new Set(dataPeriods.map(p => toQuarterLabel(p)))])
             const yearOptions = [...new Set(dataPeriods.map(p => p.split('-')[0]))].sort()
 
+            const periodsForKey = (key: string): string[] => {
+              if (compMode === 'mes') return [key]
+              if (compMode === 'trimestre') return dataPeriods.filter(p => toQuarterLabel(p) === key)
+              return dataPeriods.filter(p => p.startsWith(key + '-'))
+            }
+
             const options = compMode === 'mes' ? monthOptions
               : compMode === 'trimestre' ? quarterOptions
               : yearOptions
@@ -1372,7 +1378,6 @@ export default function DREPage() {
                             const deltaPct = vB.razao ? ((deltaRazao) / Math.abs(vB.razao)) * 100 : 0
                             return (
                               <tr key={i} data-row={row.name}
-                                onContextMenu={e => openCtxMenu(e, row, undefined, 'ambos')}
                                 className={cn('border-b transition-colors cursor-context-menu',
                                   row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50')}>
                                 <td className={cn('px-4 py-2 sticky left-0 bg-white z-10',
@@ -1392,17 +1397,17 @@ export default function DREPage() {
                                   </div>
                                 </td>
                                 {/* Period A */}
-                                <td className={cn('px-2 py-2 text-right text-xs border-l-2 border-indigo-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, node: row, tipo: 'budget', departamentos: selDepts.length ? selDepts : undefined, periodos: periodsForKey(compA), centros: selCentros.length ? selCentros : undefined }) }} className={cn('px-2 py-2 text-right text-xs border-l-2 border-indigo-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
                                   {formatCurrency(vA.budget)}
                                 </td>
-                                <td className={cn('px-2 py-2 text-right text-xs border-l border-gray-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, node: row, tipo: 'razao', departamentos: selDepts.length ? selDepts : undefined, periodos: periodsForKey(compA), centros: selCentros.length ? selCentros : undefined }) }} className={cn('px-2 py-2 text-right text-xs border-l border-gray-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
                                   {formatCurrency(vA.razao)}
                                 </td>
                                 {/* Period B */}
-                                <td className={cn('px-2 py-2 text-right text-xs border-l-2 border-emerald-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, node: row, tipo: 'budget', departamentos: selDepts.length ? selDepts : undefined, periodos: periodsForKey(compB), centros: selCentros.length ? selCentros : undefined }) }} className={cn('px-2 py-2 text-right text-xs border-l-2 border-emerald-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
                                   {formatCurrency(vB.budget)}
                                 </td>
-                                <td className={cn('px-2 py-2 text-right text-xs border-l border-gray-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, node: row, tipo: 'razao', departamentos: selDepts.length ? selDepts : undefined, periodos: periodsForKey(compB), centros: selCentros.length ? selCentros : undefined }) }} className={cn('px-2 py-2 text-right text-xs border-l border-gray-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
                                   {formatCurrency(vB.razao)}
                                 </td>
                                 {/* Delta */}

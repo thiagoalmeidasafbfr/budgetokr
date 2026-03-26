@@ -153,7 +153,11 @@ export async function GET(req: NextRequest) {
       if (centrosFiltro.length > 0) q = q.in('centro_custo', centrosFiltro)
 
       if (periodo) {
-        q = q.gte('data_lancamento', `${periodo}-01`).lte('data_lancamento', `${periodo}-31`)
+        const [yr, mo] = periodo.split('-').map(Number)
+        const nextYr = mo === 12 ? yr + 1 : yr
+        const nextMo = mo === 12 ? 1 : mo + 1
+        const nextMonthStart = `${nextYr}-${String(nextMo).padStart(2, '0')}-01`
+        q = q.gte('data_lancamento', `${periodo}-01`).lt('data_lancamento', nextMonthStart)
       } else if (periodos.length > 0) {
         const sorted = [...periodos].sort()
         const minDate = `${sorted[0]}-01`
