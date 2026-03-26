@@ -1,6 +1,6 @@
 'use client'
 import { useState, useCallback } from 'react'
-import { Upload, FileSpreadsheet, CheckCircle, ArrowRight, X, AlertCircle, ChevronDown } from 'lucide-react'
+import { FileSpreadsheet, CheckCircle, ArrowRight, X, AlertCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -27,27 +27,28 @@ const TIPO_OPTIONS: Array<{ value: UploadTipo; label: string; desc: string; colo
 function getColumns(tipo: UploadTipo) {
   if (tipo === 'lancamentos_budget' || tipo === 'lancamentos_razao') return LANCAMENTO_COLUMNS
   if (tipo === 'capex_budget' || tipo === 'capex_razao') return CAPEX_COLUMNS
-  if (tipo === 'centros_custo')   return CENTRO_CUSTO_COLUMNS
-  if (tipo === 'dre_linhas')      return DRE_LINHAS_COLUMNS
+  if (tipo === 'centros_custo')    return CENTRO_CUSTO_COLUMNS
+  if (tipo === 'dre_linhas')       return DRE_LINHAS_COLUMNS
   if (tipo === 'unidades_negocio') return UNIDADE_NEGOCIO_COLUMNS
   return CONTA_CONTABIL_COLUMNS
 }
 
 export default function UploadPage() {
   const router = useRouter()
-  const [step, setStep]           = useState<Step>('choose')
-  const [tipo, setTipo]           = useState<UploadTipo | null>(null)
-  const [mode, setMode]           = useState<'append' | 'replace'>('append')
-  const [file, setFile]           = useState<File | null>(null)
-  const [dragging, setDragging]   = useState(false)
-  const [error, setError]         = useState('')
-  const [columns, setColumns]     = useState<string[]>([])
-  const [sample, setSample]       = useState<Record<string, unknown>[]>([])
-  const [totalRows, setTotalRows] = useState(0)
-  const [mapping, setMapping]     = useState<Record<string, string>>({})
-  const [analyzing, setAnalyzing] = useState(false)
-  const [progress, setProgress]   = useState(0)
-  const [result, setResult]       = useState<{ rowCount: number } | null>(null)
+  const [step,       setStep]       = useState<Step>('choose')
+  const [tipo,       setTipo]       = useState<UploadTipo | null>(null)
+  const [mode,       setMode]       = useState<'append' | 'replace'>('append')
+  const [file,       setFile]       = useState<File | null>(null)
+  const [dragging,   setDragging]   = useState(false)
+  const [error,      setError]      = useState('')
+  const [columns,    setColumns]    = useState<string[]>([])
+  const [sample,     setSample]     = useState<Record<string, unknown>[]>([])
+  const [totalRows,  setTotalRows]  = useState(0)
+  const [parsedRows, setParsedRows] = useState<Record<string, unknown>[]>([])
+  const [mapping,    setMapping]    = useState<Record<string, string>>({})
+  const [analyzing,  setAnalyzing]  = useState(false)
+  const [progress,   setProgress]   = useState(0)
+  const [result,     setResult]     = useState<{ rowCount: number } | null>(null)
 
   const fieldCols = tipo ? getColumns(tipo) : []
 
@@ -63,63 +64,75 @@ export default function UploadPage() {
     if (f) handleFile(f)
   }, [handleFile])
 
+  // Parse the Excel file entirely in the browser — avoids sending binary to server
   const analyzeFile = async () => {
     if (!file || !tipo) return
     setAnalyzing(true)
     setError('')
     try {
+      const XLSX = await import('xlsx')
       const bytes = await file.arrayBuffer()
-      const params = new URLSearchParams({ tipo })
-      const res = await fetch(`/api/upload?${params}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/octet-stream' },
-        body: bytes,
-      })
-      let data: Record<string, unknown>
-      try {
-        data = await res.json()
-      } catch {
-        setError(`Erro ao processar resposta do servidor (status ${res.status})`)
-        return  // finally still runs
-      }
-      if (!res.ok) { setError(String(data.error ?? `Erro ${res.status}`)); return }
+      const workbook = XLSX.read(bytes, { type: 'array', cellNF: true })
+      const sheet = workbook.Sheets[workbook.SheetNames[0]]
 
-      const cols   = data.columns as string[]
-      const samp   = data.sample  as Record<string, unknown>[]
-      const total  = data.total   as number
+      // Pre-process date cells to ISO strings (same logic as server)
+      for (const key of Object.keys(sheet)) {
+        if (key.startsWith('!')) continue
+        const cell = sheet[key]
+        if (!cell || cell.t !== 'n') continue
+        const fmt = String(cell.z ?? '')
+        const fmtClean = fmt.replace(/"[^"]*"/g, '').replace(/\[[^\]]*\]/g, '')
+        if (!/[yYdD]/.test(fmtClean)) continue
+        try {
+          const dd = XLSX.SSF.parse_date_code(cell.v as number)
+          if (dd && dd.y > 1900 && dd.y < 2200) {
+            cell.w = `${dd.y}-${String(dd.m).padStart(2, '0')}-${String(dd.d).padStart(2, '0')}`
+          }
+        } catch { /* not a date serial */ }
+      }
+
+      const raw = XLSX.utils.sheet_to_json(sheet, {
+        defval: '',
+        rawNumbers: false,
+      }) as Record<string, unknown>[]
+
+      if (!raw.length) { setError('Arquivo vazio'); return }
+
+      const cols  = Object.keys(raw[0])
+      const samp  = raw.slice(0, 5)
 
       setColumns(cols)
       setSample(samp)
-      setTotalRows(total)
+      setTotalRows(raw.length)
+      setParsedRows(raw)
 
-      // Normalize: remove accents, lowercase, strip punctuation
+      // Auto-mapping
       const norm = (s: string) =>
         s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[\s_\-./()]/g, '')
 
-      // Count how many sample rows have an actual numeric value in a column
       const countNumericInSample = (col: string): number =>
-        samp.filter((row: Record<string, unknown>) => {
-          const raw = String(row[col] ?? '').trim().replace(/[^\d,.+\-]/g, '')
-          return raw.length > 0 && raw !== '-' && raw !== '+' && !isNaN(parseFloat(raw.replace(',', '.')))
+        samp.filter((row) => {
+          const v = String(row[col] ?? '').trim().replace(/[^\d,.+\-]/g, '')
+          return v.length > 0 && v !== '-' && v !== '+' && !isNaN(parseFloat(v.replace(',', '.')))
         }).length
 
       const autoMap: Record<string, string> = {}
       for (const fc of fieldCols) {
         if (fc.key === 'debito_credito') {
-          const candidates = cols.filter((c: string) => {
+          const candidates = cols.filter((c) => {
             const n = norm(c)
             return n.includes('valor') || n.includes('debito') || n.includes('credito') ||
                    n.includes('amount') || n.includes('montante') || n.includes('debitocredito')
           })
           const pool = candidates.length > 0 ? candidates : cols
           const scored = pool
-            .map((c: string) => ({ c, isValor: norm(c).includes('valor'), count: countNumericInSample(c) }))
-            .sort((a: { c: string; isValor: boolean; count: number }, b: { c: string; isValor: boolean; count: number }) => b.count - a.count || (b.isValor ? 1 : 0) - (a.isValor ? 1 : 0))
+            .map((c) => ({ c, isValor: norm(c).includes('valor'), count: countNumericInSample(c) }))
+            .sort((a, b) => b.count - a.count || (b.isValor ? 1 : 0) - (a.isValor ? 1 : 0))
           if (scored.length > 0) autoMap[fc.key] = scored[0].c
           continue
         }
         const normKey = norm(fc.key)
-        const match = cols.find((c: string) => { const n = norm(c); return n === normKey || n.includes(normKey) })
+        const match = cols.find((c) => { const n = norm(c); return n === normKey || n.includes(normKey) })
         if (match) autoMap[fc.key] = match
       }
       setMapping(autoMap)
@@ -131,37 +144,51 @@ export default function UploadPage() {
     }
   }
 
+  // Send parsed rows as JSON in batches of 500 — no binary upload, no size limit
   const importData = async () => {
-    if (!file || !tipo) return
+    if (!tipo || !parsedRows.length) return
     const required = fieldCols.filter(f => f.required)
     const missing  = required.filter(f => !mapping[f.key])
     if (missing.length) { setError(`Mapeie: ${missing.map(f => f.label).join(', ')}`); return }
 
-    setStep('importing'); setProgress(10)
-    const bytes  = await file.arrayBuffer()
-    const params = new URLSearchParams({
-      tipo,
-      mapping: JSON.stringify(mapping),
-      mode: tipo === 'dre_linhas' ? 'replace' : mode,
-    })
+    setStep('importing'); setProgress(5)
 
-    const interval = setInterval(() => setProgress(p => Math.min(p + 6, 88)), 400)
-    const res  = await fetch(`/api/upload?${params}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/octet-stream' },
-      body: bytes,
-    })
-    clearInterval(interval); setProgress(100)
+    const BATCH = 500
+    const total = parsedRows.length
+    let done = 0
 
-    const data = await res.json()
-    if (!res.ok) { setError(data.error); setStep('mapping'); return }
-    setResult({ rowCount: data.rowCount })
-    setTimeout(() => setStep('done'), 300)
+    try {
+      for (let i = 0; i < total; i += BATCH) {
+        const chunk = parsedRows.slice(i, i + BATCH)
+        const isFirst = i === 0
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tipo,
+            mapping: JSON.stringify(mapping),
+            mode: isFirst ? (tipo === 'dre_linhas' ? 'replace' : mode) : 'append',
+            rows: chunk,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) { setError(data.error ?? `Erro ${res.status}`); setStep('mapping'); return }
+        done += chunk.length
+        setProgress(5 + Math.round((done / total) * 90))
+      }
+      setProgress(100)
+      setResult({ rowCount: total })
+      setTimeout(() => setStep('done'), 300)
+    } catch (err) {
+      setError(String(err))
+      setStep('mapping')
+    }
   }
 
   const reset = () => {
     setStep('choose'); setTipo(null); setFile(null); setMapping({})
-    setColumns([]); setSample([]); setError(''); setProgress(0); setResult(null); setAnalyzing(false)
+    setColumns([]); setSample([]); setParsedRows([]); setError('')
+    setProgress(0); setResult(null); setAnalyzing(false)
   }
 
   const tipoInfo = TIPO_OPTIONS.find(t => t.value === tipo)

@@ -95,61 +95,72 @@ async function insertInChunks(
 
 export async function POST(req: NextRequest) {
   try {
-    const sp      = new URL(req.url).searchParams
-    const ct      = req.headers.get('content-type') ?? ''
+    const sp = new URL(req.url).searchParams
+    const ct = req.headers.get('content-type') ?? ''
 
-    let bytes: ArrayBuffer
+    let raw: Record<string, unknown>[] | null = null
     let tipo:    string
     let mapping: string | null
     let modeFromQuery: string | null
 
-    if (ct.includes('application/octet-stream')) {
-      bytes         = await req.arrayBuffer()
-      tipo          = sp.get('tipo') ?? ''
-      mapping       = sp.get('mapping')
-      modeFromQuery = sp.get('mode')
+    if (ct.includes('application/json')) {
+      // Client-side parsed rows — no Excel binary needed
+      const body     = await req.json()
+      tipo          = body.tipo    ?? ''
+      mapping       = body.mapping ?? null
+      modeFromQuery = body.mode    ?? null
+      raw = body.rows as Record<string, unknown>[]
+      if (!raw?.length) return NextResponse.json({ error: 'Nenhuma linha recebida' }, { status: 400 })
     } else {
-      const formData = await req.formData()
-      const file     = formData.get('file') as File
-      tipo           = (formData.get('tipo') as string) ?? ''
-      mapping        = formData.get('mapping') as string | null
-      modeFromQuery  = formData.get('mode') as string | null
-      if (!file) return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
-      bytes = await file.arrayBuffer()
-    }
+      let bytes: ArrayBuffer
+      if (ct.includes('application/octet-stream')) {
+        bytes         = await req.arrayBuffer()
+        tipo          = sp.get('tipo') ?? ''
+        mapping       = sp.get('mapping')
+        modeFromQuery = sp.get('mode')
+      } else {
+        const formData = await req.formData()
+        const file     = formData.get('file') as File
+        tipo           = (formData.get('tipo') as string) ?? ''
+        mapping        = formData.get('mapping') as string | null
+        modeFromQuery  = formData.get('mode') as string | null
+        if (!file) return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
+        bytes = await file.arrayBuffer()
+      }
 
-    if (!bytes || bytes.byteLength === 0)
-      return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
+      if (!bytes || bytes.byteLength === 0)
+        return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
 
-    const workbook = XLSX.read(bytes, { type: 'array', cellNF: true })
-    const sheet    = workbook.Sheets[workbook.SheetNames[0]]
+      const workbook = XLSX.read(bytes, { type: 'array', cellNF: true })
+      const sheet    = workbook.Sheets[workbook.SheetNames[0]]
 
-    for (const key of Object.keys(sheet)) {
-      if (key.startsWith('!')) continue
-      const cell = sheet[key]
-      if (!cell || cell.t !== 'n') continue
-      const fmt = String(cell.z ?? '')
-      const fmtClean = fmt.replace(/"[^"]*"/g, '').replace(/\[[^\]]*\]/g, '')
-      if (!/[yYdD]/.test(fmtClean)) continue
-      try {
-        const dd = XLSX.SSF.parse_date_code(cell.v as number)
-        if (dd && dd.y > 1900 && dd.y < 2200) {
-          cell.w = `${dd.y}-${String(dd.m).padStart(2,'0')}-${String(dd.d).padStart(2,'0')}`
-        }
-      } catch { /* não é serial de data */ }
-    }
+      for (const key of Object.keys(sheet)) {
+        if (key.startsWith('!')) continue
+        const cell = sheet[key]
+        if (!cell || cell.t !== 'n') continue
+        const fmt = String(cell.z ?? '')
+        const fmtClean = fmt.replace(/"[^"]*"/g, '').replace(/\[[^\]]*\]/g, '')
+        if (!/[yYdD]/.test(fmtClean)) continue
+        try {
+          const dd = XLSX.SSF.parse_date_code(cell.v as number)
+          if (dd && dd.y > 1900 && dd.y < 2200) {
+            cell.w = `${dd.y}-${String(dd.m).padStart(2,'0')}-${String(dd.d).padStart(2,'0')}`
+          }
+        } catch { /* não é serial de data */ }
+      }
 
-    const raw = XLSX.utils.sheet_to_json(sheet, {
-      defval:     '',
-      rawNumbers: false,
-    }) as Record<string, unknown>[]
+      raw = XLSX.utils.sheet_to_json(sheet, {
+        defval:     '',
+        rawNumbers: false,
+      }) as Record<string, unknown>[]
 
-    if (!raw.length) return NextResponse.json({ error: 'Arquivo vazio' }, { status: 400 })
+      if (!raw.length) return NextResponse.json({ error: 'Arquivo vazio' }, { status: 400 })
 
-    const columns = Object.keys(raw[0])
+      const columns = Object.keys(raw[0])
 
-    if (!mapping) {
-      return NextResponse.json({ columns, sample: raw.slice(0, 5), total: raw.length })
+      if (!mapping) {
+        return NextResponse.json({ columns, sample: raw.slice(0, 5), total: raw.length })
+      }
     }
 
     const map: Record<string, string> = JSON.parse(mapping)
