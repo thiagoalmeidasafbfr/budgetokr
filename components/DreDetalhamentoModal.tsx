@@ -608,6 +608,7 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
                       </td>}
                       {visibleCols.has('numero_transacao') && <td className={cn(cellCls, 'text-gray-500')} title={r.numero_transacao || r.num_transacao || ''}>{r.numero_transacao || r.num_transacao}</td>}
                       {visibleCols.has('centro')           && <td className={cellCls} title={ccLabel}>{ccLabel}</td>}
+                      {visibleCols.has('departamento')     && <td className={cellCls} title={r.nome_departamento ?? ''}>{r.nome_departamento}</td>}
                       {visibleCols.has('unidade')          && <td className={cellCls} title={r.unidade ?? ''}>{r.unidade}</td>}
                       {visibleCols.has('dre')              && <td className={cellCls} title={r.dre}>{r.dre}</td>}
                       {visibleCols.has('agrupamento')      && <td className={cellCls} title={r.agrupamento_arvore}>{r.agrupamento_arvore}</td>}
