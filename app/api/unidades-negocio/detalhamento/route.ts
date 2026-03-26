@@ -24,22 +24,23 @@ export async function GET(req: NextRequest) {
   const unidades = unidadesRaw ? unidadesRaw.split(',').filter(Boolean) : []
 
   try {
-    const sessionUser   = await getSession()
-    const forcedDept    = sessionUser?.role === 'dept' ? sessionUser.department : undefined
-    const departamentos = forcedDept ? [forcedDept] : []
+    const sessionUser = await getSession()
+    const forcedDept  = sessionUser?.role === 'dept' ? sessionUser.department : undefined
 
-    // Enforce unit restrictions: if the user has assigned units, intersect with requested units
+    // UB is the sole access control — dept/CC filter is never applied here
     let allowedUnidades = unidades
-    if (sessionUser?.role === 'dept' && sessionUser.userId) {
+    if (forcedDept && sessionUser?.userId) {
       const userUnidades = await getUserUnidades(sessionUser.userId)
-      if (userUnidades !== null) {
-        // Restrict to user's assigned units only
-        allowedUnidades = unidades.length > 0
-          ? unidades.filter((u: string) => userUnidades.includes(u))
-          : userUnidades
-        if (allowedUnidades.length === 0) {
-          return NextResponse.json({ rows: [], truncated: false })
-        }
+      if (userUnidades === null) {
+        // Dept user with no UBs assigned → no access
+        return NextResponse.json({ rows: [], truncated: false })
+      }
+      // Restrict strictly to assigned UBs (ignore CC/dept)
+      allowedUnidades = unidades.length > 0
+        ? unidades.filter((u: string) => userUnidades.includes(u))
+        : userUnidades
+      if (allowedUnidades.length === 0) {
+        return NextResponse.json({ rows: [], truncated: false })
       }
     }
 
@@ -70,7 +71,7 @@ export async function GET(req: NextRequest) {
         p_conta:         conta,
         p_offset:        page * PAGE,
         p_limit:         PAGE,
-        p_departamentos: departamentos,
+        p_departamentos: [],
       })
 
       if (error) throw new Error(error.message)

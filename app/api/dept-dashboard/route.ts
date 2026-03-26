@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getDRE, getMedidas, getDRELinhas, getDeptMedidas, getMedidaResultados } from '@/lib/query'
+import { getDRE, getMedidas, getDRELinhas, getDeptMedidas, getMedidaResultados, getUserCentros } from '@/lib/query'
 import { getSupabase } from '@/lib/supabase'
 import { getSession } from '@/lib/session'
 import type { Medida } from '@/lib/types'
@@ -21,8 +21,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'departamento required' }, { status: 400 })
     }
 
+    // Aplica restrição de centros de custo — mesma lógica do /api/dre
+    const userCentros = (user?.role === 'dept' && user.userId)
+      ? await getUserCentros(user.userId)
+      : null
+    const centros = userCentros ?? undefined
+
     const [dreRows, allMedidas, dreLinhas, deptMedidas] = await Promise.all([
-      getDRE(periodos, [departamento]),
+      getDRE(periodos, [departamento], centros),
       getMedidas(),
       getDRELinhas(),
       getDeptMedidas(departamento),
