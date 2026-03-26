@@ -1154,40 +1154,57 @@ export default function DeptDashboardPage() {
   const [dreExpanded,      setDreExpanded]      = useState<Set<string>>(new Set())
   const [dreFullLoading,   setDreFullLoading]   = useState(false)
 
-  // Carrega usuário logado
+  const isFirstDept = useRef(true)
+
+  // Single init: fetch user + periods in parallel, then call loadDashboard directly
   useEffect(() => {
-    fetch('/api/me').then(r => r.ok ? r.json() : null).then(u => {
-      if (!u) { setUserRole('master'); return }  // fallback: show full UI
-      setUserRole(u.role)
-      if (u.role === 'dept' && u.department) {
-        setForcedDept(u.department)
-        setSelDept(u.department)
+    async function init() {
+      try {
+        const [u, depts, dates] = await Promise.all([
+          fetch('/api/me').then(r => r.ok ? r.json() : null).catch(() => null),
+          fetch('/api/analise?type=distinct&col=nome_departamento', { cache: 'no-store' }).then(r => r.json()).catch(() => []),
+          fetch('/api/analise?type=distinct&col=data_lancamento',   { cache: 'no-store' }).then(r => r.json()).catch(() => []),
+        ])
+
+        // User identity
+        let dept = ''
+        if (!u) {
+          setUserRole('master')
+        } else {
+          setUserRole(u.role)
+          if (u.role === 'dept' && u.department) {
+            setForcedDept(u.department)
+            setSelDept(u.department)
+            dept = u.department
+          }
+        }
+
+        // Periods
+        setDepartamentos(Array.isArray(depts) ? depts : [])
+        const unique = [...new Set(
+          (Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean)
+        )].sort() as string[]
+        setAllPeriodos(unique)
+        const now = new Date()
+        const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+        const curMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
+        const ytd2026 = unique.filter(p => p.startsWith('2026') && p <= curMonth)
+        const def2026 = ytd2026.length > 0 ? ytd2026 : unique.filter(p => p.startsWith('2026'))
+        const defaultPeriods = def2026.length > 0 ? def2026 : []
+        if (defaultPeriods.length > 0) setSelPeriods(defaultPeriods)
+
+        // Direct load — avoids race condition between user and periods effects
+        loadDashboard(dept, defaultPeriods)
+      } catch (e) {
+        console.error('[Dept] init error:', e)
+        setUserRole('master')
       }
-    }).catch(() => setUserRole('master'))  // fallback: show full UI
+    }
+    init()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const isMaster = userRole !== 'dept'
-
-  // Load department and period lists
-  useEffect(() => {
-    Promise.all([
-      fetch('/api/analise?type=distinct&col=nome_departamento', { cache: 'no-store' }).then(r => r.json()),
-      fetch('/api/analise?type=distinct&col=data_lancamento',   { cache: 'no-store' }).then(r => r.json()),
-    ]).then(([depts, dates]) => {
-      setDepartamentos(Array.isArray(depts) ? depts : [])
-      const unique = [...new Set(
-        (Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean)
-      )].sort() as string[]
-      setAllPeriodos(unique)
-      // Default to YTD: all 2026 periods up to and including the current month
-      const now = new Date()
-      const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-      const curMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
-      const ytd2026 = unique.filter(p => p.startsWith('2026') && p <= curMonth)
-      const def2026 = ytd2026.length > 0 ? ytd2026 : unique.filter(p => p.startsWith('2026'))
-      if (def2026.length > 0) setSelPeriods(def2026)
-    })
-  }, [])
 
   // Load dashboard data when dept/periods change
   const loadDashboard = useCallback(async (dept: string, periods: string[]) => {
@@ -1204,6 +1221,7 @@ export default function DeptDashboardPage() {
   }, [])
 
   useEffect(() => {
+    if (isFirstDept.current) { isFirstDept.current = false; return }
     loadDashboard(selDept, selPeriods)
   }, [selDept, selPeriods, loadDashboard])
 
