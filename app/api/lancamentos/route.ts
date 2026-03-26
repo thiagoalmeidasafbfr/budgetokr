@@ -16,7 +16,10 @@ export async function GET(req: NextRequest) {
     const ano   = sp.get('ano')
 
     const user = await getSession()
-    const dept = user?.role === 'dept' ? (user.department ?? null) : sp.get('departamento')
+    // Para múltiplos departamentos, passa o primeiro (RPC suporta apenas um dept por query)
+    const dept = user?.role === 'dept'
+      ? ((user.departments?.[0] ?? user.department) ?? null)
+      : sp.get('departamento')
 
     const supabase = getSupabase()
 

@@ -63,15 +63,16 @@ export default function AnalisePage() {
   const [viewMode,      setViewMode]      = useState<ViewMode>('table')
   const [groupBy,       setGroupBy]       = useState<GroupBy>('departamento')
   const [loading,       setLoading]       = useState(false)
-  const [deptUser,      setDeptUser]      = useState<{ department: string } | null>(null)
+  const [deptUser,      setDeptUser]      = useState<{ department?: string; departments?: string[] } | null>(null)
   const isFirstRef = useRef(true)
 
   useEffect(() => {
     async function init() {
       const me = await fetch('/api/me').then(r => r.ok ? r.json() : null).catch(() => null)
-      const isDept = me?.role === 'dept' && me.department
+      const meDepts: string[] = me?.departments ?? (me?.department ? [me.department] : [])
+      const isDept = me?.role === 'dept' && meDepts.length > 0
 
-      const medsUrl = isDept ? `/api/medidas?departamento=${encodeURIComponent(me.department)}` : '/api/medidas'
+      const medsUrl = isDept ? `/api/medidas?departamento=${encodeURIComponent(meDepts[0] ?? '')}` : '/api/medidas'
       const [depts, dates, meds] = await Promise.all([
         fetch('/api/analise?type=distinct&col=nome_departamento', { cache: 'no-store' }).then(r => r.json()),
         fetch('/api/analise?type=distinct&col=data_lancamento',   { cache: 'no-store' }).then(r => r.json()),
@@ -91,9 +92,9 @@ export default function AnalisePage() {
       const ytd = allPeriodos.filter(p => p.startsWith('2026') && p <= curMonth)
       const finalPeriods = ytd.length > 0 ? ytd : allPeriodos.filter(p => p.startsWith('2026'))
 
-      const finalDepts = isDept ? [me.department] : []
+      const finalDepts = isDept ? meDepts : []
       if (isDept) {
-        setDeptUser({ department: me.department })
+        setDeptUser({ department: meDepts[0], departments: meDepts })
         setSelDepts(finalDepts)
       }
       setSelPeriods(finalPeriods)

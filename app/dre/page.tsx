@@ -49,7 +49,7 @@ export default function DREPage() {
   const [periodView,    setPeriodView]    = useState<'compact' | 'full'>('full')
   const [ctxMenu,       setCtxMenu]       = useState<ContextMenuState | null>(null)
   const [detModal,      setDetModal]      = useState<ContextMenuState | null>(null)
-  const [deptUser,      setDeptUser]      = useState<{ department: string } | null>(null)
+  const [deptUser,      setDeptUser]      = useState<{ department?: string; departments?: string[] } | null>(null)
   const [comments,      setComments]      = useState<DREComment[]>([])
   const [commentEdit,   setCommentEdit]   = useState<{ dre_linha: string; agrupamento?: string; conta?: string; periodo?: string; tipo_valor?: string } | null>(null)
   const [commentText,   setCommentText]   = useState('')
@@ -111,8 +111,9 @@ export default function DREPage() {
   useEffect(() => {
     async function init() {
       const me = await fetch('/api/me').then(r => r.ok ? r.json() : null).catch(() => null)
-      const isDept = me?.role === 'dept' && me.department
-      if (isDept) setDeptUser({ department: me.department })
+      const meDepts: string[] = me?.departments ?? (me?.department ? [me.department] : [])
+      const isDept = me?.role === 'dept' && meDepts.length > 0
+      if (isDept) setDeptUser({ department: meDepts[0], departments: meDepts })
 
       // ── Deep-link: sessionStorage takes priority over URL params ──────────────
       // The eye button in comment pages stores state here before navigating.
@@ -193,7 +194,7 @@ export default function DREPage() {
 
       // Determine initial depts (sessionStorage > URL > dept-user forced)
       const dlDepts = dl.depts?.length ? dl.depts : []
-      const initDepts = isDept ? [me.department]
+      const initDepts = isDept ? meDepts
         : dlDepts.length ? dlDepts
         : urlDepts.length ? urlDepts
         : (sp.get('dept') ? [sp.get('dept')!] : [])
@@ -666,8 +667,14 @@ export default function DREPage() {
               </p>
               {deptUser ? (
                 <div>
-                  <p className="text-xs font-medium text-gray-600 mb-1">Departamento</p>
-                  <p className="text-xs text-indigo-700 font-semibold px-1 py-0.5 bg-indigo-50 rounded">{deptUser.department}</p>
+                  <p className="text-xs font-medium text-gray-600 mb-1">
+                    {(deptUser.departments?.length ?? 0) > 1 ? 'Departamentos' : 'Departamento'}
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {(deptUser.departments ?? (deptUser.department ? [deptUser.department] : [])).map(d => (
+                      <span key={d} className="text-xs text-indigo-700 font-semibold px-1 py-0.5 bg-indigo-50 rounded">{d}</span>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <div>

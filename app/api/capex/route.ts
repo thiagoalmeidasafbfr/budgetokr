@@ -47,12 +47,16 @@ export async function GET(req: NextRequest) {
   }
 
   // Main query via RPC
-  const forcedDept = req.headers.get('x-user-role') === 'dept'
-    ? req.headers.get('x-user-dept') || undefined
+  const forcedDepts = req.headers.get('x-user-role') === 'dept'
+    ? (req.headers.get('x-user-depts')
+        ? decodeURIComponent(req.headers.get('x-user-depts')!).split(',').filter(Boolean)
+        : req.headers.get('x-user-dept')
+          ? [decodeURIComponent(req.headers.get('x-user-dept')!)]
+          : [])
     : undefined
 
-  const departamentos = forcedDept
-    ? [forcedDept]
+  const departamentos = forcedDepts?.length
+    ? forcedDepts
     : sp.get('departamentos')?.split(',').filter(Boolean) ?? []
   const periodos = sp.get('periodos')?.split(',').filter(Boolean) ?? []
   const projetos = sp.get('projetos')?.split(',').filter(Boolean) ?? []

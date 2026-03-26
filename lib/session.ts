@@ -12,7 +12,8 @@ export const SESSION_SECRET =
 export type SessionUser = {
   userId: string
   role: 'master' | 'dept'
-  department?: string
+  department?: string    // primeiro departamento (compatibilidade)
+  departments?: string[] // todos os departamentos atribuídos
 }
 
 // ─── Helpers Web Crypto ─────────────────────────────────────────────────────────
@@ -92,5 +93,9 @@ export function getUserFromHeaders(req: NextRequest | Request): SessionUser | nu
   const userId = req.headers.get('x-user-id') || ''
   const deptRaw = req.headers.get('x-user-dept') || ''
   const department = deptRaw ? (decodeURIComponent(deptRaw) || undefined) : undefined
-  return { userId, role: role as 'master' | 'dept', department }
+  const deptsRaw = req.headers.get('x-user-depts') || ''
+  const departments = deptsRaw
+    ? decodeURIComponent(deptsRaw).split(',').filter(Boolean)
+    : (department ? [department] : undefined)
+  return { userId, role: role as 'master' | 'dept', department, departments }
 }
