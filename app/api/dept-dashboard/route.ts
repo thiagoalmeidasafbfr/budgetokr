@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAnalise, getDRE, getMedidas, getDRELinhas, getDeptMedidas, getMedidaResultados } from '@/lib/query'
+import { getDRE, getMedidas, getDRELinhas, getDeptMedidas, getMedidaResultados } from '@/lib/query'
 import { getSupabase } from '@/lib/supabase'
 import { getSession } from '@/lib/session'
 import type { Medida } from '@/lib/types'
@@ -21,13 +21,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'departamento required' }, { status: 400 })
     }
 
-    const [byPeriodo, dreRows, allMedidas, dreLinhas, deptMedidas] = await Promise.all([
-      getAnalise([], [departamento], periodos, false),
+    const [dreRows, allMedidas, dreLinhas, deptMedidas] = await Promise.all([
       getDRE(periodos, [departamento]),
       getMedidas(),
       getDRELinhas(),
       getDeptMedidas(departamento),
     ])
+
+    // Derive byPeriodo from dreRows — same source as DRE table, guarantees consistency
+    const byPeriodMap: Record<string, { periodo: string; budget: number; razao: number }> = {}
+    for (const row of dreRows) {
+      if (!byPeriodMap[row.periodo]) byPeriodMap[row.periodo] = { periodo: row.periodo, budget: 0, razao: 0 }
+      byPeriodMap[row.periodo].budget += row.budget
+      byPeriodMap[row.periodo].razao  += row.razao
+    }
+    const byPeriodo = Object.values(byPeriodMap).sort((a, b) => a.periodo.localeCompare(b.periodo))
 
     const dreMap: Record<string, { dre: string; budget: number; razao: number; ordem_dre: number }> = {}
     for (const row of dreRows) {

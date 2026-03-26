@@ -63,15 +63,29 @@ function colValue(r: DetalhamentoLinha, key: DetColKey): string | number {
   }
 }
 
-function exportDetalhamento(rows: DetalhamentoLinha[], title: string) {
-  const header = ['Data', 'Tipo', 'Nº Transação', 'Centro de Custo', 'Departamento', 'Unidade de Negócio', 'DRE', 'Agrupamento', 'Conta Contábil', 'Valor', 'Conta Contrapartida', 'Observação']
-  const data = rows.map(r => [
+function exportDetalhamento(rows: DetalhamentoLinha[], title: string, showUnidadeCol = false) {
+  const header = showUnidadeCol
+    ? ['Data', 'Tipo', 'Nº Transação', 'Centro de Custo', 'Departamento', 'Unidade de Negócio', 'DRE', 'Agrupamento', 'Conta Contábil', 'Valor', 'Conta Contrapartida', 'Observação']
+    : ['Data', 'Tipo', 'Nº Transação', 'Centro de Custo', 'Departamento', 'DRE', 'Agrupamento', 'Conta Contábil', 'Valor', 'Conta Contrapartida', 'Observação']
+  const data = rows.map(r => showUnidadeCol ? [
     r.data_lancamento,
     r.tipo,
     r.numero_transacao || r.num_transacao || '',
     `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}`,
     r.nome_departamento ?? '',
     r.unidade ?? '',
+    r.dre,
+    r.agrupamento_arvore,
+    `${r.numero_conta_contabil} — ${r.nome_conta_contabil}`,
+    r.debito_credito,
+    r.nome_conta_contrapartida,
+    r.observacao,
+  ] : [
+    r.data_lancamento,
+    r.tipo,
+    r.numero_transacao || r.num_transacao || '',
+    `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}`,
+    r.nome_departamento ?? '',
     r.dre,
     r.agrupamento_arvore,
     `${r.numero_conta_contabil} — ${r.nome_conta_contabil}`,
@@ -157,12 +171,13 @@ const ROW_H   = 28
 const OVERSCAN = 8
 
 // ── Main modal ────────────────────────────────────────────────────────────────
-export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId, onCommentSaved, endpoint }: {
+export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId, onCommentSaved, endpoint, showUnidadeCol = false }: {
   ctx: ContextMenuState
   onClose: () => void
   highlightLancamentoId?: number
   onCommentSaved?: () => void
   endpoint?: string
+  showUnidadeCol?: boolean
 }) {
   const [rows,          setRows]          = useState<DetalhamentoLinha[]>([])
   const [truncated,     setTruncated]     = useState(false)
@@ -174,7 +189,8 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
   const [colFilters, setColFilters] = useState<Partial<Record<string, string[]>>>({})
   const [sortCol,       setSortCol]       = useState<DetColKey>('data')
   const [sortDir,       setSortDir]       = useState<'asc' | 'desc'>('asc')
-  const [visibleCols,   setVisibleCols]   = useState<Set<DetColKey>>(new Set(DET_COLS.map(c => c.key)))
+  const effectiveCols = showUnidadeCol ? DET_COLS : DET_COLS.filter(c => c.key !== 'unidade')
+  const [visibleCols,   setVisibleCols]   = useState<Set<DetColKey>>(new Set(effectiveCols.map(c => c.key)))
   const [showCols,      setShowCols]      = useState(false)
   const [scrollTop,     setScrollTop]     = useState(0)
   const [containerH,    setContainerH]    = useState(600)
@@ -238,7 +254,8 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
 
   // Pre-compute search strings (once per fetch)
   const rowSearchStrings = useMemo(() =>
-    rows.map(r => DET_COLS.map(c => String(colValue(r, c.key))).join('\n').toLowerCase()),
+    rows.map(r => effectiveCols.map(c => String(colValue(r, c.key))).join('\n').toLowerCase()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [rows]
   )
 
@@ -385,7 +402,7 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
 
   const activeFiltersCount = (ctx.departamentos?.length ?? 0) + (ctx.periodos?.length ?? 0) + (ctx.centros?.length ?? 0)
   const localFiltersActive = filterTipo !== 'all' || !!filterPeriodo || Object.values(colFilters).some(v => v?.length)
-  const visibleDefs = DET_COLS.filter(c => visibleCols.has(c.key))
+  const visibleDefs = effectiveCols.filter(c => visibleCols.has(c.key))
 
   const clearAll = () => { setFilterTipo('all'); setFilterPeriodo(''); setColFilters({}) }
 
@@ -422,7 +439,7 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
           </div>
           <div className="flex items-center gap-2">
             {!loading && rows.length > 0 && (
-              <button onClick={() => exportDetalhamento(displayed, title)}
+              <button onClick={() => exportDetalhamento(displayed, title, showUnidadeCol)}
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-indigo-50 hover:text-indigo-700 text-gray-600 transition-colors font-medium">
                 <Download size={13} /> Exportar XLSX
               </button>
@@ -447,7 +464,7 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
                 </button>
                 {showCols && (
                   <div className="absolute right-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded-xl shadow-xl p-3 min-w-[180px] space-y-1">
-                    {DET_COLS.map(c => (
+                    {effectiveCols.map(c => (
                       <label key={c.key} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
                         <input type="checkbox" checked={visibleCols.has(c.key)}
                           onChange={e => setVisibleCols(prev => {
@@ -494,7 +511,7 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
                 selected={colFilters['centro'] ?? []}
                 onChange={v => setColFilter('centro', v)} />
 
-              {filterOptions.unidade.length > 0 && (
+              {showUnidadeCol && filterOptions.unidade.length > 0 && (
                 <MultiFilter label="Unidade de Negócio" options={filterOptions.unidade}
                   selected={colFilters['unidade'] ?? []}
                   onChange={v => setColFilter('unidade', v)} />

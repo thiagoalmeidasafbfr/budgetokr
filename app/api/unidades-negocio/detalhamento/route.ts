@@ -28,14 +28,18 @@ export async function GET(req: NextRequest) {
     const forcedDept    = sessionUser?.role === 'dept' ? sessionUser.department : undefined
     const departamentos = forcedDept ? [forcedDept] : []
 
-    // Bloqueia detalhamento para usuários com restrição de unidades configurada
+    // Enforce unit restrictions: if the user has assigned units, intersect with requested units
+    let allowedUnidades = unidades
     if (sessionUser?.role === 'dept' && sessionUser.userId) {
       const userUnidades = await getUserUnidades(sessionUser.userId)
       if (userUnidades !== null) {
-        return NextResponse.json(
-          { error: 'Acesso ao detalhamento de lançamentos não permitido para este perfil.' },
-          { status: 403 }
-        )
+        // Restrict to user's assigned units only
+        allowedUnidades = unidades.length > 0
+          ? unidades.filter((u: string) => userUnidades.includes(u))
+          : userUnidades
+        if (allowedUnidades.length === 0) {
+          return NextResponse.json({ rows: [], truncated: false })
+        }
       }
     }
 
@@ -58,7 +62,7 @@ export async function GET(req: NextRequest) {
 
     for (let page = 0; page < MAX_PAGES; page++) {
       const { data, error } = await supabase.rpc('get_unidades_negocio_lancamentos_detail', {
-        p_unidades:      unidades,
+        p_unidades:      allowedUnidades,
         p_periodos:      periodos,
         p_tipo:          tipo,
         p_dre:           dre,

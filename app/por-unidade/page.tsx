@@ -524,6 +524,7 @@ export default function PorUnidadePage() {
       <DetalhamentoModal
         ctx={detModal}
         onClose={() => setDetModal(null)}
+        showUnidadeCol={true}
       />
     )}
     </>
