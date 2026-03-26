@@ -5,6 +5,13 @@ import type { FilterCondition, FilterColumn } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
+function resolveDepts(forcedDepts: string[] | undefined, requested: string[]): string[] | undefined {
+  if (!forcedDepts?.length) return requested.length ? requested : undefined
+  if (!requested.length) return forcedDepts
+  const intersected = requested.filter(d => forcedDepts.includes(d))
+  return intersected.length > 0 ? intersected : forcedDepts
+}
+
 export async function GET(req: NextRequest) {
   try {
     const sp       = new URL(req.url).searchParams
@@ -42,11 +49,12 @@ export async function GET(req: NextRequest) {
       const periodosRaw        = sp.get('periodos')
       const periodos           = periodosRaw ? periodosRaw.split(',').filter(Boolean) : []
 
+      const activeDepts = resolveDepts(forcedDepts, sp.get('departamentos')?.split(',').filter(Boolean) ?? [])
       const extraFiltros =
-        forcedDepts?.length
-          ? forcedDepts.length === 1
-            ? [{ column: 'nome_departamento' as FilterColumn, operator: '=' as const, value: forcedDepts[0] }]
-            : [{ column: 'nome_departamento' as FilterColumn, operator: 'in' as const, value: forcedDepts.join(',') }]
+        activeDepts?.length
+          ? activeDepts.length === 1
+            ? [{ column: 'nome_departamento' as FilterColumn, operator: '=' as const, value: activeDepts[0] }]
+            : [{ column: 'nome_departamento' as FilterColumn, operator: 'in' as const, value: activeDepts.join(',') }]
           : []
 
       const results = await getMedidaResultados(parseInt(medidaId), {
@@ -59,9 +67,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(results)
     }
 
-    const departamentos = forcedDepts?.length
-      ? forcedDepts
-      : sp.get('departamentos')?.split(',').filter(Boolean)
+    const departamentos = resolveDepts(forcedDepts, sp.get('departamentos')?.split(',').filter(Boolean) ?? [])
     const periodos       = sp.get('periodos')?.split(',').filter(Boolean)
     const filtersRaw     = sp.get('filtros')
     const filtros: FilterCondition[] = filtersRaw ? JSON.parse(filtersRaw) : []

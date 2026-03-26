@@ -31,7 +31,11 @@ export async function GET(req: NextRequest) {
     ? (sessionUser.departments ?? (sessionUser.department ? [sessionUser.department] : []))
     : undefined
   if (forcedDepts?.length) {
-    departamentos = forcedDepts
+    // Respeita seleção do usuário, mas valida contra os depts permitidos
+    const intersected = departamentos.length
+      ? departamentos.filter(d => forcedDepts.includes(d))
+      : []
+    departamentos = intersected.length > 0 ? intersected : forcedDepts
   }
 
   // Permissões individuais de centros de custo

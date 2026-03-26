@@ -157,7 +157,8 @@ export default function AnalisePage() {
   const loadMedidaResults = useCallback(async (
     id: number,
     gb: 'departamento' | 'periodo' | 'centro_custo',
-    prds: string[]
+    prds: string[],
+    depts: string[]
   ) => {
     setMedidaLoading(true)
     const params = new URLSearchParams({
@@ -167,7 +168,8 @@ export default function AnalisePage() {
       groupByPeriod:      String(gb === 'periodo'),
       groupByCentroCusto: String(gb === 'centro_custo'),
     })
-    if (prds.length) params.set('periodos', prds.join(','))
+    if (prds.length)   params.set('periodos',      prds.join(','))
+    if (depts.length)  params.set('departamentos', depts.join(','))
     const res = await fetch(`/api/analise?${params}`)
     if (res.ok) setMedidaResults(await res.json())
     setMedidaLoading(false)
@@ -178,7 +180,7 @@ export default function AnalisePage() {
     setViewMode('medida')
     setMedidaSelPeriods([])
     setMedidaGroupBy('departamento')
-    loadMedidaResults(id, 'departamento', [])
+    loadMedidaResults(id, 'departamento', [], selDepts)
   }
 
   const applyFilters = () => loadData(selDepts, selPeriods, groupBy)
@@ -186,7 +188,7 @@ export default function AnalisePage() {
   // Re-fetch medida when groupBy or period filter changes
   useEffect(() => {
     if (selMedida !== null) {
-      loadMedidaResults(selMedida, medidaGroupBy, medidaSelPeriods)
+      loadMedidaResults(selMedida, medidaGroupBy, medidaSelPeriods, selDepts)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [medidaGroupBy, medidaSelPeriods])
