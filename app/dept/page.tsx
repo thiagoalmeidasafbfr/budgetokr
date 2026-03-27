@@ -1,6 +1,6 @@
 'use client'
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Plus, Settings, Edit2, Trash2, Save, X, BarChart3, TrendingUp, TrendingDown, Target, ExternalLink, Download, CheckSquare, Square, ArrowUpDown, Columns3, ChevronRight, ChevronDown } from 'lucide-react'
+import { Plus, Settings, Edit2, Trash2, Save, X, BarChart3, TrendingUp, TrendingDown, Target, ExternalLink, Download, CheckSquare, Square, ArrowUpDown, Columns3, ChevronRight, ChevronDown, GripVertical, LayoutDashboard } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
@@ -8,6 +8,15 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, LabelList,
 } from 'recharts'
+import {
+  DndContext, closestCenter, PointerSensor, KeyboardSensor,
+  useSensor, useSensors, type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext, sortableKeyboardCoordinates, useSortable,
+  verticalListSortingStrategy, arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { buildTree, buildTreeFromLinhas, flattenTree, type DRERow, type DRELinha, type TreeNode } from '@/lib/dre-utils'
 import type { KpiManual, KpiValor } from '@/lib/query'
 
@@ -1136,6 +1145,46 @@ function SummaryCard({ label, value, sub, icon: Icon, color }: {
   )
 }
 
+// ─── Sortable section layout ──────────────────────────────────────────────────
+
+const DEPT_SECTIONS = ['kpis', 'dre', 'capex', 'chart', 'exec'] as const
+type DeptSection = typeof DEPT_SECTIONS[number]
+const DEFAULT_SECTION_ORDER: DeptSection[] = ['kpis', 'dre', 'capex', 'chart', 'exec']
+const SECTION_LABELS: Record<DeptSection, string> = {
+  kpis:  'KPIs & Medidas',
+  dre:   'DRE',
+  capex: 'CAPEX',
+  chart: 'Gráfico de Períodos',
+  exec:  'Gráficos Executivos',
+}
+
+function SortableDeptSection({ id, editMode, children }: {
+  id: string; editMode: boolean; children: React.ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.45 : 1,
+  }
+  return (
+    <div ref={setNodeRef} style={style} className="relative">
+      {editMode && (
+        <button
+          {...attributes} {...listeners}
+          className="absolute -left-8 top-2 z-20 p-1.5 rounded-lg cursor-grab active:cursor-grabbing bg-white border border-gray-200 shadow-sm text-gray-400 hover:text-gray-700 hover:border-gray-400 transition-colors"
+          title={`Arrastar ${SECTION_LABELS[id as DeptSection] ?? id}`}
+        >
+          <GripVertical size={14} />
+        </button>
+      )}
+      <div className={cn(editMode && 'ring-1 ring-amber-300 rounded-xl')}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function DeptDashboardPage() {
@@ -1166,6 +1215,8 @@ export default function DeptDashboardPage() {
   const [dreLinhas,        setDreLinhas]        = useState<DRELinha[]>([])
   const [dreExpanded,      setDreExpanded]      = useState<Set<string>>(new Set())
   const [dreFullLoading,   setDreFullLoading]   = useState(false)
+  const [sectionOrder,     setSectionOrder]     = useState<DeptSection[]>(DEFAULT_SECTION_ORDER)
+  const [editLayout,       setEditLayout]       = useState(false)
 
   const isFirstDept = useRef(true)
 
@@ -1433,6 +1484,330 @@ export default function DeptDashboardPage() {
     variacao_pct: g.budget ? ((g.razao - g.budget) / Math.abs(g.budget)) * 100 : 0,
   }))
 
+  // ── Layout persistence ────────────────────────────────────────────────────
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!selDept) return
+    try {
+      const saved = localStorage.getItem(`dept_layout_${selDept}`)
+      if (saved) {
+        const parsed = JSON.parse(saved) as DeptSection[]
+        if (
+          Array.isArray(parsed) &&
+          parsed.length === DEPT_SECTIONS.length &&
+          DEPT_SECTIONS.every(s => parsed.includes(s))
+        ) {
+          setSectionOrder(parsed)
+          return
+        }
+      }
+    } catch { /* ignore */ }
+    setSectionOrder(DEFAULT_SECTION_ORDER)
+  }, [selDept])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    setSectionOrder(prev => {
+      const oldIdx = prev.indexOf(active.id as DeptSection)
+      const newIdx = prev.indexOf(over.id as DeptSection)
+      const next = arrayMove(prev, oldIdx, newIdx)
+      try { localStorage.setItem(`dept_layout_${selDept}`, JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
+  }
+
+  // ── Section renderer (closes over all component state) ────────────────────
+  const renderSection = (id: DeptSection): React.ReactNode => {
+    switch (id) {
+
+      case 'kpis': return (
+        <SortableDeptSection key="kpis" id="kpis" editMode={editLayout}>
+          {/* Section 2 — KPIs + Medidas Calculadas */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">KPIs</h2>
+              {isMaster && (
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setShowMedidaModal(true)}>
+                    <Settings size={12} />Medidas
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setShowMgmtModal(true)}>
+                    <Plus size={13} />Novo KPI
+                  </Button>
+                </div>
+              )}
+            </div>
+            {activeKpis.length === 0 && medidaCards.length === 0 ? (
+              <Card>
+                <CardContent className="py-10 flex flex-col items-center gap-2">
+                  <Target size={28} className="text-gray-300" />
+                  <p className="text-sm text-gray-400">Nenhum KPI ou medida configurado.</p>
+                  {isMaster && (
+                    <Button size="sm" variant="outline" onClick={() => setShowMgmtModal(true)}>
+                      <Plus size={13} />Adicionar KPI
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-3 gap-4">
+                {medidaCards.map((card, i) => (
+                  <MedidaDisplayCard key={`m-${i}`} card={card} dept={card._dept} />
+                ))}
+                {activeKpis.map(kpi => (
+                  <KpiCard
+                    key={`${kpi.id}-${kpi.departamento}`}
+                    kpi={kpi}
+                    valores={activeKpiValores[kpi.id] ?? []}
+                    onEditValores={isMaster ? () => setEditValoresKpi(kpi) : undefined}
+                    dept={combineDepts ? kpi.departamento : undefined}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </SortableDeptSection>
+      )
+
+      case 'dre': return (
+        <SortableDeptSection key="dre" id="dre" editMode={editLayout}>
+          {/* Section 3 — DRE */}
+          {dreRows.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2 flex-row items-center justify-between">
+                <CardTitle className="text-sm font-semibold text-gray-700">DRE por Departamento</CardTitle>
+                <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
+                  {(['resumida', 'completa'] as const).map(v => (
+                    <button key={v} onClick={() => setDreView(v)}
+                      className={cn('px-3 py-1 rounded-md text-xs font-medium transition-colors capitalize',
+                        dreView === v ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700')}>
+                      {v === 'resumida' ? 'Resumida' : 'Completa'}
+                    </button>
+                  ))}
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {dreView === 'resumida' ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="text-left px-5 py-3 font-medium text-gray-500">DRE Gerencial</th>
+                        <th className="text-right px-5 py-3 font-medium text-gray-500 cursor-pointer select-none hover:text-gray-700">Budget</th>
+                        <th className="text-right px-5 py-3 font-medium text-gray-500 cursor-pointer select-none hover:text-gray-700">Realizado</th>
+                        <th className="text-right px-5 py-3 font-medium text-gray-500">Variação</th>
+                        <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>
+                        <th className="px-5 py-3" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dreRows.map((row, i) => (
+                        <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/40 transition-colors group">
+                          <td className="px-5 py-3 font-medium text-gray-900 cursor-pointer"
+                            onClick={() => setDetModal({ dre: row.dre, departamento: selDept, periodos: selPeriods, tipo: 'ambos' })}>
+                            {row.dre}
+                          </td>
+                          <td className="px-5 py-3 text-right text-gray-600 cursor-pointer hover:text-gray-700 hover:bg-gray-50/60"
+                            onClick={() => setDetModal({ dre: row.dre, departamento: selDept, periodos: selPeriods, tipo: 'budget' })}>
+                            {formatCurrency(row.budget)}
+                          </td>
+                          <td className="px-5 py-3 text-right text-gray-600 cursor-pointer hover:text-emerald-700 hover:bg-emerald-50/60"
+                            onClick={() => setDetModal({ dre: row.dre, departamento: selDept, periodos: selPeriods, tipo: 'razao' })}>
+                            {formatCurrency(row.razao)}
+                          </td>
+                          <td className={cn('px-5 py-3 text-right font-semibold', colorForVariance(row.variacao))}>
+                            {formatCurrency(row.variacao)}
+                          </td>
+                          <td className="px-5 py-3 text-right">
+                            <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(row.variacao))}>
+                              {formatPct(row.variacao_pct)}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-gray-300 group-hover:text-gray-500 cursor-pointer"
+                            onClick={() => setDetModal({ dre: row.dre, departamento: selDept, periodos: selPeriods, tipo: 'ambos' })}>
+                            <ExternalLink size={13} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
+                        <td className="px-5 py-3">Total</td>
+                        <td className="px-5 py-3 text-right">{formatCurrency(dreRows.reduce((s, r) => s + r.budget, 0))}</td>
+                        <td className="px-5 py-3 text-right">{formatCurrency(dreRows.reduce((s, r) => s + r.razao, 0))}</td>
+                        <td className={cn('px-5 py-3 text-right', colorForVariance(totalVariacao))}>
+                          {formatCurrency(totalVariacao)}
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(totalVariacao))}>
+                            {formatPct(totalVariacaoPct)}
+                          </span>
+                        </td>
+                        <td />
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                ) : (
+                  <DreFull
+                    rawData={dreFullData}
+                    hierarchy={dreHierarchy}
+                    dreLinhas={dreLinhas}
+                    expanded={dreExpanded}
+                    onToggle={name => setDreExpanded(prev => { const n = new Set(prev); n.has(name) ? n.delete(name) : n.add(name); return n })}
+                    loading={dreFullLoading}
+                    onDetalhamento={(dre, agrupamento, tipo) =>
+                      setDetModal({ dre, agrupamento, departamento: selDept, periodos: selPeriods, tipo })}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </SortableDeptSection>
+      )
+
+      case 'capex': return (
+        <SortableDeptSection key="capex" id="capex" editMode={editLayout}>
+          {/* Section 4 — CAPEX por Projeto */}
+          {activeCapex.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold text-gray-700">CAPEX — Investimentos por Projeto</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="text-left px-5 py-3 font-medium text-gray-500">Projeto</th>
+                        <th className="text-right px-5 py-3 font-medium text-gray-500">Budget</th>
+                        <th className="text-right px-5 py-3 font-medium text-gray-500">Realizado</th>
+                        <th className="text-right px-5 py-3 font-medium text-gray-500">Variação</th>
+                        <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeCapex.map((row, i) => (
+                        <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                          <td className="px-5 py-3 font-medium text-gray-900">{row.nome_projeto || '—'}</td>
+                          <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.budget)}</td>
+                          <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.razao)}</td>
+                          <td className={cn('px-5 py-3 text-right font-semibold', colorForVariance(row.variacao))}>
+                            {formatCurrency(row.variacao)}
+                          </td>
+                          <td className="px-5 py-3 text-right">
+                            <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(row.variacao))}>
+                              {formatPct(row.variacao_pct)}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
+                        <td className="px-5 py-3">Total CAPEX</td>
+                        <td className="px-5 py-3 text-right">{formatCurrency(activeCapex.reduce((s, r) => s + r.budget, 0))}</td>
+                        <td className="px-5 py-3 text-right">{formatCurrency(activeCapex.reduce((s, r) => s + r.razao, 0))}</td>
+                        {(() => {
+                          const capexTotal = activeCapex.reduce((s, r) => s + r.variacao, 0)
+                          const capexBudgetTotal = activeCapex.reduce((s, r) => s + r.budget, 0)
+                          return (
+                            <>
+                              <td className={cn('px-5 py-3 text-right', colorForVariance(capexTotal))}>
+                                {formatCurrency(capexTotal)}
+                              </td>
+                              <td className="px-5 py-3 text-right">
+                                <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(capexTotal))}>
+                                  {formatPct(capexBudgetTotal ? (capexTotal / Math.abs(capexBudgetTotal)) * 100 : 0)}
+                                </span>
+                              </td>
+                            </>
+                          )
+                        })()}
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </SortableDeptSection>
+      )
+
+      case 'chart': return (
+        <SortableDeptSection key="chart" id="chart" editMode={editLayout}>
+          {/* Section 5 — Budget vs Realizado por Período */}
+          {chartRows.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold text-gray-700">Budget vs Realizado por Período</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={chartRows} margin={{ top: 0, right: 0, left: -10, bottom: 20 }}>
+                    <CartesianGrid vertical={false} stroke="#f1f5f9" />
+                    <XAxis
+                      dataKey="label"
+                      angle={-30}
+                      textAnchor="end"
+                      tick={{ fontSize: 10, fill: '#94a3b8' }}
+                      interval={0}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tickFormatter={v => formatCurrency(Number(v)).replace('R$\u00a0', '')}
+                      tick={{ fontSize: 10, fill: '#94a3b8' }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }}
+                      labelStyle={{ color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}
+                      itemStyle={{ color: '#fff', fontWeight: 700 }}
+                      formatter={(v) => formatCurrency(Number(v))}
+                      cursor={{ fill: '#f8fafc' }}
+                    />
+                    <Bar dataKey="budget" name="Budget"    fill="#cbd5e1" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="razao"  name="Realizado" fill="#334155" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="flex items-center gap-4 mt-2 justify-center">
+                  {[{ color: '#cbd5e1', label: 'Budget' }, { color: '#334155', label: 'Realizado' }].map(l => (
+                    <div key={l.label} className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-sm inline-block" style={{ background: l.color }} />
+                      <span className="text-xs text-gray-500">{l.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </SortableDeptSection>
+      )
+
+      case 'exec': return (
+        <SortableDeptSection key="exec" id="exec" editMode={editLayout}>
+          {/* Section 6 — Executive Charts */}
+          <ExecCharts
+            selPeriodos={selPeriods.length > 0 ? selPeriods : allPeriodos.filter(p => p.startsWith(selYear ?? '2026'))}
+            allDepts={[]}
+            deptName={selDept}
+            canEdit={isMaster}
+          />
+        </SortableDeptSection>
+      )
+
+      default: return null
+    }
+  }
+
   return (
     <div className="flex gap-0 min-h-screen">
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
@@ -1603,6 +1978,19 @@ export default function DeptDashboardPage() {
                 {loading && (
                   <div className="w-5 h-5 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
                 )}
+                <button
+                  onClick={() => setEditLayout(v => !v)}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors',
+                    editLayout
+                      ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400 hover:text-gray-800'
+                  )}
+                  title="Personalizar layout do dashboard"
+                >
+                  <LayoutDashboard size={13} />
+                  {editLayout ? 'Concluir' : 'Layout'}
+                </button>
               </div>
             </div>
 
@@ -1636,269 +2024,20 @@ export default function DeptDashboardPage() {
               />
             </div>
 
-            {/* Section 2 — KPIs + Medidas Calculadas */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">KPIs</h2>
-                {isMaster && (
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => setShowMedidaModal(true)}>
-                      <Settings size={12} />Medidas
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setShowMgmtModal(true)}>
-                      <Plus size={13} />Novo KPI
-                    </Button>
-                  </div>
-                )}
+            {/* Sections 2-6: drag-and-drop sortable */}
+            {editLayout && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
+                <GripVertical size={12} className="flex-shrink-0" />
+                <span>Arraste as seções pelo ícone lateral para reorganizar o dashboard. Clique em <strong>Concluir</strong> quando terminar.</span>
               </div>
-              {activeKpis.length === 0 && medidaCards.length === 0 ? (
-                <Card>
-                  <CardContent className="py-10 flex flex-col items-center gap-2">
-                    <Target size={28} className="text-gray-300" />
-                    <p className="text-sm text-gray-400">Nenhum KPI ou medida configurado.</p>
-                    {isMaster && (
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => setShowMgmtModal(true)}>
-                          <Plus size={12} />Adicionar KPI
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => setShowMedidaModal(true)}>
-                          <Settings size={12} />Adicionar Medida
-                        </Button>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid grid-cols-3 gap-4">
-                  {medidaCards.map((card, i) => (
-                    <MedidaDisplayCard key={`m-${i}`} card={card} dept={card._dept} />
-                  ))}
-                  {activeKpis.map(kpi => (
-                    <KpiCard
-                      key={`${kpi.id}-${kpi.departamento}`}
-                      kpi={kpi}
-                      valores={activeKpiValores[kpi.id] ?? []}
-                      onEditValores={isMaster ? () => setEditValoresKpi(kpi) : undefined}
-                      dept={combineDepts ? kpi.departamento : undefined}
-                    />
-                  ))}
+            )}
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={sectionOrder} strategy={verticalListSortingStrategy}>
+                <div className={cn("space-y-6", editLayout && "pl-8")}>
+                  {sectionOrder.map(id => renderSection(id))}
                 </div>
-              )}
-            </div>
-
-            {/* Section 3 — DRE */}
-            {dreRows.length > 0 && (
-              <Card>
-                <CardHeader className="pb-2 flex-row items-center justify-between">
-                  <CardTitle className="text-sm font-semibold text-gray-700">DRE por Departamento</CardTitle>
-                  <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
-                    {(['resumida', 'completa'] as const).map(v => (
-                      <button key={v} onClick={() => setDreView(v)}
-                        className={cn('px-3 py-1 rounded-md text-xs font-medium transition-colors capitalize',
-                          dreView === v ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700')}>
-                        {v === 'resumida' ? 'Resumida' : 'Completa'}
-                      </button>
-                    ))}
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  {dreView === 'resumida' ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b bg-gray-50">
-                          <th className="text-left px-5 py-3 font-medium text-gray-500">DRE Gerencial</th>
-                          <th className="text-right px-5 py-3 font-medium text-gray-500 cursor-pointer select-none hover:text-gray-700">Budget</th>
-                          <th className="text-right px-5 py-3 font-medium text-gray-500 cursor-pointer select-none hover:text-gray-700">Realizado</th>
-                          <th className="text-right px-5 py-3 font-medium text-gray-500">Variação</th>
-                          <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>
-                          <th className="px-5 py-3" />
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dreRows.map((row, i) => (
-                          <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/40 transition-colors group">
-                            <td className="px-5 py-3 font-medium text-gray-900 cursor-pointer"
-                              onClick={() => setDetModal({ dre: row.dre, departamento: selDept, periodos: selPeriods, tipo: 'ambos' })}>
-                              {row.dre}
-                            </td>
-                            <td className="px-5 py-3 text-right text-gray-600 cursor-pointer hover:text-gray-700 hover:bg-gray-50/60"
-                              onClick={() => setDetModal({ dre: row.dre, departamento: selDept, periodos: selPeriods, tipo: 'budget' })}>
-                              {formatCurrency(row.budget)}
-                            </td>
-                            <td className="px-5 py-3 text-right text-gray-600 cursor-pointer hover:text-emerald-700 hover:bg-emerald-50/60"
-                              onClick={() => setDetModal({ dre: row.dre, departamento: selDept, periodos: selPeriods, tipo: 'razao' })}>
-                              {formatCurrency(row.razao)}
-                            </td>
-                            <td className={cn('px-5 py-3 text-right font-semibold', colorForVariance(row.variacao))}>
-                              {formatCurrency(row.variacao)}
-                            </td>
-                            <td className="px-5 py-3 text-right">
-                              <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(row.variacao))}>
-                                {formatPct(row.variacao_pct)}
-                              </span>
-                            </td>
-                            <td className="px-3 py-3 text-gray-300 group-hover:text-gray-500 cursor-pointer"
-                              onClick={() => setDetModal({ dre: row.dre, departamento: selDept, periodos: selPeriods, tipo: 'ambos' })}>
-                              <ExternalLink size={13} />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
-                          <td className="px-5 py-3">Total</td>
-                          <td className="px-5 py-3 text-right">{formatCurrency(dreRows.reduce((s, r) => s + r.budget, 0))}</td>
-                          <td className="px-5 py-3 text-right">{formatCurrency(dreRows.reduce((s, r) => s + r.razao, 0))}</td>
-                          <td className={cn('px-5 py-3 text-right', colorForVariance(totalVariacao))}>
-                            {formatCurrency(totalVariacao)}
-                          </td>
-                          <td className="px-5 py-3 text-right">
-                            <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(totalVariacao))}>
-                              {formatPct(totalVariacaoPct)}
-                            </span>
-                          </td>
-                          <td />
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                  ) : (
-                    /* DRE Completa */
-                    <DreFull
-                      rawData={dreFullData}
-                      hierarchy={dreHierarchy}
-                      dreLinhas={dreLinhas}
-                      expanded={dreExpanded}
-                      onToggle={name => setDreExpanded(prev => { const n = new Set(prev); n.has(name) ? n.delete(name) : n.add(name); return n })}
-                      loading={dreFullLoading}
-                      onDetalhamento={(dre, agrupamento, tipo) =>
-                        setDetModal({ dre, agrupamento, departamento: selDept, periodos: selPeriods, tipo })}
-                    />
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Section 4 — CAPEX por Projeto */}
-            {activeCapex.length > 0 && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold text-gray-700">CAPEX — Investimentos por Projeto</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b bg-gray-50">
-                          <th className="text-left px-5 py-3 font-medium text-gray-500">Projeto</th>
-                          <th className="text-right px-5 py-3 font-medium text-gray-500">Budget</th>
-                          <th className="text-right px-5 py-3 font-medium text-gray-500">Realizado</th>
-                          <th className="text-right px-5 py-3 font-medium text-gray-500">Variação</th>
-                          <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {activeCapex.map((row, i) => (
-                          <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                            <td className="px-5 py-3 font-medium text-gray-900">{row.nome_projeto || '—'}</td>
-                            <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.budget)}</td>
-                            <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.razao)}</td>
-                            <td className={cn('px-5 py-3 text-right font-semibold', colorForVariance(row.variacao))}>
-                              {formatCurrency(row.variacao)}
-                            </td>
-                            <td className="px-5 py-3 text-right">
-                              <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(row.variacao))}>
-                                {formatPct(row.variacao_pct)}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
-                          <td className="px-5 py-3">Total CAPEX</td>
-                          <td className="px-5 py-3 text-right">{formatCurrency(activeCapex.reduce((s, r) => s + r.budget, 0))}</td>
-                          <td className="px-5 py-3 text-right">{formatCurrency(activeCapex.reduce((s, r) => s + r.razao, 0))}</td>
-                          {(() => {
-                            const capexTotal = activeCapex.reduce((s, r) => s + r.variacao, 0)
-                            const capexBudgetTotal = activeCapex.reduce((s, r) => s + r.budget, 0)
-                            return (
-                              <>
-                                <td className={cn('px-5 py-3 text-right', colorForVariance(capexTotal))}>
-                                  {formatCurrency(capexTotal)}
-                                </td>
-                                <td className="px-5 py-3 text-right">
-                                  <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(capexTotal))}>
-                                    {formatPct(capexBudgetTotal ? (capexTotal / Math.abs(capexBudgetTotal)) * 100 : 0)}
-                                  </span>
-                                </td>
-                              </>
-                            )
-                          })()}
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Section 5 — Budget vs Realizado por Período */}
-            {chartRows.length > 0 && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold text-gray-700">Budget vs Realizado por Período</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={chartRows} margin={{ top: 0, right: 0, left: -10, bottom: 20 }}>
-                      <CartesianGrid vertical={false} stroke="#f1f5f9" />
-                      <XAxis
-                        dataKey="label"
-                        angle={-30}
-                        textAnchor="end"
-                        tick={{ fontSize: 10, fill: '#94a3b8' }}
-                        interval={0}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <YAxis
-                        tickFormatter={v => formatCurrency(Number(v)).replace('R$\u00a0', '')}
-                        tick={{ fontSize: 10, fill: '#94a3b8' }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <Tooltip
-                        contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }}
-                        labelStyle={{ color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}
-                        itemStyle={{ color: '#fff', fontWeight: 700 }}
-                        formatter={(v) => formatCurrency(Number(v))}
-                        cursor={{ fill: '#f8fafc' }}
-                      />
-                      <Bar dataKey="budget" name="Budget"    fill="#cbd5e1" radius={[3, 3, 0, 0]} />
-                      <Bar dataKey="razao"  name="Realizado" fill="#334155" radius={[3, 3, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                  <div className="flex items-center gap-4 mt-2 justify-center">
-                    {[{ color: '#cbd5e1', label: 'Budget' }, { color: '#334155', label: 'Realizado' }].map(l => (
-                      <div key={l.label} className="flex items-center gap-1.5">
-                        <span className="w-3 h-3 rounded-sm inline-block" style={{ background: l.color }} />
-                        <span className="text-xs text-gray-500">{l.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Section 6 — Executive Charts */}
-            <ExecCharts
-              selPeriodos={selPeriods.length > 0 ? selPeriods : allPeriodos.filter(p => p.startsWith(selYear ?? '2026'))}
-              allDepts={[]}
-              deptName={selDept}
-              canEdit={isMaster}
-            />
+              </SortableContext>
+            </DndContext>
           </>
         )}
       </div>
