@@ -118,7 +118,7 @@ export default function KpisPage() {
 
       {/* Form */}
       {editing !== null && (
-        <Card id="kpi-form" className="ring-1 ring-indigo-100">
+        <Card id="kpi-form" className="ring-1 ring-gray-100">
           <CardHeader>
             <CardTitle>{editing === -1 ? 'Novo KPI' : 'Editar KPI'}</CardTitle>
             <CardDescription>
@@ -137,7 +137,7 @@ export default function KpisPage() {
                   value={form.nome}
                   onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
                   onKeyDown={e => e.key === 'Enter' && save()}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
                   placeholder="Ex: NPS, Churn Rate, Taxa de Conversão…"
                 />
               </div>
@@ -161,7 +161,7 @@ export default function KpisPage() {
                 <input
                   value={form.unidade}
                   onChange={e => setForm(f => ({ ...f, unidade: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
                   placeholder="R$, %, pts, x…"
                 />
               </div>
@@ -170,7 +170,7 @@ export default function KpisPage() {
                 <select
                   value={form.departamento}
                   onChange={e => setForm(f => ({ ...f, departamento: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 bg-white">
                   <option value="">Global (todos)</option>
                   {departamentos.filter(Boolean).map(d => (
                     <option key={d} value={d}>{d}</option>
@@ -183,7 +183,7 @@ export default function KpisPage() {
                   type="number"
                   value={form.ordem}
                   onChange={e => setForm(f => ({ ...f, ordem: parseInt(e.target.value) || 999 }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
                 />
               </div>
             </div>
@@ -195,7 +195,7 @@ export default function KpisPage() {
                 value={form.descricao}
                 onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
                 rows={2}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none"
                 placeholder="Descrição ou metodologia de cálculo deste KPI…"
               />
             </div>
@@ -207,7 +207,7 @@ export default function KpisPage() {
                   type="checkbox"
                   checked={form.tem_budget === 1}
                   onChange={e => setForm(f => ({ ...f, tem_budget: e.target.checked ? 1 : 0 }))}
-                  className="w-4 h-4 accent-indigo-600"
+                  className="w-4 h-4 accent-gray-800"
                 />
                 <div>
                   <p className="text-sm font-medium text-gray-800">Possui meta (budget)</p>
@@ -215,7 +215,7 @@ export default function KpisPage() {
                 </div>
               </label>
               {form.tem_budget === 1 && (
-                <Badge className="bg-indigo-100 text-indigo-700 border-indigo-200">com meta</Badge>
+                <Badge className="bg-gray-100 text-gray-700 border-gray-200">com meta</Badge>
               )}
             </div>
 
@@ -229,7 +229,7 @@ export default function KpisPage() {
               <div className="flex gap-1.5 flex-shrink-0">
                 {form.unidade && <Badge variant="outline">{form.unidade}</Badge>}
                 <Badge variant="secondary">{form.departamento || 'Global'}</Badge>
-                {form.tem_budget === 1 && <Badge className="bg-indigo-50 text-indigo-600 border-indigo-100">com meta</Badge>}
+                {form.tem_budget === 1 && <Badge className="bg-gray-50 text-gray-700 border-gray-100">com meta</Badge>}
               </div>
             </div>
 
@@ -254,8 +254,8 @@ export default function KpisPage() {
               className={cn(
                 'flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors',
                 deptFilter === d
-                  ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-400 hover:text-indigo-600'
+                  ? 'bg-gray-900 text-white border-gray-700'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-500 hover:text-gray-700'
               )}>
               {d === '__all__' && <><Target size={10} /> Todos ({kpis.length})</>}
               {d === '' && <><Globe size={10} /> Global ({kpis.filter(k => k.departamento === '').length})</>}
@@ -299,7 +299,7 @@ export default function KpisPage() {
             {items.map(kpi => (
               <Card key={kpi.id}
                 className={cn('hover:shadow-sm transition-shadow',
-                  editing === kpi.id && 'ring-2 ring-indigo-300')}>
+                  editing === kpi.id && 'ring-2 ring-gray-300')}>
                 <CardContent className="p-4 flex items-center gap-4">
                   {/* Color bar */}
                   <div className="w-1 h-12 rounded-full flex-shrink-0" style={{ backgroundColor: kpi.cor }} />
@@ -312,7 +312,7 @@ export default function KpisPage() {
                         <Badge variant="outline" className="font-mono text-xs">{kpi.unidade}</Badge>
                       )}
                       {kpi.tem_budget === 1 && (
-                        <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 text-xs">com meta</Badge>
+                        <Badge className="bg-gray-50 text-gray-700 border-gray-200 text-xs">com meta</Badge>
                       )}
                       <span className="text-xs text-gray-400">ordem {kpi.ordem}</span>
                     </div>

@@ -543,13 +543,13 @@ export default function DREPage() {
           style={{ left: ctxMenu.x, top: ctxMenu.y }}
           onClick={e => e.stopPropagation()}>
           <button
-            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2"
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-700 flex items-center gap-2"
             onClick={() => { setDetModal(ctxMenu); setCtxMenu(null) }}>
             <ExternalLink size={13} /> Abrir detalhamento
           </button>
           {ctxMenu.tipo !== 'ambos' && (
             <button
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2"
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-700 flex items-center gap-2"
               onClick={() => { setDetModal({ ...ctxMenu, tipo: 'ambos' }); setCtxMenu(null) }}>
               <ExternalLink size={13} /> Detalhamento (Budget + Real)
             </button>
@@ -603,12 +603,12 @@ export default function DREPage() {
             onClick={e => { if (e.target === e.currentTarget) setCommentEdit(null) }}>
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-5 space-y-3">
               <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                <MessageSquare size={14} className="text-indigo-500" />
-                Comentário · <span className="text-indigo-600">{label}</span>
+                <MessageSquare size={14} className="text-gray-600" />
+                Comentário · <span className="text-gray-700">{label}</span>
               </h3>
               <p className="text-xs text-gray-500">
                 {commentEdit.dre_linha}
-                {commentEdit.periodo && <span className="ml-1 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 font-medium">{commentEdit.periodo}</span>}
+                {commentEdit.periodo && <span className="ml-1 px-1.5 py-0.5 rounded bg-gray-50 text-gray-700 font-medium">{commentEdit.periodo}</span>}
               </p>
               {/* Existing comments for this exact cell */}
               {existing.map(c => (
@@ -634,11 +634,11 @@ export default function DREPage() {
               ))}
               <textarea value={commentText} onChange={e => setCommentText(e.target.value)}
                 placeholder="Adicionar comentário…"
-                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 h-20 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400" autoFocus />
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 h-20 resize-none focus:outline-none focus:ring-2 focus:ring-gray-400" autoFocus />
               <div className="flex justify-end gap-2">
                 <button onClick={() => setCommentEdit(null)} className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5">Cancelar</button>
                 <button onClick={saveComment} disabled={!commentText.trim()}
-                  className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 disabled:opacity-50">Salvar</button>
+                  className="text-xs bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 disabled:opacity-50">Salvar</button>
               </div>
             </div>
           </div>
@@ -673,18 +673,18 @@ export default function DREPage() {
                   {(deptUser.departments?.length ?? 0) > 1 ? (
                     <div className="space-y-0.5 max-h-36 overflow-y-auto">
                       {deptUser.departments!.map(d => (
-                        <label key={d} className="flex items-center gap-1.5 cursor-pointer hover:bg-indigo-50 rounded px-1 py-0.5">
+                        <label key={d} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
                           <input type="checkbox" checked={selDepts.includes(d)}
                             onChange={e => setSelDepts(prev => e.target.checked ? [...prev, d] : prev.filter(x => x !== d))}
-                            className="w-3 h-3 accent-indigo-600" />
-                          <span className="text-xs text-indigo-700 font-medium truncate">{d}</span>
+                            className="w-3 h-3 accent-gray-800" />
+                          <span className="text-xs text-gray-700 font-medium truncate">{d}</span>
                         </label>
                       ))}
                     </div>
                   ) : (
                     <div className="flex flex-wrap gap-1">
                       {(deptUser.departments ?? (deptUser.department ? [deptUser.department] : [])).map(d => (
-                        <span key={d} className="text-xs text-indigo-700 font-semibold px-1 py-0.5 bg-indigo-50 rounded">{d}</span>
+                        <span key={d} className="text-xs text-gray-700 font-semibold px-1 py-0.5 bg-gray-50 rounded">{d}</span>
                       ))}
                     </div>
                   )}
@@ -697,7 +697,7 @@ export default function DREPage() {
                       <label key={d} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
                         <input type="checkbox" checked={selDepts.includes(d)}
                           onChange={e => setSelDepts(prev => e.target.checked ? [...prev, d] : prev.filter(x => x !== d))}
-                          className="w-3 h-3 accent-indigo-600" />
+                          className="w-3 h-3 accent-gray-800" />
                         <span className="text-xs text-gray-600 truncate">{d || '—'}</span>
                       </label>
                     ))}
@@ -708,15 +708,15 @@ export default function DREPage() {
               {/* Centro de Custo sub-filter — só aparece quando há departamentos selecionados */}
               {selDepts.length > 0 && centrosDisp.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-indigo-600 mb-1 flex items-center gap-1">
+                  <p className="text-xs font-medium text-gray-700 mb-1 flex items-center gap-1">
                     <ChevronRight size={10} /> Centros de Custo
                   </p>
-                  <div className="space-y-0.5 max-h-32 overflow-y-auto pl-2 border-l-2 border-indigo-100">
+                  <div className="space-y-0.5 max-h-32 overflow-y-auto pl-2 border-l-2 border-gray-100">
                     {centrosDisp.map(c => (
-                      <label key={c.cc} className="flex items-center gap-1.5 cursor-pointer hover:bg-indigo-50 rounded px-1 py-0.5">
+                      <label key={c.cc} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
                         <input type="checkbox" checked={selCentros.includes(c.cc)}
                           onChange={e => setSelCentros(prev => e.target.checked ? [...prev, c.cc] : prev.filter(x => x !== c.cc))}
-                          className="w-3 h-3 accent-indigo-600" />
+                          className="w-3 h-3 accent-gray-800" />
                         <span className="text-xs text-gray-600 truncate" title={c.nome}>{c.nome || c.cc}</span>
                       </label>
                     ))}
@@ -746,9 +746,9 @@ export default function DREPage() {
                                 ? [...new Set([...prev, ...months])]
                                 : prev.filter(p => !months.includes(p))
                             )}
-                            className="w-3 h-3 accent-indigo-600 flex-shrink-0" />
+                            className="w-3 h-3 accent-gray-800 flex-shrink-0" />
                           <span className="text-xs font-semibold text-gray-700">{year}</span>
-                          {someSel && <span className="ml-auto text-[10px] text-indigo-500 tabular-nums">{selInYear.length}/{months.length}</span>}
+                          {someSel && <span className="ml-auto text-[10px] text-gray-600 tabular-nums">{selInYear.length}/{months.length}</span>}
                         </div>
                         {isOpen && (
                           <div className="ml-4 space-y-0.5">
@@ -756,7 +756,7 @@ export default function DREPage() {
                               <label key={m} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
                                 <input type="checkbox" checked={selPeriods.includes(m)}
                                   onChange={e => setSelPeriods(prev => e.target.checked ? [...prev, m] : prev.filter(x => x !== m))}
-                                  className="w-3 h-3 accent-indigo-600" />
+                                  className="w-3 h-3 accent-gray-800" />
                                 <span className="text-xs text-gray-600">{formatPeriodo(m)}</span>
                               </label>
                             ))}
@@ -786,8 +786,8 @@ export default function DREPage() {
             <CardContent className="p-3 space-y-2">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Visualização</p>
               <div className="flex flex-col gap-1">
-                <button onClick={expandAll} className="text-xs text-indigo-600 hover:text-indigo-800 text-left px-1">Expandir todos</button>
-                <button onClick={collapseAll} className="text-xs text-indigo-600 hover:text-indigo-800 text-left px-1">Recolher todos</button>
+                <button onClick={expandAll} className="text-xs text-gray-700 hover:text-gray-800 text-left px-1">Expandir todos</button>
+                <button onClick={collapseAll} className="text-xs text-gray-700 hover:text-gray-800 text-left px-1">Recolher todos</button>
               </div>
             </CardContent>
           </Card>
@@ -813,14 +813,14 @@ export default function DREPage() {
                 {selDepts.map(d => <Badge key={d} variant="secondary" className="gap-1">{d}<button onClick={() => setSelDepts(p => p.filter(x => x !== d))}><X size={9} /></button></Badge>)}
                 {selCentros.map(c => {
                   const nome = centrosDisp.find(x => x.cc === c)?.nome ?? c
-                  return <Badge key={c} variant="secondary" className="gap-1 bg-indigo-50 text-indigo-700 border-indigo-200">{nome}<button onClick={() => setSelCentros(p => p.filter(x => x !== c))}><X size={9} /></button></Badge>
+                  return <Badge key={c} variant="secondary" className="gap-1 bg-gray-50 text-gray-700 border-gray-200">{nome}<button onClick={() => setSelCentros(p => p.filter(x => x !== c))}><X size={9} /></button></Badge>
                 })}
                 {selPeriods.map(p => <Badge key={p} variant="outline" className="gap-1">{formatPeriodo(p)}<button onClick={() => setSelPeriods(prev => prev.filter(x => x !== p))}><X size={9} /></button></Badge>)}
               </div>
             )}
           </div>
 
-          {loading && <div className="flex items-center justify-center h-40"><div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>}
+          {loading && <div className="flex items-center justify-center h-40"><div className="w-5 h-5 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" /></div>}
 
           {!loading && viewMode === 'total' && (
             <Card>
@@ -1293,7 +1293,7 @@ export default function DREPage() {
 
                       <div className="flex items-center gap-2">
                         <select value={compA} onChange={e => setCompA(e.target.value)}
-                          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+                          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-gray-500 focus:border-gray-600 outline-none">
                           <option value="">Período A</option>
                           {options.map(o => <option key={o} value={o}>{formatOption(o)}</option>)}
                         </select>
@@ -1301,7 +1301,7 @@ export default function DREPage() {
                         <span className="text-sm font-medium text-gray-400">vs</span>
 
                         <select value={compB} onChange={e => setCompB(e.target.value)}
-                          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+                          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-gray-500 focus:border-gray-600 outline-none">
                           <option value="">Período B</option>
                           {options.map(o => <option key={o} value={o}>{formatOption(o)}</option>)}
                         </select>
@@ -1370,7 +1370,7 @@ export default function DREPage() {
                             <th className="text-left px-4 py-2 font-medium text-gray-500 sticky left-0 bg-gray-50 z-10 min-w-[220px]">
                               Demonstrativo Gerencial
                             </th>
-                            <th colSpan={2} className="text-center px-2 py-2 font-medium text-indigo-600 border-l-2 border-indigo-200 bg-indigo-50/50">
+                            <th colSpan={2} className="text-center px-2 py-2 font-medium text-gray-700 border-l-2 border-gray-200 bg-gray-50/50">
                               {formatOption(compA)}
                             </th>
                             <th colSpan={2} className="text-center px-2 py-2 font-medium text-emerald-600 border-l-2 border-emerald-200 bg-emerald-50/50">
@@ -1382,7 +1382,7 @@ export default function DREPage() {
                           </tr>
                           <tr className="border-b bg-gray-50/50">
                             <th className="sticky left-0 bg-gray-50/50 z-10" />
-                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-indigo-200">Orçado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-gray-200">Orçado</th>
                             <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Realizado</th>
                             <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-emerald-200">Orçado</th>
                             <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Realizado</th>
@@ -1417,7 +1417,7 @@ export default function DREPage() {
                                   </div>
                                 </td>
                                 {/* Period A */}
-                                <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, node: row, tipo: 'budget', departamentos: selDepts.length ? selDepts : undefined, periodos: periodsForKey(compA), centros: selCentros.length ? selCentros : undefined }) }} className={cn('px-2 py-2 text-right text-xs border-l-2 border-indigo-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, node: row, tipo: 'budget', departamentos: selDepts.length ? selDepts : undefined, periodos: periodsForKey(compA), centros: selCentros.length ? selCentros : undefined }) }} className={cn('px-2 py-2 text-right text-xs border-l-2 border-gray-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
                                   {formatCurrency(vA.budget)}
                                 </td>
                                 <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, node: row, tipo: 'razao', departamentos: selDepts.length ? selDepts : undefined, periodos: periodsForKey(compA), centros: selCentros.length ? selCentros : undefined }) }} className={cn('px-2 py-2 text-right text-xs border-l border-gray-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>

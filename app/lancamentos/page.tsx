@@ -144,7 +144,7 @@ export default function LancamentosPage() {
           {(['budget', 'razao'] as const).map(t => (
             <button key={t} onClick={() => { setTipo(t); setPage(1) }}
               className={cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-                tipo === t ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+                tipo === t ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50')}>
               {t === 'budget' ? 'Budget' : 'Razão'}
             </button>
           ))}
@@ -153,7 +153,7 @@ export default function LancamentosPage() {
         <div className="relative flex-1 max-w-sm">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input value={q} onChange={e => handleSearch(e.target.value)} placeholder="Buscar conta, CC, fonte..."
-            className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400" />
         </div>
 
         <button onClick={() => load(page, q, tipo)} className="p-2 text-gray-400 hover:text-gray-700 transition-colors">
@@ -161,7 +161,7 @@ export default function LancamentosPage() {
         </button>
 
         <div className="ml-auto text-sm text-gray-500">
-          Total: <span className={cn('font-semibold', totalBudget >= 0 ? 'text-indigo-700' : 'text-red-600')}>
+          Total: <span className={cn('font-semibold', totalBudget >= 0 ? 'text-gray-700' : 'text-red-600')}>
             {formatCurrency(totalBudget)}
           </span>
         </div>
@@ -191,7 +191,7 @@ export default function LancamentosPage() {
             <tbody>
               {loading && (
                 <tr><td colSpan={COLS.length + 1} className="text-center py-10 text-gray-400">
-                  <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                  <div className="w-5 h-5 border-2 border-gray-600 border-t-transparent rounded-full animate-spin mx-auto" />
                 </td></tr>
               )}
               {!loading && data?.rows.length === 0 && (
@@ -217,14 +217,14 @@ export default function LancamentosPage() {
                             onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit() }}
                             type={col.type === 'number' ? 'number' : 'text'}
                             step={col.type === 'number' ? '0.01' : undefined}
-                            className="w-full h-full px-3 py-2 text-sm bg-indigo-50 border-0 border-b-2 border-indigo-400 outline-none"
+                            className="w-full h-full px-3 py-2 text-sm bg-gray-50 border-0 border-b-2 border-gray-500 outline-none"
                           />
                         ) : (
                           <div
                             onClick={() => !isReadonly && startEdit(row.id, col.key, val)}
                             className={cn(
                               'px-3 py-2.5 truncate',
-                              !isReadonly && 'cursor-pointer hover:bg-indigo-50 rounded transition-colors',
+                              !isReadonly && 'cursor-pointer hover:bg-gray-50 rounded transition-colors',
                               isReadonly && 'text-gray-400',
                               col.key === 'debito_credito' && 'text-right font-mono',
                               col.key === 'debito_credito' && (Number(val) >= 0 ? 'text-gray-800' : 'text-red-600'),

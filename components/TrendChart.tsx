@@ -98,7 +98,7 @@ export default function TrendChart({ title, conta, agrupamento, dre, departament
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-2 text-xs text-gray-600">
               <input type="checkbox" checked={showForecast} onChange={e => setShowForecast(e.target.checked)}
-                className="w-3 h-3 accent-indigo-600" />
+                className="w-3 h-3 accent-gray-800" />
               Forecast
             </label>
             {showForecast && (
@@ -116,7 +116,7 @@ export default function TrendChart({ title, conta, agrupamento, dre, departament
         <div className="flex-1 p-5 min-h-0">
           {loading ? (
             <div className="flex items-center justify-center h-[400px]">
-              <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              <div className="w-5 h-5 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : series.length === 0 ? (
             <div className="flex items-center justify-center h-[400px] text-gray-400 text-sm">Sem dados para exibir</div>

@@ -81,11 +81,11 @@ export function FilterSidebar({
                 // Multi-dept: checkboxes filtráveis dentro dos departamentos permitidos
                 <div className="space-y-0.5 max-h-36 overflow-y-auto">
                   {deptUser.departments!.map(d => (
-                    <label key={d} className="flex items-center gap-1.5 cursor-pointer hover:bg-indigo-50 rounded px-1 py-0.5">
+                    <label key={d} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
                       <input type="checkbox" checked={selDepts.includes(d)}
                         onChange={e => onDeptsChange(e.target.checked ? [...selDepts, d] : selDepts.filter(x => x !== d))}
-                        className="w-3 h-3 accent-indigo-600" />
-                      <span className="text-xs text-indigo-700 font-medium truncate">{d}</span>
+                        className="w-3 h-3 accent-gray-800" />
+                      <span className="text-xs text-gray-700 font-medium truncate">{d}</span>
                     </label>
                   ))}
                 </div>
@@ -93,7 +93,7 @@ export function FilterSidebar({
                 // Single dept: badge fixo
                 <div className="flex flex-wrap gap-1">
                   {(deptUser.departments ?? (deptUser.department ? [deptUser.department] : [])).map(d => (
-                    <span key={d} className="text-xs text-indigo-700 font-semibold px-1.5 py-0.5 bg-indigo-50 rounded">
+                    <span key={d} className="text-xs text-gray-700 font-semibold px-1.5 py-0.5 bg-gray-50 rounded">
                       {d}
                     </span>
                   ))}
@@ -108,7 +108,7 @@ export function FilterSidebar({
                   <label key={d} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
                     <input type="checkbox" checked={selDepts.includes(d)}
                       onChange={e => onDeptsChange(e.target.checked ? [...selDepts, d] : selDepts.filter(x => x !== d))}
-                      className="w-3 h-3 accent-indigo-600" />
+                      className="w-3 h-3 accent-gray-800" />
                     <span className="text-xs text-gray-600 truncate">{d || '—'}</span>
                   </label>
                 ))}
@@ -120,15 +120,15 @@ export function FilterSidebar({
         {/* Cost centers — cascaded from departments */}
         {selDepts.length > 0 && centrosDisp.length > 0 && onCentrosChange && (
           <div>
-            <p className="text-xs font-medium text-indigo-600 mb-1 flex items-center gap-1">
+            <p className="text-xs font-medium text-gray-700 mb-1 flex items-center gap-1">
               <ChevronRight size={10} /> Centros de Custo
             </p>
-            <div className="space-y-0.5 max-h-32 overflow-y-auto pl-2 border-l-2 border-indigo-100">
+            <div className="space-y-0.5 max-h-32 overflow-y-auto pl-2 border-l-2 border-gray-100">
               {centrosDisp.map(c => (
-                <label key={c.cc} className="flex items-center gap-1.5 cursor-pointer hover:bg-indigo-50 rounded px-1 py-0.5">
+                <label key={c.cc} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
                   <input type="checkbox" checked={selCentros.includes(c.cc)}
                     onChange={e => onCentrosChange(e.target.checked ? [...selCentros, c.cc] : selCentros.filter(x => x !== c.cc))}
-                    className="w-3 h-3 accent-indigo-600" />
+                    className="w-3 h-3 accent-gray-800" />
                   <span className="text-xs text-gray-600 truncate" title={c.nome}>{c.nome || c.cc}</span>
                 </label>
               ))}
@@ -164,9 +164,9 @@ export function FilterSidebar({
                           ? [...new Set([...selPeriods, ...months])]
                           : selPeriods.filter(p => !months.includes(p))
                       )}
-                      className="w-3 h-3 accent-indigo-600 flex-shrink-0" />
+                      className="w-3 h-3 accent-gray-800 flex-shrink-0" />
                     <span className="text-xs font-semibold text-gray-700">{year}</span>
-                    {someSel && <span className="ml-auto text-[10px] text-indigo-500 tabular-nums">{selInYear.length}/{months.length}</span>}
+                    {someSel && <span className="ml-auto text-[10px] text-gray-600 tabular-nums">{selInYear.length}/{months.length}</span>}
                   </div>
                   {isOpen && (
                     <div className="ml-4 space-y-0.5">
@@ -174,7 +174,7 @@ export function FilterSidebar({
                         <label key={m} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
                           <input type="checkbox" checked={selPeriods.includes(m)}
                             onChange={e => onPeriodsChange(e.target.checked ? [...selPeriods, m] : selPeriods.filter(x => x !== m))}
-                            className="w-3 h-3 accent-indigo-600" />
+                            className="w-3 h-3 accent-gray-800" />
                           <span className="text-xs text-gray-600">{formatPeriodo(m)}</span>
                         </label>
                       ))}

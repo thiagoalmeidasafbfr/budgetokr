@@ -111,7 +111,7 @@ export default function Dashboard() {
   if (loading) return (
     <div className="flex items-center justify-center h-[70vh]">
       <div className="flex flex-col items-center gap-2">
-        <div className="w-7 h-7 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+        <div className="w-7 h-7 border-2 border-gray-700 border-t-transparent rounded-full animate-spin" />
         <p className="text-gray-400 text-sm">Carregando…</p>
       </div>
     </div>
@@ -119,8 +119,8 @@ export default function Dashboard() {
 
   if (empty) return (
     <div className="flex flex-col items-center justify-center h-[70vh] gap-4">
-      <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center">
-        <AlertCircle size={30} className="text-indigo-400" />
+      <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center">
+        <AlertCircle size={30} className="text-gray-500" />
       </div>
       <div className="text-center">
         <h2 className="text-xl font-semibold text-gray-900 mb-1">Nenhum dado encontrado</h2>
@@ -133,7 +133,7 @@ export default function Dashboard() {
             ['4', 'Lançamentos Razão', '/upload'],
           ].map(([n, l, href]) => (
             <div key={n} className="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2">
-              <span className="w-5 h-5 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">{n}</span>
+              <span className="w-5 h-5 bg-gray-100 text-gray-700 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">{n}</span>
               <span className="text-sm text-gray-700">{l}</span>
             </div>
           ))}
@@ -253,7 +253,7 @@ export default function Dashboard() {
                   <div key={w.id} className="flex items-center gap-2 hover:bg-gray-50 rounded-lg px-2 py-1.5">
                     <button onClick={() => toggleWidget(w.id)} className="flex-shrink-0">
                       {w.visible
-                        ? <Eye size={13} className="text-indigo-500" />
+                        ? <Eye size={13} className="text-gray-600" />
                         : <EyeOff size={13} className="text-gray-300" />}
                     </button>
                     <span className={cn('text-xs flex-1', w.visible ? 'text-gray-700' : 'text-gray-400')}>{w.label}</span>
@@ -279,7 +279,7 @@ export default function Dashboard() {
           title={selYear && hasYtdData ? 'Budget YTD' : 'Budget Total'}
           value={formatCurrency(displayBudget)}
           sub={selYear && hasYtdData ? ytdLabelSub : `${summary?.linhas_budget.toLocaleString()} linhas`}
-          icon={<BarChart3 size={16} className="text-indigo-500" />} bg="bg-indigo-50" />
+          icon={<BarChart3 size={16} className="text-gray-600" />} bg="bg-gray-50" />
         <SCard
           title={selYear && hasYtdData ? 'Razão YTD' : 'Razão Total'}
           value={formatCurrency(displayRazao)}
@@ -353,7 +353,7 @@ function SCard({ title, value, sub, icon, bg, highlight }: {
   title: string; value: string; sub: string; icon: React.ReactNode; bg: string; highlight?: boolean
 }) {
   return (
-    <Card className={cn(highlight && 'ring-1 ring-indigo-100')}>
+    <Card className={cn(highlight && 'ring-1 ring-gray-100')}>
       <CardContent className="p-4">
         <div className="flex items-start justify-between">
           <div>

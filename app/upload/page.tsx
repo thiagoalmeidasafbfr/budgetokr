@@ -14,7 +14,7 @@ import {
 type Step = 'choose' | 'upload' | 'mapping' | 'importing' | 'done'
 
 const TIPO_OPTIONS: Array<{ value: UploadTipo; label: string; desc: string; color: string }> = [
-  { value: 'lancamentos_budget',  label: 'Lançamentos — Budget',       desc: 'Valores orçados por conta e centro de custo',      color: 'indigo' },
+  { value: 'lancamentos_budget',  label: 'Lançamentos — Budget',       desc: 'Valores orçados por conta e centro de custo',      color: 'gray' },
   { value: 'lancamentos_razao',   label: 'Lançamentos — Razão (Real)', desc: 'Valores realizados / movimentos contábeis reais',  color: 'emerald' },
   { value: 'capex_budget',        label: 'CAPEX — Budget',             desc: 'Orçamento de investimentos (ativo) por projeto',   color: 'cyan' },
   { value: 'capex_razao',         label: 'CAPEX — Razão (Real)',       desc: 'Investimentos realizados por projeto',             color: 'teal' },
@@ -209,7 +209,7 @@ export default function UploadPage() {
           return (
             <div key={s} className="flex items-center gap-1.5">
               <div className={cn('w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold',
-                done ? 'bg-indigo-600 text-white' : current ? 'bg-indigo-100 text-indigo-700 ring-2 ring-indigo-300' : 'bg-gray-100 text-gray-400')}>
+                done ? 'bg-gray-900 text-white' : current ? 'bg-gray-100 text-gray-700 ring-2 ring-gray-300' : 'bg-gray-100 text-gray-400')}>
                 {done ? <CheckCircle size={12} /> : i + 1}
               </div>
               <span className={cn(current ? 'text-gray-900 font-medium' : 'text-gray-400')}>{labels[i]}</span>
@@ -234,7 +234,7 @@ export default function UploadPage() {
               className={cn('text-left p-4 rounded-xl border-2 transition-all hover:shadow-md',
                 `border-gray-100 hover:border-${opt.color}-200 bg-white`)}>
               <div className={cn('w-8 h-8 rounded-lg mb-3 flex items-center justify-center text-white text-xs font-bold',
-                opt.color === 'indigo' && 'bg-indigo-500',
+                opt.color === 'gray' && 'bg-gray-800',
                 opt.color === 'emerald' && 'bg-emerald-500',
                 opt.color === 'cyan' && 'bg-cyan-500',
                 opt.color === 'teal' && 'bg-teal-500',
@@ -270,8 +270,8 @@ export default function UploadPage() {
                 <div className="flex gap-3">
                   {(['append','replace'] as const).map(m => (
                     <label key={m} className={cn('flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border text-sm transition-colors',
-                      mode === m ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50')}>
-                      <input type="radio" name="mode" value={m} checked={mode === m} onChange={() => setMode(m)} className="accent-indigo-600" />
+                      mode === m ? 'border-gray-300 bg-gray-50 text-gray-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50')}>
+                      <input type="radio" name="mode" value={m} checked={mode === m} onChange={() => setMode(m)} className="accent-gray-800" />
                       {m === 'append' ? 'Adicionar (manter dados existentes)' : 'Substituir (apagar e reimportar)'}
                     </label>
                   ))}
@@ -288,7 +288,7 @@ export default function UploadPage() {
                 onDragLeave={() => setDragging(false)}
                 onClick={() => document.getElementById('file-input')?.click()}
                 className={cn('border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors',
-                  dragging ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 hover:border-indigo-300 hover:bg-gray-50')}>
+                  dragging ? 'border-gray-500 bg-gray-50' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50')}>
                 <input id="file-input" type="file" className="hidden" accept=".xlsx,.xls,.csv"
                   onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
                 <FileSpreadsheet size={36} className="mx-auto text-gray-300 mb-2" />
@@ -328,7 +328,7 @@ export default function UploadPage() {
                   <select
                     value={mapping[fc.key] ?? ''}
                     onChange={e => setMapping(m => ({ ...m, [fc.key]: e.target.value }))}
-                    className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-400">
                     <option value="">— Não mapeado —</option>
                     {columns.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
@@ -347,7 +347,7 @@ export default function UploadPage() {
                     <thead><tr className="border-b bg-gray-50">
                       {columns.map(c => (
                         <th key={c} className="text-left px-3 py-2 font-medium text-gray-500 whitespace-nowrap">
-                          {c}{Object.values(mapping).includes(c) && <span className="text-indigo-500 ml-1">●</span>}
+                          {c}{Object.values(mapping).includes(c) && <span className="text-gray-600 ml-1">●</span>}
                         </th>
                       ))}
                     </tr></thead>
@@ -374,12 +374,12 @@ export default function UploadPage() {
       {/* Step: Importing */}
       {step === 'importing' && (
         <Card><CardContent className="p-10 text-center space-y-4">
-          <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto">
-            <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+          <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto">
+            <div className="w-5 h-5 border-2 border-gray-700 border-t-transparent rounded-full animate-spin" />
           </div>
           <p className="font-semibold text-gray-900">Importando {totalRows.toLocaleString()} linhas...</p>
           <div className="w-full bg-gray-100 rounded-full h-2">
-            <div className="bg-indigo-600 h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+            <div className="bg-gray-900 h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
           </div>
           <p className="text-xs text-gray-400">{progress}%</p>
         </CardContent></Card>

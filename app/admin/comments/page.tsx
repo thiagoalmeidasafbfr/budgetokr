@@ -201,7 +201,7 @@ function TicketCard({
                 {ticket.dre_linha}
               </span>
               {ticket.periodo && (
-                <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">
+                <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-gray-50 text-gray-700">
                   {ticket.periodo}
                 </span>
               )}
@@ -250,7 +250,7 @@ function TicketCard({
             <button
               onClick={() => onView(ticket)}
               title="Ver na DRE com filtros aplicados"
-              className="p-1.5 rounded-lg text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+              className="p-1.5 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"
             >
               <Eye size={13} />
             </button>
@@ -446,12 +446,12 @@ export default function CommentsLogPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <MessageSquare size={22} className="text-indigo-500" /> Tickets de Comentários
+            <MessageSquare size={22} className="text-gray-600" /> Tickets de Comentários
           </h1>
           <p className="text-gray-500 text-sm mt-0.5">Comentários dos departamentos · gerenciamento de tickets</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={load} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Atualizar">
+          <button onClick={load} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-colors" title="Atualizar">
             <RefreshCw size={14} />
           </button>
         </div>
@@ -467,11 +467,11 @@ export default function CommentsLogPage() {
         ] as const).map(([v, l, c]) => (
           <button key={v} onClick={() => setFilter(v)}
             className={cn('px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5',
-              filter === v ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+              filter === v ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50')}>
             {l}
             {c > 0 && (
               <span className={cn('text-xs px-1.5 py-0.5 rounded-full font-bold',
-                filter === v ? 'bg-indigo-500 text-white' : 'bg-gray-100 text-gray-500')}>
+                filter === v ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500')}>
                 {c}
               </span>
             )}
@@ -482,7 +482,7 @@ export default function CommentsLogPage() {
       {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center h-40">
-          <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-5 h-5 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
         </div>
       )}
 

@@ -49,7 +49,7 @@ export default function AuditPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <History size={22} className="text-indigo-500" /> Audit Trail
+          <History size={22} className="text-gray-600" /> Audit Trail
         </h1>
         <p className="text-gray-500 text-sm mt-0.5">Histórico de alterações em lançamentos</p>
       </div>
@@ -59,13 +59,13 @@ export default function AuditPage() {
           <div className="flex items-center gap-3 flex-wrap">
             <Filter size={14} className="text-gray-400" />
             <select value={filterTabela} onChange={e => setFilterTabela(e.target.value)}
-              className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+              className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gray-400">
               <option value="">Todas as tabelas</option>
               <option value="lancamentos">Lançamentos</option>
               <option value="capex">CAPEX</option>
             </select>
             <select value={filterAcao} onChange={e => setFilterAcao(e.target.value)}
-              className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+              className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gray-400">
               <option value="">Todas as ações</option>
               <option value="INSERT">Insert</option>
               <option value="UPDATE">Update</option>
@@ -77,7 +77,7 @@ export default function AuditPage() {
         <CardContent className="p-0">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              <div className="w-5 h-5 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : rows.length === 0 ? (
             <p className="text-center text-gray-400 py-12 text-sm">Nenhum registro de auditoria</p>

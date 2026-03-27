@@ -86,7 +86,7 @@ export default function DREDimensaoPage() {
                 {loading && (
                   <tr>
                     <td colSpan={7} className="text-center py-8">
-                      <div className="w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin mx-auto" />
+                      <div className="w-5 h-5 border-2 border-gray-500 border-t-transparent rounded-full animate-spin mx-auto" />
                     </td>
                   </tr>
                 )}
@@ -100,7 +100,7 @@ export default function DREDimensaoPage() {
                       <span className={cn(
                         'text-gray-800',
                         row.negrito ? 'font-bold' : 'font-normal',
-                        row.tipo === 'subtotal' ? 'text-indigo-700' : ''
+                        row.tipo === 'subtotal' ? 'text-gray-700' : ''
                       )}>
                         {row.nome}
                       </span>
@@ -109,7 +109,7 @@ export default function DREDimensaoPage() {
                       <span className={cn(
                         'text-xs px-2 py-0.5 rounded-full font-medium',
                         row.tipo === 'subtotal'
-                          ? 'bg-indigo-100 text-indigo-700'
+                          ? 'bg-gray-100 text-gray-700'
                           : 'bg-gray-100 text-gray-600'
                       )}>
                         {row.tipo === 'subtotal' ? 'Subtotal' : 'Grupo'}

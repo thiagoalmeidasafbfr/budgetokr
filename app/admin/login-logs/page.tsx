@@ -78,7 +78,7 @@ export default function LoginLogsPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Shield size={22} className="text-indigo-500" />
+            <Shield size={22} className="text-gray-600" />
             Log de Acessos
           </h1>
           <p className="text-gray-500 text-sm mt-0.5">
@@ -98,7 +98,7 @@ export default function LoginLogsPage() {
             value={q}
             onChange={e => handleSearch(e.target.value)}
             placeholder="Buscar usuário ou IP..."
-            className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400"
           />
         </div>
 
@@ -106,7 +106,7 @@ export default function LoginLogsPage() {
           {([['', 'Todos'], ['1', 'Sucesso'], ['0', 'Falha']] as const).map(([val, label]) => (
             <button key={val} onClick={() => { setFilter(val); setPage(1) }}
               className={cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-                filter === val ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+                filter === val ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50')}>
               {label}
             </button>
           ))}
@@ -142,7 +142,7 @@ export default function LoginLogsPage() {
             <tbody>
               {loading && (
                 <tr><td colSpan={7} className="text-center py-10">
-                  <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                  <div className="w-5 h-5 border-2 border-gray-600 border-t-transparent rounded-full animate-spin mx-auto" />
                 </td></tr>
               )}
               {!loading && data?.rows.length === 0 && (
@@ -159,7 +159,7 @@ export default function LoginLogsPage() {
                   <td className="px-4 py-2.5">
                     {row.role ? (
                       <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium',
-                        row.role === 'master' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700')}>
+                        row.role === 'master' ? 'bg-gray-100 text-gray-700' : 'bg-amber-100 text-amber-700')}>
                         {row.role === 'master' ? 'Admin' : 'Dept'}
                       </span>
                     ) : <span className="text-gray-300">—</span>}
