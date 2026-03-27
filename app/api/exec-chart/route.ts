@@ -87,6 +87,24 @@ async function getLancamentosRows(
   return Object.entries(acc).map(([name, v]) => ({ name, ...v }))
 }
 
+// ─── Resolve CC codes → names ─────────────────────────────────────────────────
+
+async function resolveCCNames(
+  rows: { name: string; budget: number; razao: number }[]
+): Promise<{ name: string; budget: number; razao: number }[]> {
+  const codes = rows.map(r => r.name).filter(Boolean)
+  if (!codes.length) return rows
+  const { data } = await getSupabase()
+    .from('centros_custo')
+    .select('centro_custo, nome_centro_custo')
+    .in('centro_custo', codes)
+  const map: Record<string, string> = {}
+  for (const r of (data ?? []) as { centro_custo: string; nome_centro_custo: string }[]) {
+    if (r.centro_custo && r.nome_centro_custo) map[r.centro_custo] = r.nome_centro_custo
+  }
+  return rows.map(r => ({ ...r, name: map[r.name] ?? r.name }))
+}
+
 // ─── Route ────────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
@@ -178,7 +196,8 @@ export async function GET(req: NextRequest) {
     }
 
     const groupCol = groupBy === 'contrapartida' ? 'nome_conta_contrapartida' : 'centro_custo'
-    const rows = await getLancamentosRows(periodos, ccFilter, accountFilter, groupCol)
+    let rows = await getLancamentosRows(periodos, ccFilter, accountFilter, groupCol)
+    if (groupBy === 'centro_custo') rows = await resolveCCNames(rows)
 
     // dreGroups for filter selector
     const dreRows = await getDRE(periodos.length ? periodos : [], activeDepts ?? [], authCentros)

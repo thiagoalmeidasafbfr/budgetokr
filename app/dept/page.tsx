@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  Legend, LineChart, Line, LabelList,
+  LineChart, Line, LabelList,
 } from 'recharts'
 import { buildTree, buildTreeFromLinhas, flattenTree, type DRERow, type DRELinha, type TreeNode } from '@/lib/dre-utils'
 import type { KpiManual, KpiValor } from '@/lib/query'
@@ -1853,24 +1853,41 @@ export default function DeptDashboardPage() {
                 <CardContent>
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={chartRows} margin={{ top: 0, right: 0, left: -10, bottom: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <CartesianGrid vertical={false} stroke="#f1f5f9" />
                       <XAxis
                         dataKey="label"
                         angle={-30}
                         textAnchor="end"
-                        tick={{ fontSize: 10 }}
+                        tick={{ fontSize: 10, fill: '#94a3b8' }}
                         interval={0}
+                        axisLine={false}
+                        tickLine={false}
                       />
                       <YAxis
                         tickFormatter={v => formatCurrency(Number(v)).replace('R$\u00a0', '')}
-                        tick={{ fontSize: 10 }}
+                        tick={{ fontSize: 10, fill: '#94a3b8' }}
+                        axisLine={false}
+                        tickLine={false}
                       />
-                      <Tooltip formatter={(v) => formatCurrency(Number(v))} />
-                      <Legend />
-                      <Bar dataKey="budget" name="Budget"    fill="#818cf8" radius={[3, 3, 0, 0]} />
-                      <Bar dataKey="razao"  name="Realizado" fill="#34d399" radius={[3, 3, 0, 0]} />
+                      <Tooltip
+                        contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }}
+                        labelStyle={{ color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}
+                        itemStyle={{ color: '#fff', fontWeight: 700 }}
+                        formatter={(v) => formatCurrency(Number(v))}
+                        cursor={{ fill: '#f8fafc' }}
+                      />
+                      <Bar dataKey="budget" name="Budget"    fill="#cbd5e1" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="razao"  name="Realizado" fill="#334155" radius={[3, 3, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
+                  <div className="flex items-center gap-4 mt-2 justify-center">
+                    {[{ color: '#cbd5e1', label: 'Budget' }, { color: '#334155', label: 'Realizado' }].map(l => (
+                      <div key={l.label} className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-sm inline-block" style={{ background: l.color }} />
+                        <span className="text-xs text-gray-500">{l.label}</span>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             )}

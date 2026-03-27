@@ -53,9 +53,9 @@ function WaterfallTooltip({ active, payload }: { active?: boolean; payload?: Arr
   if (!active || !payload?.length) return null
   const d = payload[0].payload
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-xs">
-      <p className="font-semibold text-gray-800 mb-1">{d.name}</p>
-      <p className={d.isPositive ? 'text-emerald-600' : 'text-red-500'}>{formatCurrency(d.rawValue)}</p>
+    <div style={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '8px 12px', fontSize: 12 }}>
+      <p style={{ color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}>{d.name}</p>
+      <p style={{ color: d.isPositive ? '#34d399' : '#f87171', fontWeight: 700 }}>{formatCurrency(d.rawValue)}</p>
     </div>
   )
 }
@@ -69,22 +69,22 @@ export default function WaterfallChart({ tree, dreLinhas }: { tree: TreeNode[]; 
       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">{title}</p>
       <ResponsiveContainer width="100%" height={380}>
         <BarChart data={data} margin={{ top: 10, right: 12, left: 10, bottom: 80 }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-          <XAxis dataKey="shortName" tick={{ fontSize: 10, fill: '#6b7280' }} angle={-40} textAnchor="end" interval={0} />
+          <CartesianGrid vertical={false} stroke="#f1f5f9" />
+          <XAxis dataKey="shortName" tick={{ fontSize: 10, fill: '#94a3b8' }} angle={-40} textAnchor="end" interval={0} axisLine={false} tickLine={false} />
           <YAxis
             tickFormatter={(v: number) => {
               if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(0)}M`
               if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(0)}k`
               return String(v)
             }}
-            tick={{ fontSize: 10, fill: '#6b7280' }} width={56}
+            tick={{ fontSize: 10, fill: '#94a3b8' }} width={56} axisLine={false} tickLine={false}
           />
-          <Tooltip content={<WaterfallTooltip />} />
-          <ReferenceLine y={0} stroke="#9ca3af" strokeWidth={1} />
+          <Tooltip content={<WaterfallTooltip />} cursor={{ fill: '#f8fafc' }} />
+          <ReferenceLine y={0} stroke="#cbd5e1" strokeWidth={1} />
           <Bar dataKey="offset" stackId="wf" fill="transparent" isAnimationActive={false} />
           <Bar dataKey="bar" stackId="wf" isAnimationActive={false} radius={[3, 3, 0, 0]}>
             {data.map((entry, i) => (
-              <Cell key={i} fill={entry.isSubtotal ? color : entry.isPositive ? '#22c55e' : '#ef4444'}
+              <Cell key={i} fill={entry.isSubtotal ? color : entry.isPositive ? '#059669' : '#dc2626'}
                 opacity={entry.isSubtotal ? 1 : 0.85} />
             ))}
           </Bar>
@@ -97,15 +97,15 @@ export default function WaterfallChart({ tree, dreLinhas }: { tree: TreeNode[]; 
     <Card>
       <CardContent className="p-5">
         <div className="flex gap-6">
-          {renderChart(budgetData, 'Orçado (Budget)', '#6366f1')}
-          {renderChart(razaoData, 'Realizado', '#0ea5e9')}
+          {renderChart(budgetData, 'Orçado (Budget)', '#94a3b8')}
+          {renderChart(razaoData, 'Realizado', '#334155')}
         </div>
         <div className="flex items-center gap-4 mt-3 justify-center flex-wrap">
           {[
-            { color: '#22c55e', label: 'Positivo (receita / ganho)' },
-            { color: '#ef4444', label: 'Negativo (custo / dedução)' },
-            { color: '#6366f1', label: 'Subtotal Budget' },
-            { color: '#0ea5e9', label: 'Subtotal Realizado' },
+            { color: '#059669', label: 'Positivo (receita / ganho)' },
+            { color: '#dc2626', label: 'Negativo (custo / dedução)' },
+            { color: '#94a3b8', label: 'Subtotal Budget' },
+            { color: '#334155', label: 'Subtotal Realizado' },
           ].map(l => (
             <div key={l.label} className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-sm inline-block" style={{ background: l.color }} />
