@@ -1879,7 +1879,7 @@ export default function DeptDashboardPage() {
             <ExecCharts
               selPeriodos={selPeriods.length > 0 ? selPeriods : allPeriodos.filter(p => p.startsWith(selYear ?? '2026'))}
               allDepts={[]}
-              storageKey={`exec-charts-dept-${selDept}-v1`}
+              deptName={selDept}
               canEdit={isMaster}
             />
           </>

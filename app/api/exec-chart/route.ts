@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getDRE } from '@/lib/query'
+import { getDRE, getUserCentros } from '@/lib/query'
 import { getSession } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     const periodos     = periodosRaw ? periodosRaw.split(',').filter(Boolean) : []
     const departamentos = deptsRaw   ? deptsRaw.split(',').filter(Boolean)   : []
 
-    // Auth: dept users can only see their own departments
+    // Auth: dept users can only see their own departments and centros de custo
     const user = await getSession()
     const forcedDepts = user?.role === 'dept'
       ? (user.departments ?? (user.department ? [user.department] : []))
@@ -30,7 +30,14 @@ export async function GET(req: NextRequest) {
         : forcedDepts
       : departamentos.length ? departamentos : undefined
 
-    const rows = await getDRE(periodos, activeDepts ?? [], [])
+    // Apply individual centro de custo restrictions (same as /api/dre)
+    const userCentros = (user?.role === 'dept' && user.userId)
+      ? await getUserCentros(user.userId)
+      : null
+
+    const centros = userCentros !== null ? userCentros : undefined
+
+    const rows = await getDRE(periodos, activeDepts ?? [], centros)
 
     // Aggregate by agrupamento_arvore, optionally filtering by DRE group
     const acc: Record<string, { budget: number; razao: number }> = {}
@@ -56,12 +63,12 @@ export async function GET(req: NextRequest) {
       }))
       .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
 
-    const top    = sorted.slice(0, topN)
-    const rest   = sorted.slice(topN)
+    const top  = sorted.slice(0, topN)
+    const rest = sorted.slice(topN)
 
     if (rest.length > 0) {
-      const othBudget   = rest.reduce((s, r) => s + r.budget,   0)
-      const othRazao    = rest.reduce((s, r) => s + r.razao,    0)
+      const othBudget = rest.reduce((s, r) => s + r.budget, 0)
+      const othRazao  = rest.reduce((s, r) => s + r.razao,  0)
       top.push({
         name:     `Outros (${rest.length})`,
         budget:   othBudget,
@@ -71,7 +78,6 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    // Also return available DRE groups for the filter selector
     const dreGroups = [...new Set(rows.map(r => r.dre))].filter(Boolean).sort()
 
     return NextResponse.json({ items: top, dreGroups })
