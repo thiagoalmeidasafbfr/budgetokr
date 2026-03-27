@@ -22,7 +22,7 @@ export interface ExecChartConfig {
   palette: string
   valueFormat: 'currency' | 'percent'
   labelPosition: 'inside' | 'outside' | 'none'
-  groupBy: 'agrupamento_arvore' | 'contrapartida'
+  groupBy: 'agrupamento_arvore' | 'dre' | 'conta_contabil' | 'centro_custo' | 'contrapartida'
 }
 
 interface ChartItem {
@@ -164,24 +164,38 @@ function ExecChartCard({
 
   const tooltip = <ExecTooltip valueFormat={vf} total={total} />
 
+  // Inside labels only — clean, no connector lines
+  // Threshold: 8% for inside (enough room to read), 5% for outside (text only, no lines)
   const renderPieLabel = ({
     cx, cy, midAngle, innerRadius, outerRadius, percent, value,
   }: { cx: number; cy: number; midAngle: number; innerRadius: number; outerRadius: number; percent: number; value: number }) => {
-    if (lp === 'none' || percent < 0.04) return null
+    if (lp === 'none') return null
     const RADIAN = Math.PI / 180
-    const isIn   = lp !== 'outside'
-    const r      = isIn
-      ? innerRadius + (outerRadius - innerRadius) * 0.5
-      : outerRadius * 1.25
-    const x = cx + r * Math.cos(-midAngle * RADIAN)
-    const y = cy + r * Math.sin(-midAngle * RADIAN)
-    const label = vf === 'percent'
-      ? `${(percent * 100).toFixed(0)}%`
-      : tickFmt(value)
+    const label  = vf === 'percent' ? `${(percent * 100).toFixed(0)}%` : tickFmt(value)
+
+    if (lp !== 'outside') {
+      // Inside: only show when slice is big enough to fit the text
+      if (percent < 0.08) return null
+      const r = innerRadius + (outerRadius - innerRadius) * 0.55
+      const x = cx + r * Math.cos(-midAngle * RADIAN)
+      const y = cy + r * Math.sin(-midAngle * RADIAN)
+      return (
+        <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central"
+          fontSize={11} fontWeight={700} style={{ pointerEvents: 'none' }}>
+          {label}
+        </text>
+      )
+    }
+
+    // Outside: text-only label at fixed distance, no connector lines
+    if (percent < 0.05) return null
+    const r      = outerRadius + 16
+    const x      = cx + r * Math.cos(-midAngle * RADIAN)
+    const y      = cy + r * Math.sin(-midAngle * RADIAN)
+    const anchor = x > cx ? 'start' : 'end'
     return (
-      <text x={x} y={y} fill={isIn ? 'white' : '#334155'}
-        textAnchor="middle" dominantBaseline="central"
-        fontSize={isIn ? 10 : 9} fontWeight={600}>
+      <text x={x} y={y} fill="#475569" textAnchor={anchor} dominantBaseline="central"
+        fontSize={9} fontWeight={600} style={{ pointerEvents: 'none' }}>
         {label}
       </text>
     )
@@ -198,7 +212,14 @@ function ExecChartCard({
           <p className="text-sm font-semibold text-gray-800 truncate">{config.title}</p>
           <p className="text-xs text-gray-400 mt-0.5">
             {fieldLabel} · Top {config.topN}
-            {config.groupBy === 'contrapartida' && <span className="ml-1 text-amber-600">· Contrapartida</span>}
+            {config.groupBy && config.groupBy !== 'agrupamento_arvore' && (
+              <span className="ml-1 text-amber-600">· {{
+                dre: 'Categoria DRE',
+                conta_contabil: 'Conta',
+                centro_custo: 'Centro de Custo',
+                contrapartida: 'Contrapartida',
+              }[config.groupBy]}</span>
+            )}
             {config.dreGroup && <span className="ml-1">· {config.dreGroup}</span>}
           </p>
         </div>
@@ -236,11 +257,11 @@ function ExecChartCard({
                     dataKey="absValue"
                     nameKey="name"
                     cx="50%" cy="50%"
-                    innerRadius={config.chartType === 'donut' ? '48%' : 0}
-                    outerRadius={lp === 'outside' ? '62%' : '78%'}
-                    labelLine={lp === 'outside'}
-                    label={renderPieLabel}
-                    strokeWidth={1}
+                    innerRadius={config.chartType === 'donut' ? '46%' : 0}
+                    outerRadius={lp === 'outside' ? '60%' : '78%'}
+                    labelLine={false}
+                    label={lp !== 'none' ? renderPieLabel : false}
+                    strokeWidth={2}
                     stroke="#fff"
                   >
                     {absItems.map((_, i) => <Cell key={i} fill={palette[i % palette.length]} />)}
@@ -276,15 +297,18 @@ function ExecChartCard({
 
             {/* Legend */}
             <div className="flex flex-wrap gap-x-3 gap-y-1">
-              {items.map((it, i) => (
-                <div key={i} className="flex items-center gap-1 text-[10px] text-gray-500">
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: palette[i % palette.length] }} />
-                  <span className="truncate max-w-[110px]" title={it.name}>{it.name}</span>
-                  {vf === 'percent' && total > 0 && (
-                    <span className="text-gray-400">({((Math.abs(it.value) / total) * 100).toFixed(0)}%)</span>
-                  )}
-                </div>
-              ))}
+              {items.map((it, i) => {
+                const pct = total > 0 ? ((Math.abs(it.value) / total) * 100).toFixed(0) : '0'
+                return (
+                  <div key={i} className="flex items-center gap-1 text-[10px] text-gray-500">
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: palette[i % palette.length] }} />
+                    <span className="truncate max-w-[110px]" title={it.name}>{it.name}</span>
+                    <span className="text-gray-400">
+                      {vf === 'percent' ? `${pct}%` : `(${pct}%)`}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}
@@ -312,7 +336,7 @@ function ConfigModal({
   const [palette,       setPalette]       = useState(config?.palette       ?? DEFAULT_PALETTE)
   const [valueFormat,   setValueFormat]   = useState<ExecChartConfig['valueFormat']>(config?.valueFormat   ?? 'currency')
   const [labelPosition, setLabelPosition] = useState<ExecChartConfig['labelPosition']>(config?.labelPosition ?? 'inside')
-  const [groupBy,       setGroupBy]       = useState<ExecChartConfig['groupBy']>(config?.groupBy ?? 'agrupamento_arvore')
+  const [groupBy,       setGroupBy]       = useState<ExecChartConfig['groupBy']>(config?.groupBy    ?? 'agrupamento_arvore')
   const [dreGroups,     setDreGroups]     = useState<string[]>([])
 
   useEffect(() => {
@@ -379,16 +403,27 @@ function ConfigModal({
 
           {/* GroupBy */}
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Nível de detalhe</label>
-            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+            <label className="block text-xs font-medium text-gray-600 mb-2">Dimensão de análise</label>
+            <div className="grid grid-cols-1 gap-1.5">
               {([
-                ['agrupamento_arvore', 'Grupos DRE'],
-                ['contrapartida',      'Contrapartida (clientes/fornecedores)'],
-              ] as const).map(([v, lbl]) => (
+                ['agrupamento_arvore', 'Agrupamento DRE',   'Ex: Receitas Comerciais, Despesas Operacionais'],
+                ['dre',               'Categoria DRE',      'Ex: Receitas, Custos, EBITDA'],
+                ['conta_contabil',    'Conta Contábil',     'Ex: Receita de Licenciamento, Salários'],
+                ['centro_custo',      'Centro de Custo',    'Quais CCs geram mais receita/despesa'],
+                ['contrapartida',     'Contrapartida',      'Clientes, fornecedores ou parceiros'],
+              ] as const).map(([v, lbl, desc]) => (
                 <button key={v} onClick={() => setGroupBy(v)}
-                  className={cn('flex-1 py-2 px-2 font-medium transition-colors text-center',
-                    groupBy === v ? 'bg-gray-800 text-white' : 'text-gray-600 hover:bg-gray-50')}>
-                  {lbl}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition-colors',
+                    groupBy === v
+                      ? 'border-gray-800 bg-gray-800 text-white'
+                      : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                  )}>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold leading-tight">{lbl}</p>
+                    <p className={cn('text-[10px] leading-tight mt-0.5', groupBy === v ? 'text-gray-300' : 'text-gray-400')}>{desc}</p>
+                  </div>
+                  {groupBy === v && <span className="text-[10px] font-bold flex-shrink-0">✓</span>}
                 </button>
               ))}
             </div>
