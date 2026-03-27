@@ -187,12 +187,12 @@ export default function MedidasPage() {
         </div>
       )}
 
-      <div className="flex items-start gap-2 bg-indigo-50 border border-indigo-100 text-indigo-700 px-4 py-3 rounded-lg text-sm">
+      <div className="flex items-start gap-2 bg-gray-50 border border-gray-100 text-gray-700 px-4 py-3 rounded-lg text-sm">
         <Info size={15} className="mt-0.5 flex-shrink-0" />
         <div>
           <p className="font-medium">Como funciona</p>
-          <p className="text-indigo-600 text-xs mt-0.5">
-            <strong>Simples:</strong> soma de <code className="bg-indigo-100 px-1 rounded">debito_credito</code> filtrada. Ex: SG&A = agrupamento = &quot;Operating Expenses&quot;.<br />
+          <p className="text-gray-700 text-xs mt-0.5">
+            <strong>Simples:</strong> soma de <code className="bg-gray-100 px-1 rounded">debito_credito</code> filtrada. Ex: SG&A = agrupamento = &quot;Operating Expenses&quot;.<br />
             <strong>Ratio:</strong> Numerador &divide; Denominador. Ex: SG&A Marketing / Receita Marketing = % do custo sobre receita.<br />
             <strong>E / OU:</strong> Cada critério pode ser conectado ao anterior com &quot;E&quot; (ambos devem ser verdadeiros) ou &quot;OU&quot; (qualquer um basta). Clique no conector para alternar.
           </p>
@@ -201,7 +201,7 @@ export default function MedidasPage() {
 
       {/* Form */}
       {editing !== null && (
-        <Card className="ring-1 ring-indigo-100">
+        <Card className="ring-1 ring-gray-100">
           <CardHeader>
             <CardTitle>{editing === -1 ? 'Nova Medida' : 'Editar Medida'}</CardTitle>
             <CardDescription>Defina filtros e conecte-os com E ou OU clicando no conector entre cada linha.</CardDescription>
@@ -212,7 +212,7 @@ export default function MedidasPage() {
               <div className="flex-1">
                 <label className="text-sm font-medium text-gray-700 mb-1 block">Nome *</label>
                 <input value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
                   placeholder="Ex: SG&A, COGS, % Marketing sobre Receita…" />
               </div>
               <div>
@@ -231,13 +231,13 @@ export default function MedidasPage() {
               <div className="col-span-2">
                 <label className="text-sm font-medium text-gray-700 mb-1 block">Descrição</label>
                 <input value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
                   placeholder="Descrição opcional" />
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-1 block">Unidade</label>
                 <input value={form.unidade} onChange={e => setForm(f => ({ ...f, unidade: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
                   placeholder="R$, %, x…" />
               </div>
             </div>
@@ -263,8 +263,8 @@ export default function MedidasPage() {
                         className={cn(
                           'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
                           selected
-                            ? 'bg-indigo-600 text-white border-indigo-600'
-                            : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-400'
+                            ? 'bg-gray-900 text-white border-gray-700'
+                            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-500'
                         )}>
                         {d}
                       </button>
@@ -281,7 +281,7 @@ export default function MedidasPage() {
                 {([['simples','Simples (soma)'],['ratio','Ratio (A ÷ B)']] as const).map(([t, label]) => (
                   <button key={t} onClick={() => setForm(f => ({ ...f, tipo_medida: t }))}
                     className={cn('flex items-center gap-2 px-4 py-2 rounded-lg text-sm border font-medium transition-colors',
-                      form.tipo_medida === t ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50')}>
+                      form.tipo_medida === t ? 'bg-gray-900 text-white border-gray-700' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50')}>
                     {t === 'ratio' && <Divide size={14} />}{label}
                   </button>
                 ))}
@@ -311,9 +311,9 @@ export default function MedidasPage() {
             {/* Ratio: numerador + denominador */}
             {form.tipo_medida === 'ratio' && (
               <div className="space-y-4">
-                <div className="border border-indigo-100 rounded-xl p-4 space-y-3 bg-indigo-50/30">
-                  <p className="text-sm font-semibold text-indigo-700 flex items-center gap-1.5">
-                    <span className="w-5 h-5 bg-indigo-600 text-white rounded-full flex items-center justify-center text-xs">A</span>
+                <div className="border border-gray-100 rounded-xl p-4 space-y-3 bg-gray-50/30">
+                  <p className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                    <span className="w-5 h-5 bg-gray-900 text-white rounded-full flex items-center justify-center text-xs">A</span>
                     Numerador
                   </p>
                   <FonteSelector value={form.tipo_fonte} onChange={v => setForm(f => ({ ...f, tipo_fonte: v }))} />
@@ -467,7 +467,7 @@ function FonteSelector({ value, onChange }: { value: 'budget'|'razao'|'ambos'; o
         {(['budget','razao','ambos'] as const).map(t => (
           <button key={t} onClick={() => onChange(t)}
             className={cn('px-3 py-1.5 rounded-lg text-sm border font-medium transition-colors',
-              value === t ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50')}>
+              value === t ? 'bg-gray-900 text-white border-gray-700' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50')}>
             {t === 'budget' ? 'Budget' : t === 'razao' ? 'Razão' : 'Budget + Razão'}
           </button>
         ))}
@@ -512,7 +512,7 @@ function FilterSection({
           return (
             <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg p-3">
               {i === 0 ? (
-                <span className="text-xs font-medium px-2 py-0.5 rounded bg-indigo-100 text-indigo-600 flex-shrink-0">
+                <span className="text-xs font-medium px-2 py-0.5 rounded bg-gray-100 text-gray-700 flex-shrink-0">
                   ONDE
                 </span>
               ) : (
@@ -531,7 +531,7 @@ function FilterSection({
               )}
               <select value={f.column}
                 onChange={e => { onUpdate(i, { column: e.target.value as FilterColumn, value: '' }); onFocus(`${prefix}-${e.target.value}`) }}
-                className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-400">
                 {Object.entries(groupedCols).map(([group, cols]) => (
                   <optgroup key={group} label={group}>
                     {cols.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
@@ -539,7 +539,7 @@ function FilterSection({
                 ))}
               </select>
               <select value={f.operator} onChange={e => onUpdate(i, { operator: e.target.value as FilterOperator })}
-                className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-400">
                 {OPERATORS.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
               </select>
               <div className="relative flex-1">
@@ -548,7 +548,7 @@ function FilterSection({
                   onFocus={() => onFocus(`${prefix}-${f.column}`)}
                   onBlur={onBlur}
                   placeholder={f.operator === 'in' ? 'val1, val2, val3' : 'Valor…'}
-                  className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                  className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-400" />
                 {suggestions === `${prefix}-${f.column}` && (distinctVals[f.column]?.length ?? 0) > 0 && (
                   <div className="absolute top-full left-0 right-0 z-20 mt-0.5 bg-white border border-gray-100 rounded-lg shadow-lg max-h-44 overflow-y-auto">
                     {(distinctVals[f.column] ?? [])
@@ -556,7 +556,7 @@ function FilterSection({
                       .slice(0, 25)
                       .map(v => (
                         <button key={v} onMouseDown={() => onUpdate(i, { value: v })}
-                          className="w-full text-left px-3 py-1.5 text-sm hover:bg-indigo-50 text-gray-700 truncate">
+                          className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 text-gray-700 truncate">
                           {v}
                         </button>
                       ))}

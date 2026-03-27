@@ -13,6 +13,8 @@ import type { KpiManual, KpiValor } from '@/lib/query'
 
 import { CHART_COLORS as DEFAULT_COLORS } from '@/lib/constants'
 import { YearFilter } from '@/components/YearFilter'
+import dynamic from 'next/dynamic'
+const ExecCharts = dynamic(() => import('@/components/ExecCharts'), { ssr: false })
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -194,7 +196,7 @@ function DetalhamentoModal({ ctx, onClose }: { ctx: DetModalState; onClose: () =
           <div className="flex items-center gap-2">
             {!loading && rows.length > 0 && (
               <button onClick={exportCSV}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-indigo-50 hover:text-indigo-700 text-gray-600 transition-colors font-medium">
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-50 hover:text-gray-700 text-gray-600 transition-colors font-medium">
                 <Download size={13} /> Exportar CSV
               </button>
             )}
@@ -207,10 +209,10 @@ function DetalhamentoModal({ ctx, onClose }: { ctx: DetModalState; onClose: () =
           <div className="flex items-center gap-2 px-5 py-2 border-b bg-gray-50">
             <input type="text" value={textFilter} onChange={e => setTextFilter(e.target.value)}
               placeholder="Buscar em todos os campos…"
-              className="flex-1 text-xs border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white" />
+              className="flex-1 text-xs border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-gray-400 bg-white" />
             <div className="relative" ref={colsRef}>
               <button onClick={() => setShowCols(v => !v)}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-400 hover:text-indigo-700 text-gray-600 transition-colors">
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-gray-500 hover:text-gray-700 text-gray-600 transition-colors">
                 <Columns3 size={13} /> Colunas
               </button>
               {showCols && (
@@ -219,7 +221,7 @@ function DetalhamentoModal({ ctx, onClose }: { ctx: DetModalState; onClose: () =
                     <label key={c.key} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
                       <input type="checkbox" checked={visibleCols.has(c.key)}
                         onChange={e => setVisibleCols(prev => { const n = new Set(prev); e.target.checked ? n.add(c.key) : n.delete(c.key); return n })}
-                        className="w-3 h-3 accent-indigo-600" />
+                        className="w-3 h-3 accent-gray-800" />
                       <span className="text-xs text-gray-700">{c.label}</span>
                     </label>
                   ))}
@@ -231,7 +233,7 @@ function DetalhamentoModal({ ctx, onClose }: { ctx: DetModalState; onClose: () =
         )}
         {loading ? (
           <div className="flex-1 flex items-center justify-center p-10">
-            <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-5 h-5 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : (
           <div className="flex-1 overflow-auto">
@@ -243,8 +245,8 @@ function DetalhamentoModal({ ctx, onClose }: { ctx: DetModalState; onClose: () =
                       className={cn('px-3 py-2 font-medium whitespace-nowrap cursor-pointer select-none hover:bg-gray-600', c.align === 'right' ? 'text-right' : 'text-left')}>
                       <span className="inline-flex items-center gap-1">
                         {c.label}
-                        <ArrowUpDown size={10} className={cn('opacity-40', sortCol === c.key && 'opacity-100 text-indigo-300')} />
-                        {sortCol === c.key && <span className="text-indigo-300 text-[9px]">{sortDir === 'asc' ? '▲' : '▼'}</span>}
+                        <ArrowUpDown size={10} className={cn('opacity-40', sortCol === c.key && 'opacity-100 text-gray-400')} />
+                        {sortCol === c.key && <span className="text-gray-400 text-[9px]">{sortDir === 'asc' ? '▲' : '▼'}</span>}
                       </span>
                     </th>
                   ))}
@@ -254,7 +256,7 @@ function DetalhamentoModal({ ctx, onClose }: { ctx: DetModalState; onClose: () =
                 {displayed.map((r, i) => (
                   <tr key={r.id} className={cn('border-b border-gray-100', i % 2 === 0 ? 'bg-white' : 'bg-gray-50/60')}>
                     {visibleCols.has('data')          && <td className="px-3 py-1.5 whitespace-nowrap font-mono">{r.data_lancamento}</td>}
-                    {visibleCols.has('tipo')          && <td className="px-3 py-1.5"><span className={cn('text-xs px-1.5 py-0.5 rounded font-medium', r.tipo === 'budget' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700')}>{r.tipo === 'budget' ? 'Budget' : 'Real'}</span></td>}
+                    {visibleCols.has('tipo')          && <td className="px-3 py-1.5"><span className={cn('text-xs px-1.5 py-0.5 rounded font-medium', r.tipo === 'budget' ? 'bg-gray-100 text-gray-700' : 'bg-emerald-100 text-emerald-700')}>{r.tipo === 'budget' ? 'Budget' : 'Real'}</span></td>}
                     {visibleCols.has('centro')        && <td className="px-3 py-1.5 whitespace-nowrap">{r.centro_custo}{r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}</td>}
                     {visibleCols.has('dre')           && <td className="px-3 py-1.5 whitespace-nowrap">{r.dre}</td>}
                     {visibleCols.has('agrupamento')   && <td className="px-3 py-1.5 whitespace-nowrap">{r.agrupamento_arvore}</td>}
@@ -295,7 +297,7 @@ function DreFull({
 }) {
   if (loading) return (
     <div className="flex items-center justify-center py-12">
-      <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      <div className="w-5 h-5 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
     </div>
   )
   const tree = dreLinhas.length > 0
@@ -309,7 +311,7 @@ function DreFull({
         <thead>
           <tr className="border-b bg-gray-50">
             <th className="text-left px-5 py-3 font-medium text-gray-500">Demonstrativo Gerencial</th>
-            <th className="text-right px-5 py-3 font-medium text-gray-500 hover:text-indigo-600 cursor-pointer select-none">Orçado</th>
+            <th className="text-right px-5 py-3 font-medium text-gray-500 hover:text-gray-700 cursor-pointer select-none">Orçado</th>
             <th className="text-right px-5 py-3 font-medium text-gray-500 hover:text-emerald-600 cursor-pointer select-none">Realizado</th>
             <th className="text-right px-5 py-3 font-medium text-gray-500">Variação</th>
             <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>
@@ -327,12 +329,12 @@ function DreFull({
                     </button>
                   ) : <span className="w-5" />}
                   <span onClick={() => !row.isSubtotal && onDetalhamento(row.dre ?? row.name, row.agrupamento, 'ambos')}
-                    className={cn(!row.isSubtotal && 'cursor-pointer hover:text-indigo-700')}>
+                    className={cn(!row.isSubtotal && 'cursor-pointer hover:text-gray-700')}>
                     {row.name}
                   </span>
                 </div>
               </td>
-              <td className={cn('px-5 py-2.5 text-right cursor-pointer hover:text-indigo-700 hover:bg-indigo-50/60', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}
+              <td className={cn('px-5 py-2.5 text-right cursor-pointer hover:text-gray-700 hover:bg-gray-50/60', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}
                 onClick={() => !row.isSubtotal && onDetalhamento(row.dre ?? row.name, row.agrupamento, 'budget')}>
                 {formatCurrency(row.budget)}
               </td>
@@ -412,7 +414,7 @@ function KpiEditModal({ kpi, departamento, onSave, onDelete, onClose }: KpiEditM
             <input
               value={nome}
               onChange={e => setNome(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
               placeholder="Ex: NPS, Churn Rate, MRR..."
             />
           </div>
@@ -422,7 +424,7 @@ function KpiEditModal({ kpi, departamento, onSave, onDelete, onClose }: KpiEditM
               <input
                 value={unidade}
                 onChange={e => setUnidade(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
                 placeholder="R$, %, un, x..."
               />
             </div>
@@ -454,7 +456,7 @@ function KpiEditModal({ kpi, departamento, onSave, onDelete, onClose }: KpiEditM
               value={descricao}
               onChange={e => setDescricao(e.target.value)}
               rows={2}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 resize-none"
               placeholder="Descrição opcional..."
             />
           </div>
@@ -464,7 +466,7 @@ function KpiEditModal({ kpi, departamento, onSave, onDelete, onClose }: KpiEditM
                 type="checkbox"
                 checked={temBudget === 1}
                 onChange={e => setTemBudget(e.target.checked ? 1 : 0)}
-                className="w-4 h-4 accent-indigo-600"
+                className="w-4 h-4 accent-gray-800"
               />
               <span className="text-sm text-gray-700">Possui meta (budget)</span>
             </label>
@@ -571,7 +573,7 @@ function KpiValoresModal({ kpi, periodos, onClose, onSaved }: KpiValoresModalPro
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {loading ? (
             <div className="flex items-center justify-center h-32">
-              <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              <div className="w-5 h-5 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : rows.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-8">
@@ -598,7 +600,7 @@ function KpiValoresModal({ kpi, periodos, onClose, onSaved }: KpiValoresModalPro
                         step="any"
                         value={row.valor}
                         onChange={e => updateRow(idx, 'valor', e.target.value)}
-                        className="w-28 border border-gray-200 rounded px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                        className="w-28 border border-gray-200 rounded px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-gray-300"
                         placeholder="0"
                       />
                     </td>
@@ -609,7 +611,7 @@ function KpiValoresModal({ kpi, periodos, onClose, onSaved }: KpiValoresModalPro
                           step="any"
                           value={row.meta}
                           onChange={e => updateRow(idx, 'meta', e.target.value)}
-                          className="w-28 border border-gray-200 rounded px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                          className="w-28 border border-gray-200 rounded px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-gray-300"
                           placeholder="—"
                         />
                       </td>
@@ -685,7 +687,7 @@ function KpiManagementModal({ departamento, kpis, onClose, onRefresh }: KpiManag
                         <p className="text-xs text-gray-400">
                           {kpi.unidade && <span className="mr-2">{kpi.unidade}</span>}
                           {kpi.departamento === '' ? 'Global' : kpi.departamento}
-                          {kpi.tem_budget === 1 && <span className="ml-2 text-indigo-500">com meta</span>}
+                          {kpi.tem_budget === 1 && <span className="ml-2 text-gray-600">com meta</span>}
                         </p>
                       </div>
                     </div>
@@ -762,7 +764,7 @@ function MedidaRow({
   return (
     <div className={cn(
       'rounded-xl border transition-colors flex items-center gap-0',
-      active ? 'border-indigo-200 bg-indigo-50' : 'border-gray-100',
+      active ? 'border-gray-200 bg-gray-50' : 'border-gray-100',
     )}>
       {/* Left: toggle area */}
       <button
@@ -790,7 +792,7 @@ function MedidaRow({
           }}
           placeholder="R$, %…"
           className={cn(
-            'w-14 text-center text-xs border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-colors',
+            'w-14 text-center text-xs border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors',
             saved ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200 bg-white hover:border-gray-300'
           )}
         />
@@ -803,7 +805,7 @@ function MedidaRow({
         className="flex-shrink-0 p-3 rounded-r-xl hover:bg-black/5 transition-colors"
       >
         {active
-          ? <CheckSquare size={16} className="text-indigo-600" />
+          ? <CheckSquare size={16} className="text-gray-700" />
           : <Square size={16} className="text-gray-300" />}
       </button>
     </div>
@@ -947,7 +949,7 @@ function MedidaDisplayCard({ card, dept }: { card: MedidaCard; dept?: string }) 
           <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5" style={{ backgroundColor: card.medida.cor }} />
           <p className="text-sm font-semibold text-gray-800 truncate">{card.medida.nome}</p>
           {unidade && <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full flex-shrink-0">{unidade}</span>}
-          {dept && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 truncate max-w-[80px]">{dept}</span>}
+          {dept && <span className="text-[10px] bg-gray-50 text-gray-700 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 truncate max-w-[80px]">{dept}</span>}
         </div>
 
         {sorted.length > 0 ? (
@@ -1034,11 +1036,11 @@ function KpiCard({ kpi, valores, onEditValores, dept }: KpiCardProps) {
             <p className="text-sm font-semibold text-gray-800 truncate">{kpi.nome}</p>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0 ml-1">
-            {dept && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-full font-medium truncate max-w-[80px]">{dept}</span>}
+            {dept && <span className="text-[10px] bg-gray-50 text-gray-700 px-1.5 py-0.5 rounded-full font-medium truncate max-w-[80px]">{dept}</span>}
             {onEditValores && (
               <button
                 onClick={onEditValores}
-                className="text-xs text-gray-400 hover:text-indigo-600 flex items-center gap-0.5"
+                className="text-xs text-gray-400 hover:text-gray-700 flex items-center gap-0.5"
               >
                 <Edit2 size={11} />
               </button>
@@ -1449,7 +1451,7 @@ export default function DeptDashboardPage() {
                   className={cn(
                     'w-full text-left px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
                     selDept === d
-                      ? 'bg-indigo-50 text-indigo-700'
+                      ? 'bg-gray-50 text-gray-700'
                       : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                   )}
                 >
@@ -1465,14 +1467,14 @@ export default function DeptDashboardPage() {
           <div className="p-3 border-b border-gray-100 space-y-2">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Departamento</p>
             {forcedDepts.length === 1 ? (
-              <p className="text-sm font-semibold text-indigo-700 px-1">{forcedDepts[0]}</p>
+              <p className="text-sm font-semibold text-gray-700 px-1">{forcedDepts[0]}</p>
             ) : (
               <>
                 <select
                   value={selDept}
                   onChange={e => { setSelDept(e.target.value); setForcedDept(e.target.value) }}
                   disabled={combineDepts}
-                  className="w-full text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-2 py-1 outline-none cursor-pointer disabled:opacity-50 disabled:cursor-default"
+                  className="w-full text-sm font-semibold text-gray-700 bg-gray-50 border border-gray-200 rounded px-2 py-1 outline-none cursor-pointer disabled:opacity-50 disabled:cursor-default"
                 >
                   {forcedDepts.map(d => (
                     <option key={d} value={d}>{d}</option>
@@ -1483,8 +1485,8 @@ export default function DeptDashboardPage() {
                   className={cn(
                     'w-full text-xs font-medium px-2 py-1.5 rounded-lg border transition-colors',
                     combineDepts
-                      ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700'
-                      : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300 hover:text-indigo-600'
+                      ? 'bg-gray-900 text-white border-gray-700 hover:bg-gray-800'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:text-gray-700'
                   )}
                 >
                   {combineDepts ? '✓ Combinando todos' : 'Combinar departamentos'}
@@ -1520,9 +1522,9 @@ export default function DeptDashboardPage() {
                       onChange={e => setSelPeriods(prev =>
                         e.target.checked ? [...new Set([...prev, ...months])] : prev.filter(p => !months.includes(p))
                       )}
-                      className="w-3 h-3 accent-indigo-600 flex-shrink-0" />
+                      className="w-3 h-3 accent-gray-800 flex-shrink-0" />
                     <span className="text-xs font-semibold text-gray-700">{year}</span>
-                    {someSel && <span className="ml-auto text-[10px] text-indigo-500 tabular-nums">{selInYear.length}/{months.length}</span>}
+                    {someSel && <span className="ml-auto text-[10px] text-gray-600 tabular-nums">{selInYear.length}/{months.length}</span>}
                   </div>
                   {isOpen && (
                     <div className="ml-4 space-y-0.5">
@@ -1530,7 +1532,7 @@ export default function DeptDashboardPage() {
                         <label key={m} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
                           <input type="checkbox" checked={selPeriods.includes(m)}
                             onChange={e => setSelPeriods(prev => e.target.checked ? [...prev, m] : prev.filter(x => x !== m))}
-                            className="w-3 h-3 accent-indigo-600" />
+                            className="w-3 h-3 accent-gray-800" />
                           <span className="text-xs text-gray-600">{formatPeriodo(m)}</span>
                         </label>
                       ))}
@@ -1578,7 +1580,7 @@ export default function DeptDashboardPage() {
                   {combineDepts ? forcedDepts.join(' + ') : selDept}
                 </h1>
                 <p className="text-gray-500 text-sm mt-0.5">
-                  {combineDepts && <span className="text-indigo-600 font-medium mr-1">[Combinado]</span>}
+                  {combineDepts && <span className="text-gray-700 font-medium mr-1">[Combinado]</span>}
                   {selPeriods.length > 0
                     ? `${selPeriods.length} período(s) selecionado(s)`
                     : 'Todos os períodos'}
@@ -1599,7 +1601,7 @@ export default function DeptDashboardPage() {
                   }}
                 />
                 {loading && (
-                  <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                  <div className="w-5 h-5 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
                 )}
               </div>
             </div>
@@ -1610,7 +1612,7 @@ export default function DeptDashboardPage() {
                 label="Total Budget"
                 value={formatCurrency(totals.budget)}
                 icon={Target}
-                color="bg-indigo-500"
+                color="bg-gray-800"
               />
               <SummaryCard
                 label="Total Realizado"
@@ -1706,8 +1708,8 @@ export default function DeptDashboardPage() {
                       <thead>
                         <tr className="border-b bg-gray-50">
                           <th className="text-left px-5 py-3 font-medium text-gray-500">DRE Gerencial</th>
-                          <th className="text-right px-5 py-3 font-medium text-gray-500 cursor-pointer select-none hover:text-indigo-600">Budget</th>
-                          <th className="text-right px-5 py-3 font-medium text-gray-500 cursor-pointer select-none hover:text-indigo-600">Realizado</th>
+                          <th className="text-right px-5 py-3 font-medium text-gray-500 cursor-pointer select-none hover:text-gray-700">Budget</th>
+                          <th className="text-right px-5 py-3 font-medium text-gray-500 cursor-pointer select-none hover:text-gray-700">Realizado</th>
                           <th className="text-right px-5 py-3 font-medium text-gray-500">Variação</th>
                           <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>
                           <th className="px-5 py-3" />
@@ -1715,12 +1717,12 @@ export default function DeptDashboardPage() {
                       </thead>
                       <tbody>
                         {dreRows.map((row, i) => (
-                          <tr key={i} className="border-b border-gray-50 hover:bg-indigo-50/40 transition-colors group">
+                          <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/40 transition-colors group">
                             <td className="px-5 py-3 font-medium text-gray-900 cursor-pointer"
                               onClick={() => setDetModal({ dre: row.dre, departamento: selDept, periodos: selPeriods, tipo: 'ambos' })}>
                               {row.dre}
                             </td>
-                            <td className="px-5 py-3 text-right text-gray-600 cursor-pointer hover:text-indigo-700 hover:bg-indigo-50/60"
+                            <td className="px-5 py-3 text-right text-gray-600 cursor-pointer hover:text-gray-700 hover:bg-gray-50/60"
                               onClick={() => setDetModal({ dre: row.dre, departamento: selDept, periodos: selPeriods, tipo: 'budget' })}>
                               {formatCurrency(row.budget)}
                             </td>
@@ -1736,7 +1738,7 @@ export default function DeptDashboardPage() {
                                 {formatPct(row.variacao_pct)}
                               </span>
                             </td>
-                            <td className="px-3 py-3 text-gray-300 group-hover:text-indigo-400 cursor-pointer"
+                            <td className="px-3 py-3 text-gray-300 group-hover:text-gray-500 cursor-pointer"
                               onClick={() => setDetModal({ dre: row.dre, departamento: selDept, periodos: selPeriods, tipo: 'ambos' })}>
                               <ExternalLink size={13} />
                             </td>
@@ -1872,6 +1874,14 @@ export default function DeptDashboardPage() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Section 6 — Executive Charts */}
+            <ExecCharts
+              selPeriodos={selPeriods.length > 0 ? selPeriods : allPeriodos.filter(p => p.startsWith(selYear ?? '2026'))}
+              allDepts={[]}
+              storageKey={`exec-charts-dept-${selDept}-v1`}
+              canEdit={isMaster}
+            />
           </>
         )}
       </div>

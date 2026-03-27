@@ -26,7 +26,7 @@ const iconColors = new Map<React.ElementType, string>([
   [FileText,        'text-sky-400'],
   [Database,        'text-purple-400'],
   [Upload,          'text-green-400'],
-  [Shield,          'text-indigo-400'],
+  [Shield,          'text-gray-500'],
   [History,         'text-amber-300'],
   [Building2,       'text-orange-300'],
   [BookOpen,        'text-lime-400'],

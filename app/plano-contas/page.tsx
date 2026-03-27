@@ -332,8 +332,8 @@ export default function PlanoContasPage() {
                     className={cn(
                       'px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors',
                       expandLevel === lvl
-                        ? 'bg-indigo-600 text-white border-indigo-600'
-                        : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-400'
+                        ? 'bg-gray-900 text-white border-gray-700'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-gray-500'
                     )}
                   >
                     Nv {lvl}
@@ -368,13 +368,13 @@ export default function PlanoContasPage() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Buscar por número ou nome da conta..."
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
             />
           </div>
 
           {loading ? (
             <div className="flex items-center justify-center h-[60vh]">
-              <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+              <div className="w-6 h-6 border-2 border-gray-700 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : !data || rows.length === 0 ? (
             <Card>
@@ -455,7 +455,7 @@ export default function PlanoContasPage() {
                                       if (e.key === 'Enter') saveAccountName()
                                       if (e.key === 'Escape') cancelEditing()
                                     }}
-                                    className="border border-indigo-400 rounded px-1.5 py-0.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-400 min-w-[200px]"
+                                    className="border border-gray-500 rounded px-1.5 py-0.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-400 min-w-[200px]"
                                     placeholder="Nome da conta..."
                                   />
                                 ) : (
@@ -468,13 +468,13 @@ export default function PlanoContasPage() {
                                     )}
                                     onClick={() => !row.nome && startEditing(row.numero, '')}
                                   >
-                                    {row.nome || <span className="italic text-gray-300 hover:text-indigo-400">sem nome — clique para editar</span>}
+                                    {row.nome || <span className="italic text-gray-300 hover:text-gray-500">sem nome — clique para editar</span>}
                                     {row.nome && (
                                       <button
                                         onClick={e => { e.stopPropagation(); startEditing(row.numero, row.nome) }}
                                         className={cn(
                                           'inline-flex ml-1.5 opacity-0 group-hover/name:opacity-100 transition-opacity',
-                                          row.nivel === 1 ? 'text-white/50 hover:text-white' : 'text-gray-300 hover:text-indigo-500'
+                                          row.nivel === 1 ? 'text-white/50 hover:text-white' : 'text-gray-300 hover:text-gray-600'
                                         )}
                                       >
                                         <Pencil size={11} />

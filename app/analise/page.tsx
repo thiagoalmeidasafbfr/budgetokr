@@ -333,7 +333,7 @@ export default function AnalisePage() {
                 {medidas.map(m => (
                   <button key={m.id} onClick={() => selectMedida(m.id)}
                     className={cn('w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left text-xs transition-colors',
-                      selMedida === m.id ? 'bg-indigo-50 text-indigo-700 font-medium' : 'hover:bg-gray-50 text-gray-600')}>
+                      selMedida === m.id ? 'bg-gray-50 text-gray-700 font-medium' : 'hover:bg-gray-50 text-gray-600')}>
                     <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: m.cor }} />
                     <span className="truncate">{m.nome}</span>
                   </button>
@@ -356,14 +356,14 @@ export default function AnalisePage() {
               {([['table','Tabela',<Table2 key="t" size={13} />],['chart','Gráfico',<BarChart3 key="c" size={13} />]] as const).map(([v,l,icon]) => (
                 <button key={v} onClick={() => setViewMode(v as ViewMode)}
                   className={cn('flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-                    viewMode === v ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+                    viewMode === v ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50')}>
                   {icon}{l}
                 </button>
               ))}
               {selMedida && (
                 <button onClick={() => setViewMode('medida')}
                   className={cn('flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-                    viewMode === 'medida' ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+                    viewMode === 'medida' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50')}>
                   <Target size={13} />{activeMedida?.nome}
                 </button>
               )}
@@ -393,7 +393,7 @@ export default function AnalisePage() {
             </div>
           )}
 
-          {loading && <div className="flex items-center justify-center h-40"><div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>}
+          {loading && <div className="flex items-center justify-center h-40"><div className="w-5 h-5 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" /></div>}
 
           {/* TABLE VIEW */}
           {!loading && viewMode === 'table' && (
@@ -493,7 +493,7 @@ export default function AnalisePage() {
                   ] as const).map(([g, label]) => (
                     <button key={g} onClick={() => { setMedidaGroupBy(g); setMedidaPeriodView('mes') }}
                       className={cn('px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
-                        medidaGroupBy === g ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+                        medidaGroupBy === g ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50')}>
                       {label}
                     </button>
                   ))}
@@ -505,7 +505,7 @@ export default function AnalisePage() {
                     {([['mes', 'Mês a Mês'], ['acumulado', 'Acumulado YTD']] as const).map(([v, label]) => (
                       <button key={v} onClick={() => setMedidaPeriodView(v)}
                         className={cn('px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
-                          medidaPeriodView === v ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+                          medidaPeriodView === v ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50')}>
                         {label}
                       </button>
                     ))}
@@ -526,7 +526,7 @@ export default function AnalisePage() {
                         <input type="checkbox" checked={medidaSelPeriods.includes(p)}
                           onChange={e => setMedidaSelPeriods(prev =>
                             e.target.checked ? [...prev, p] : prev.filter(x => x !== p))}
-                          className="w-3 h-3 accent-indigo-600" />
+                          className="w-3 h-3 accent-gray-800" />
                         <span className="text-xs text-gray-600">{formatPeriodo(p)}</span>
                       </label>
                     ))}
@@ -539,7 +539,7 @@ export default function AnalisePage() {
                   </div>
                 </div>
 
-                {medidaLoading && <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />}
+                {medidaLoading && <div className="w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />}
               </div>
 
               {/* Active period badges */}
@@ -668,15 +668,15 @@ function MedidaAcumuladoTable({
               <tr className="border-b bg-gray-50">
                 <th className="text-left px-4 py-2 font-medium text-gray-500 text-xs" rowSpan={2}>Período</th>
                 <th className="text-center px-2 py-1 font-medium text-gray-400 text-xs border-b border-gray-100 bg-gray-50/80" colSpan={3}>Mês</th>
-                <th className="text-center px-2 py-1 font-medium text-indigo-500 text-xs border-b border-indigo-100 border-l bg-indigo-50/40" colSpan={4}>Acumulado YTD</th>
+                <th className="text-center px-2 py-1 font-medium text-gray-600 text-xs border-b border-gray-100 border-l bg-gray-50/40" colSpan={4}>Acumulado YTD</th>
               </tr>
               <tr className="border-b bg-gray-50">
                 <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs">Numerador</th>
                 <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs">Denominador</th>
                 <th className="text-right px-3 py-2 font-medium text-gray-600 text-xs">% Mês</th>
-                <th className="text-right px-3 py-2 font-medium text-indigo-400 text-xs border-l border-indigo-100">Num. Acum.</th>
-                <th className="text-right px-3 py-2 font-medium text-indigo-400 text-xs">Den. Acum.</th>
-                <th className="text-right px-3 py-2 font-medium text-indigo-700 text-xs">% Acum.</th>
+                <th className="text-right px-3 py-2 font-medium text-gray-500 text-xs border-l border-gray-100">Num. Acum.</th>
+                <th className="text-right px-3 py-2 font-medium text-gray-500 text-xs">Den. Acum.</th>
+                <th className="text-right px-3 py-2 font-medium text-gray-700 text-xs">% Acum.</th>
                 <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs">Bgd % Acum.</th>
               </tr>
             </thead>
@@ -687,9 +687,9 @@ function MedidaAcumuladoTable({
                   <td className="px-3 py-3 text-right text-gray-500 text-xs">{formatCurrency(r.monthNum_r)}</td>
                   <td className="px-3 py-3 text-right text-gray-500 text-xs">{formatCurrency(r.monthDen_r)}</td>
                   <td className="px-3 py-3 text-right text-gray-700 font-medium">{formatPct(r.mRazao)}</td>
-                  <td className="px-3 py-3 text-right text-indigo-500 text-xs border-l border-indigo-50">{formatCurrency(r.cumNum_r)}</td>
-                  <td className="px-3 py-3 text-right text-indigo-500 text-xs">{formatCurrency(r.cumDen_r)}</td>
-                  <td className="px-3 py-3 text-right font-bold text-indigo-700">{formatPct(r.cumRaz)}</td>
+                  <td className="px-3 py-3 text-right text-gray-600 text-xs border-l border-gray-100">{formatCurrency(r.cumNum_r)}</td>
+                  <td className="px-3 py-3 text-right text-gray-600 text-xs">{formatCurrency(r.cumDen_r)}</td>
+                  <td className="px-3 py-3 text-right font-bold text-gray-700">{formatPct(r.cumRaz)}</td>
                   <td className="px-3 py-3 text-right text-gray-400 text-xs">{formatPct(r.cumBgt)}</td>
                 </tr>
               ))}
@@ -697,8 +697,8 @@ function MedidaAcumuladoTable({
             <tfoot>
               <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
                 <td className="px-4 py-3 text-xs" colSpan={4}>Total Acumulado</td>
-                <td className="px-3 py-3 border-l border-indigo-50" colSpan={2} />
-                <td className="px-3 py-3 text-right text-indigo-700">{formatPct(medidaTotals.razao)}</td>
+                <td className="px-3 py-3 border-l border-gray-100" colSpan={2} />
+                <td className="px-3 py-3 text-right text-gray-700">{formatPct(medidaTotals.razao)}</td>
                 <td className="px-3 py-3 text-right text-gray-400 text-xs">{formatPct(medidaTotals.budget)}</td>
               </tr>
             </tfoot>
@@ -717,14 +717,14 @@ function MedidaAcumuladoTable({
             <tr className="border-b bg-gray-50">
               <th className="text-left px-4 py-2 font-medium text-gray-500 text-xs" rowSpan={2}>Período</th>
               <th className="text-center px-2 py-1 font-medium text-gray-400 text-xs border-b border-gray-100" colSpan={2}>Mês</th>
-              <th className="text-center px-2 py-1 font-medium text-indigo-500 text-xs border-b border-indigo-100 border-l bg-indigo-50/40" colSpan={3}>Acumulado YTD</th>
+              <th className="text-center px-2 py-1 font-medium text-gray-600 text-xs border-b border-gray-100 border-l bg-gray-50/40" colSpan={3}>Acumulado YTD</th>
             </tr>
             <tr className="border-b bg-gray-50">
               <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs">Razão</th>
               <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs">Budget</th>
-              <th className="text-right px-3 py-2 font-medium text-indigo-600 text-xs border-l border-indigo-100">Razão Acum.</th>
-              <th className="text-right px-3 py-2 font-medium text-indigo-400 text-xs">Budget Acum.</th>
-              <th className="text-right px-3 py-2 font-medium text-indigo-400 text-xs">Δ Acum.</th>
+              <th className="text-right px-3 py-2 font-medium text-gray-700 text-xs border-l border-gray-100">Razão Acum.</th>
+              <th className="text-right px-3 py-2 font-medium text-gray-500 text-xs">Budget Acum.</th>
+              <th className="text-right px-3 py-2 font-medium text-gray-500 text-xs">Δ Acum.</th>
             </tr>
           </thead>
           <tbody>
@@ -735,8 +735,8 @@ function MedidaAcumuladoTable({
                   <td className="px-4 py-3 font-medium text-gray-900">{formatPeriodo(r.period)}</td>
                   <td className="px-3 py-3 text-right text-gray-600">{formatCurrency(r.mRazao)}</td>
                   <td className="px-3 py-3 text-right text-gray-500">{formatCurrency(r.mBudget)}</td>
-                  <td className="px-3 py-3 text-right font-semibold text-indigo-700 border-l border-indigo-50">{formatCurrency(r.cumRaz)}</td>
-                  <td className="px-3 py-3 text-right text-indigo-500">{formatCurrency(r.cumBgt)}</td>
+                  <td className="px-3 py-3 text-right font-semibold text-gray-700 border-l border-gray-100">{formatCurrency(r.cumRaz)}</td>
+                  <td className="px-3 py-3 text-right text-gray-600">{formatCurrency(r.cumBgt)}</td>
                   <td className={cn('px-3 py-3 text-right font-semibold', colorForVariance(delta))}>{formatCurrency(delta)}</td>
                 </tr>
               )
@@ -745,7 +745,7 @@ function MedidaAcumuladoTable({
           <tfoot>
             <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
               <td className="px-4 py-3 text-xs" colSpan={3}>Total Acumulado</td>
-              <td className="px-3 py-3 text-right text-indigo-700">{formatCurrency(medidaTotals.razao)}</td>
+              <td className="px-3 py-3 text-right text-gray-700">{formatCurrency(medidaTotals.razao)}</td>
               <td className="px-3 py-3 text-right">{formatCurrency(medidaTotals.budget)}</td>
               <td className={cn('px-3 py-3 text-right', colorForVariance(medidaTotals.razao - medidaTotals.budget))}>{formatCurrency(medidaTotals.razao - medidaTotals.budget)}</td>
             </tr>

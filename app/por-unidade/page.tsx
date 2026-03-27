@@ -308,7 +308,7 @@ export default function PorUnidadePage() {
                       <button
                         onClick={() => setSelYear(null)}
                         className={cn('px-2 py-0.5 rounded text-xs font-medium transition-colors',
-                          selYear === null ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}
+                          selYear === null ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}
                       >
                         Todos
                       </button>
@@ -316,7 +316,7 @@ export default function PorUnidadePage() {
                     {years.map(y => (
                       <button key={y} onClick={() => setSelYear(y)}
                         className={cn('px-2 py-0.5 rounded text-xs font-medium transition-colors',
-                          selYear === y ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}
+                          selYear === y ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}
                       >
                         {y}
                       </button>
@@ -341,7 +341,7 @@ export default function PorUnidadePage() {
                             e.target.checked ? [...prev, u] : prev.filter(x => x !== u)
                           )
                         }
-                        className="w-3 h-3 accent-indigo-600"
+                        className="w-3 h-3 accent-gray-800"
                       />
                       <span className="text-xs text-gray-600 truncate" title={u}>{u || '—'}</span>
                     </label>
@@ -373,7 +373,7 @@ export default function PorUnidadePage() {
                             e.target.checked ? [...prev, p] : prev.filter(x => x !== p)
                           )
                         }
-                        className="w-3 h-3 accent-indigo-600"
+                        className="w-3 h-3 accent-gray-800"
                       />
                       <span className="text-xs text-gray-600">{formatPeriodo(p)}</span>
                     </label>
@@ -389,7 +389,7 @@ export default function PorUnidadePage() {
         <div className="flex-1 min-w-0">
           {loading ? (
             <div className="flex items-center justify-center h-40">
-              <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              <div className="w-5 h-5 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : (
             <Card>
@@ -434,7 +434,7 @@ export default function PorUnidadePage() {
                             key={row.key}
                             className={cn(
                               'border-b border-gray-50 transition-colors cursor-pointer',
-                              isUnit ? 'hover:bg-indigo-50 font-semibold' : 'hover:bg-indigo-50'
+                              isUnit ? 'hover:bg-gray-50 font-semibold' : 'hover:bg-gray-50'
                             )}
                             onClick={() => openDetalhamento(row)}
                           >

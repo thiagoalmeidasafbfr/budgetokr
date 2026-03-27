@@ -64,7 +64,7 @@ function DeptMultiSelect({ allDepts, selected, onChange }: DeptMultiSelectProps)
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-300 bg-white text-left flex items-center justify-between"
+        className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-gray-300 bg-white text-left flex items-center justify-between"
       >
         <span className={selected.length === 0 ? 'text-gray-400' : 'text-gray-800'}>{label}</span>
         <ChevronDown size={14} className={cn('text-gray-400 transition-transform', open && 'rotate-180')} />
@@ -78,7 +78,7 @@ function DeptMultiSelect({ allDepts, selected, onChange }: DeptMultiSelectProps)
               placeholder="Buscar departamento..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full text-xs border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-indigo-300"
+              className="w-full text-xs border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-gray-300"
               autoFocus
             />
           </div>
@@ -92,7 +92,7 @@ function DeptMultiSelect({ allDepts, selected, onChange }: DeptMultiSelectProps)
                     type="checkbox"
                     checked={selected.includes(d)}
                     onChange={() => toggle(d)}
-                    className="accent-indigo-600 w-3.5 h-3.5 flex-shrink-0"
+                    className="accent-gray-800 w-3.5 h-3.5 flex-shrink-0"
                   />
                   <span className="text-sm text-gray-800 truncate">{d}</span>
                 </label>
@@ -113,7 +113,7 @@ function DeptMultiSelect({ allDepts, selected, onChange }: DeptMultiSelectProps)
           <div className="p-2 border-t">
             <button
               onClick={() => setOpen(false)}
-              className="w-full text-xs py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+              className="w-full text-xs py-1.5 bg-gray-900 text-white rounded hover:bg-gray-800"
             >
               Confirmar
             </button>
@@ -221,7 +221,7 @@ function CentrosModal({ user, onClose }: CentrosModalProps) {
           <div className="flex items-center justify-between flex-shrink-0">
             <div>
               <h2 className="font-semibold text-gray-900 flex items-center gap-1.5">
-                <ShieldCheck size={15} className="text-indigo-500" />
+                <ShieldCheck size={15} className="text-gray-600" />
                 Permissões de Centros de Custo
               </h2>
               <p className="text-xs text-gray-500 mt-0.5">
@@ -234,7 +234,7 @@ function CentrosModal({ user, onClose }: CentrosModalProps) {
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
           </div>
 
-          <div className="text-xs bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 text-indigo-700 flex-shrink-0">
+          <div className="text-xs bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-gray-700 flex-shrink-0">
             {configured
               ? `Restrição ativa: usuário vê apenas ${selected.size} centro(s) selecionado(s).`
               : 'Sem restrição configurada: usuário vê todos os centros do(s) departamento(s).'}
@@ -259,7 +259,7 @@ function CentrosModal({ user, onClose }: CentrosModalProps) {
                   placeholder="Buscar centro..."
                   value={search}
                   onChange={e => setSearch(e.target.value)}
-                  className="flex-1 text-xs border rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-indigo-300"
+                  className="flex-1 text-xs border rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-gray-300"
                 />
                 <button
                   onClick={toggleAll}
@@ -276,7 +276,7 @@ function CentrosModal({ user, onClose }: CentrosModalProps) {
                       type="checkbox"
                       checked={selected.has(c.cc)}
                       onChange={() => toggle(c.cc)}
-                      className="accent-indigo-600 w-3.5 h-3.5 flex-shrink-0"
+                      className="accent-gray-800 w-3.5 h-3.5 flex-shrink-0"
                     />
                     <span className="text-sm text-gray-800 flex-1">{c.nome}</span>
                     <span className="text-[10px] text-gray-400 font-mono">{c.cc}</span>
@@ -307,7 +307,7 @@ function CentrosModal({ user, onClose }: CentrosModalProps) {
               Cancelar
             </button>
             <button onClick={handleSave} disabled={saving || loading}
-              className="flex-1 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-60 flex items-center justify-center gap-1.5">
+              className="flex-1 py-2 text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-60 flex items-center justify-center gap-1.5">
               {saving ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />}
               Salvar
             </button>
@@ -394,7 +394,7 @@ function UnidadesModal({ user, onClose }: UnidadesModalProps) {
           <div className="flex items-center justify-between flex-shrink-0">
             <div>
               <h2 className="font-semibold text-gray-900 flex items-center gap-1.5">
-                <Briefcase size={15} className="text-indigo-500" />
+                <Briefcase size={15} className="text-gray-600" />
                 Permissões de Unidades de Negócio
               </h2>
               <p className="text-xs text-gray-500 mt-0.5">
@@ -422,7 +422,7 @@ function UnidadesModal({ user, onClose }: UnidadesModalProps) {
               <div className="flex gap-2 flex-shrink-0">
                 <input type="text" placeholder="Buscar unidade..." value={search}
                   onChange={e => setSearch(e.target.value)}
-                  className="flex-1 text-xs border rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-indigo-300" />
+                  className="flex-1 text-xs border rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-gray-300" />
                 <button onClick={() => setSelected(allChecked ? new Set() : new Set(allUnidades))}
                   className="text-xs px-2.5 py-1.5 border rounded-lg hover:bg-gray-50 text-gray-600 whitespace-nowrap">
                   {allChecked ? 'Desmarcar todos' : 'Selecionar todos'}
@@ -433,7 +433,7 @@ function UnidadesModal({ user, onClose }: UnidadesModalProps) {
                 {filtered.map(u => (
                   <label key={u} className="flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 cursor-pointer">
                     <input type="checkbox" checked={selected.has(u)} onChange={() => toggle(u)}
-                      className="accent-indigo-600 w-3.5 h-3.5 flex-shrink-0" />
+                      className="accent-gray-800 w-3.5 h-3.5 flex-shrink-0" />
                     <span className="text-sm text-gray-800 flex-1">{u}</span>
                   </label>
                 ))}
@@ -458,7 +458,7 @@ function UnidadesModal({ user, onClose }: UnidadesModalProps) {
             <button onClick={onClose} disabled={saving}
               className="flex-1 py-2 text-sm border rounded-lg hover:bg-gray-50 text-gray-600">Cancelar</button>
             <button onClick={handleSave} disabled={saving || loading}
-              className="flex-1 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-60 flex items-center justify-center gap-1.5">
+              className="flex-1 py-2 text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-60 flex items-center justify-center gap-1.5">
               {saving ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />}
               Salvar
             </button>
@@ -584,7 +584,7 @@ export default function UsersPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Users size={20} className="text-indigo-500" />
+          <Users size={20} className="text-gray-600" />
           <h1 className="text-xl font-bold text-gray-900">Gerenciar Usuários</h1>
           <span className="text-sm text-gray-500 ml-1">({users.length} usuários)</span>
         </div>
@@ -594,7 +594,7 @@ export default function UsersPage() {
             <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Atualizar
           </button>
           <button onClick={openCreate}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800">
             <Plus size={13} /> Novo Usuário
           </button>
         </div>
@@ -631,7 +631,7 @@ export default function UsersPage() {
                     disabled={!!editUser}
                     placeholder="ex: joao.silva"
                     className={cn(
-                      'w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-300',
+                      'w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-gray-300',
                       editUser ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''
                     )}
                   />
@@ -648,7 +648,7 @@ export default function UsersPage() {
                       value={form.password}
                       onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                       placeholder={editUser ? 'Nova senha (opcional)' : 'Senha'}
-                      className="w-full text-sm border rounded-lg px-3 py-2 pr-9 outline-none focus:ring-2 focus:ring-indigo-300"
+                      className="w-full text-sm border rounded-lg px-3 py-2 pr-9 outline-none focus:ring-2 focus:ring-gray-300"
                     />
                     <button type="button" onClick={() => setShowPwd(p => !p)}
                       className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -663,7 +663,7 @@ export default function UsersPage() {
                   <select
                     value={form.role}
                     onChange={e => setForm(f => ({ ...f, role: e.target.value as 'master' | 'dept', departments: [] }))}
-                    className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+                    className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-gray-300 bg-white"
                   >
                     {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                   </select>
@@ -689,10 +689,10 @@ export default function UsersPage() {
                     {form.departments.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-2">
                         {form.departments.map(d => (
-                          <span key={d} className="inline-flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full px-2 py-0.5">
+                          <span key={d} className="inline-flex items-center gap-1 text-xs bg-gray-50 text-gray-700 border border-gray-200 rounded-full px-2 py-0.5">
                             {d}
                             <button type="button" onClick={() => setForm(f => ({ ...f, departments: f.departments.filter(x => x !== d) }))}
-                              className="text-indigo-400 hover:text-indigo-700">
+                              className="text-gray-500 hover:text-gray-700">
                               <X size={10} />
                             </button>
                           </span>
@@ -709,7 +709,7 @@ export default function UsersPage() {
                   Cancelar
                 </button>
                 <button onClick={handleSave} disabled={saving}
-                  className="flex-1 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-60 flex items-center justify-center gap-1.5">
+                  className="flex-1 py-2 text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-60 flex items-center justify-center gap-1.5">
                   {saving ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />}
                   {editUser ? 'Salvar' : 'Criar Usuário'}
                 </button>
@@ -781,10 +781,10 @@ export default function UsersPage() {
         : `${user.departments[0]} +${user.departments.length - 1}`
 
     return (
-      <div className="flex items-center gap-3 px-4 py-3 bg-white border rounded-lg hover:border-indigo-200 transition-colors">
+      <div className="flex items-center gap-3 px-4 py-3 bg-white border rounded-lg hover:border-gray-200 transition-colors">
         <div className={cn(
           'w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0',
-          user.role === 'master' ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-600'
+          user.role === 'master' ? 'bg-gray-100 text-gray-700' : 'bg-gray-100 text-gray-600'
         )}>
           {user.username.charAt(0).toUpperCase()}
         </div>
@@ -799,13 +799,13 @@ export default function UsersPage() {
           </p>
         </div>
         {user.role === 'dept' && user.departments.length > 1 && (
-          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600 flex-shrink-0">
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-50 text-gray-700 flex-shrink-0">
             {user.departments.length} depts
           </span>
         )}
         <span className={cn(
           'text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0',
-          user.role === 'master' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'
+          user.role === 'master' ? 'bg-gray-100 text-gray-700' : 'bg-gray-100 text-gray-600'
         )}>
           {user.role}
         </span>
@@ -822,7 +822,7 @@ export default function UsersPage() {
           <div className="flex items-center gap-1 flex-shrink-0">
             {onCentros && (
               <button onClick={onCentros} title="Permissões de centros de custo"
-                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors">
+                className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-50 rounded-md transition-colors">
                 <ShieldCheck size={13} />
               </button>
             )}
@@ -833,7 +833,7 @@ export default function UsersPage() {
               </button>
             )}
             <button onClick={() => onEdit(user)} title="Editar"
-              className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors">
+              className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-50 rounded-md transition-colors">
               <Pencil size={13} />
             </button>
             <button onClick={() => setConfirmDel(user.id)} title="Excluir"

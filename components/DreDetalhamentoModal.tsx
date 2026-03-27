@@ -130,31 +130,31 @@ function MultiFilter({ label, options, selected, onChange }: MultiFilterProps) {
         className={cn(
           'flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border transition-colors',
           selected.length
-            ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium'
-            : 'border-gray-200 bg-white text-gray-600 hover:border-indigo-400 hover:text-indigo-700'
+            ? 'border-gray-600 bg-gray-50 text-gray-700 font-medium'
+            : 'border-gray-200 bg-white text-gray-600 hover:border-gray-500 hover:text-gray-700'
         )}>
         {label}
         {selected.length > 0
-          ? <span className="bg-indigo-600 text-white rounded-full px-1.5 text-[10px] font-bold">{selected.length}</span>
+          ? <span className="bg-gray-900 text-white rounded-full px-1.5 text-[10px] font-bold">{selected.length}</span>
           : <ChevronDown size={10} className="text-gray-400" />}
       </button>
       {open && (
         <div className="absolute left-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded-xl shadow-xl p-2 w-64">
           <input type="text" value={q} onChange={e => setQ(e.target.value)}
             placeholder={`Buscar ${label.toLowerCase()}…`}
-            className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 mb-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 mb-1.5 focus:outline-none focus:ring-2 focus:ring-gray-400"
             autoFocus />
           {selected.length > 0 && (
             <button onClick={() => onChange([])}
-              className="w-full text-left text-xs text-indigo-600 hover:text-indigo-800 px-1 py-0.5 mb-1">
+              className="w-full text-left text-xs text-gray-700 hover:text-gray-800 px-1 py-0.5 mb-1">
               Limpar ({selected.length})
             </button>
           )}
           <div className="max-h-48 overflow-y-auto space-y-0.5">
             {filtered.map(o => (
-              <label key={o.value} className="flex items-center gap-2 cursor-pointer hover:bg-indigo-50 rounded px-1.5 py-1">
+              <label key={o.value} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-1.5 py-1">
                 <input type="checkbox" checked={selected.includes(o.value)} onChange={() => toggle(o.value)}
-                  className="w-3 h-3 accent-indigo-600 flex-shrink-0" />
+                  className="w-3 h-3 accent-gray-800 flex-shrink-0" />
                 <span className="text-xs text-gray-700 leading-tight truncate">{o.label}</span>
               </label>
             ))}
@@ -428,7 +428,7 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
             <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">DRE — Lançamentos</p>
             <h2 className="text-base font-bold text-gray-900 mt-0.5">{title}</h2>
             {activeFiltersCount > 0 && (
-              <p className="text-xs text-indigo-600 mt-0.5">
+              <p className="text-xs text-gray-700 mt-0.5">
                 {[
                   ctx.departamentos?.length ? `${ctx.departamentos.length} dept.` : null,
                   ctx.periodos?.length && !ctx.periodo ? `${ctx.periodos.length} período(s)` : null,
@@ -440,7 +440,7 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
           <div className="flex items-center gap-2">
             {!loading && rows.length > 0 && (
               <button onClick={() => exportDetalhamento(displayed, title, showUnidadeCol)}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-indigo-50 hover:text-indigo-700 text-gray-600 transition-colors font-medium">
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-50 hover:text-gray-700 text-gray-600 transition-colors font-medium">
                 <Download size={13} /> Exportar XLSX
               </button>
             )}
@@ -456,10 +456,10 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
             <div className="flex items-center gap-2">
               <input type="text" value={textInput} onChange={e => setTextInput(e.target.value)}
                 placeholder="Buscar em todos os campos…"
-                className="flex-1 text-xs border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white" />
+                className="flex-1 text-xs border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-gray-400 bg-white" />
               <div className="relative" ref={colsRef}>
                 <button onClick={() => setShowCols(v => !v)}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-indigo-400 hover:text-indigo-700 text-gray-600 transition-colors">
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-gray-500 hover:text-gray-700 text-gray-600 transition-colors">
                   <Columns3 size={13} /> Colunas
                 </button>
                 {showCols && (
@@ -471,7 +471,7 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
                             const next = new Set(prev)
                             e.target.checked ? next.add(c.key) : next.delete(c.key)
                             return next
-                          })} className="w-3 h-3 accent-indigo-600" />
+                          })} className="w-3 h-3 accent-gray-800" />
                         <span className="text-xs text-gray-700">{c.label}</span>
                       </label>
                     ))}
@@ -491,7 +491,7 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
                 {(['all', 'budget', 'razao'] as const).map(v => (
                   <button key={v} onClick={() => setFilterTipo(v)}
                     className={cn('px-2.5 py-1 transition-colors',
-                      filterTipo === v ? 'bg-indigo-600 text-white font-medium' : 'text-gray-600 hover:bg-gray-50')}>
+                      filterTipo === v ? 'bg-gray-900 text-white font-medium' : 'text-gray-600 hover:bg-gray-50')}>
                     {v === 'all' ? 'Todos' : v === 'budget' ? 'Budget' : 'Real'}
                   </button>
                 ))}
@@ -500,8 +500,8 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
               {/* Período */}
               {periodoOptions.length > 1 && (
                 <select value={filterPeriodo} onChange={e => setFilterPeriodo(e.target.value)}
-                  className={cn('text-xs border rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-colors flex-shrink-0',
-                    filterPeriodo ? 'border-indigo-500 text-indigo-700' : 'border-gray-200 text-gray-600')}>
+                  className={cn('text-xs border rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors flex-shrink-0',
+                    filterPeriodo ? 'border-gray-600 text-gray-700' : 'border-gray-200 text-gray-600')}>
                   <option value="">Todos os períodos</option>
                   {periodoOptions.map(p => <option key={p} value={p}>{formatPeriodo(p)}</option>)}
                 </select>
@@ -552,7 +552,7 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
           </div>
         ) : loading ? (
           <div className="flex-1 flex items-center justify-center">
-            <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-5 h-5 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : (
           <div ref={scrollRef} className="flex-1 overflow-auto" onScroll={handleScroll}>
@@ -567,8 +567,8 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
                         c.align === 'right' ? 'text-right' : 'text-left')}>
                       <span className="inline-flex items-center gap-1">
                         {c.label}
-                        <ArrowUpDown size={10} className={cn('opacity-40', sortCol === c.key && 'opacity-100 text-indigo-300')} />
-                        {sortCol === c.key && <span className="text-indigo-300 text-[9px]">{sortDir === 'asc' ? '▲' : '▼'}</span>}
+                        <ArrowUpDown size={10} className={cn('opacity-40', sortCol === c.key && 'opacity-100 text-gray-400')} />
+                        {sortCol === c.key && <span className="text-gray-400 text-[9px]">{sortDir === 'asc' ? '▲' : '▼'}</span>}
                       </span>
                     </th>
                   ))}
@@ -593,8 +593,8 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
                           title="Comentar neste lançamento"
                           className={cn('p-0.5 rounded transition-colors',
                             commentingRow?.id === r.id
-                              ? 'text-indigo-600 bg-indigo-100'
-                              : 'text-gray-300 hover:text-indigo-500 hover:bg-indigo-50'
+                              ? 'text-gray-700 bg-gray-100'
+                              : 'text-gray-300 hover:text-gray-600 hover:bg-gray-50'
                           )}>
                           <MessageSquare size={11} />
                         </button>
@@ -602,7 +602,7 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
                       {visibleCols.has('data')             && <td className={cellCls} title={r.data_lancamento} style={{ fontVariantNumeric: 'tabular-nums' }}>{r.data_lancamento}</td>}
                       {visibleCols.has('tipo')             && <td className={cellCls}>
                         <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium',
-                          r.tipo === 'budget' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700')}>
+                          r.tipo === 'budget' ? 'bg-gray-100 text-gray-700' : 'bg-emerald-100 text-emerald-700')}>
                           {r.tipo === 'budget' ? 'Budget' : 'Real'}
                         </span>
                       </td>}
@@ -641,11 +641,11 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
 
         {/* ── Painel de comentário de lançamento ─────────────────────────── */}
         {commentingRow && (
-          <div className="border-t bg-indigo-50 px-5 py-3 flex-shrink-0">
-            <p className="text-xs font-semibold text-indigo-700 mb-2">
+          <div className="border-t bg-gray-50 px-5 py-3 flex-shrink-0">
+            <p className="text-xs font-semibold text-gray-700 mb-2">
               Comentar lançamento:&nbsp;
               <span className="font-normal">{commentingRow.numero_conta_contabil} — {commentingRow.nome_conta_contabil}</span>
-              <span className="ml-2 px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-600 font-medium">
+              <span className="ml-2 px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 font-medium">
                 {commentingRow.data_lancamento?.substring(0, 7)}
               </span>
               <span className={cn('ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium',
@@ -661,13 +661,13 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
                 placeholder="Seu comentário sobre este lançamento… (Ctrl+Enter para salvar)"
                 rows={2}
                 autoFocus
-                className="flex-1 text-xs border border-indigo-200 rounded-lg px-3 py-1.5 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+                className="flex-1 text-xs border border-gray-200 rounded-lg px-3 py-1.5 resize-none focus:outline-none focus:ring-2 focus:ring-gray-400 bg-white"
               />
               <div className="flex flex-col gap-1">
                 <button
                   onClick={saveRowComment}
                   disabled={!commentText.trim() || commentSaving}
-                  className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 whitespace-nowrap"
+                  className="px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-medium hover:bg-gray-800 disabled:opacity-50 whitespace-nowrap"
                 >
                   {commentSaving ? '…' : 'Salvar'}
                 </button>

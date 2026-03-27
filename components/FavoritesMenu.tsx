@@ -64,7 +64,7 @@ export function FavoritesMenu() {
         <div className="absolute bottom-full mb-2 right-0 z-50 bg-white border border-gray-200 rounded-xl shadow-xl w-64 p-2">
           <div className="flex items-center justify-between px-2 py-1 mb-1">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Favoritos</span>
-            <button onClick={() => setAdding(true)} className="text-indigo-500 hover:text-indigo-700">
+            <button onClick={() => setAdding(true)} className="text-gray-600 hover:text-gray-700">
               <Plus size={13} />
             </button>
           </div>
@@ -74,9 +74,9 @@ export function FavoritesMenu() {
               <input type="text" value={nome} onChange={e => setNome(e.target.value)}
                 placeholder="Nome do favorito…"
                 onKeyDown={e => e.key === 'Enter' && addFav()}
-                className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-gray-400"
                 autoFocus />
-              <button onClick={addFav} className="text-xs bg-indigo-600 text-white px-2 py-1 rounded-lg hover:bg-indigo-700">Salvar</button>
+              <button onClick={addFav} className="text-xs bg-gray-900 text-white px-2 py-1 rounded-lg hover:bg-gray-800">Salvar</button>
               <button onClick={() => { setAdding(false); setNome('') }} className="text-gray-400 hover:text-gray-600"><X size={12} /></button>
             </div>
           )}
@@ -86,9 +86,9 @@ export function FavoritesMenu() {
               <p className="text-xs text-gray-400 text-center py-3">Nenhum favorito salvo</p>
             )}
             {favs.map(f => (
-              <div key={f.id} className="flex items-center gap-2 group hover:bg-indigo-50 rounded-lg px-2 py-1.5">
+              <div key={f.id} className="flex items-center gap-2 group hover:bg-gray-50 rounded-lg px-2 py-1.5">
                 <Star size={11} className="text-amber-400 flex-shrink-0" fill="currentColor" />
-                <Link href={f.url} className="flex-1 text-xs text-gray-700 truncate hover:text-indigo-700"
+                <Link href={f.url} className="flex-1 text-xs text-gray-700 truncate hover:text-gray-700"
                   onClick={() => setOpen(false)}>
                   {f.nome}
                 </Link>
