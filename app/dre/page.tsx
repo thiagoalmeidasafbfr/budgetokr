@@ -670,11 +670,24 @@ export default function DREPage() {
                   <p className="text-xs font-medium text-gray-600 mb-1">
                     {(deptUser.departments?.length ?? 0) > 1 ? 'Departamentos' : 'Departamento'}
                   </p>
-                  <div className="flex flex-wrap gap-1">
-                    {(deptUser.departments ?? (deptUser.department ? [deptUser.department] : [])).map(d => (
-                      <span key={d} className="text-xs text-indigo-700 font-semibold px-1 py-0.5 bg-indigo-50 rounded">{d}</span>
-                    ))}
-                  </div>
+                  {(deptUser.departments?.length ?? 0) > 1 ? (
+                    <div className="space-y-0.5 max-h-36 overflow-y-auto">
+                      {deptUser.departments!.map(d => (
+                        <label key={d} className="flex items-center gap-1.5 cursor-pointer hover:bg-indigo-50 rounded px-1 py-0.5">
+                          <input type="checkbox" checked={selDepts.includes(d)}
+                            onChange={e => setSelDepts(prev => e.target.checked ? [...prev, d] : prev.filter(x => x !== d))}
+                            className="w-3 h-3 accent-indigo-600" />
+                          <span className="text-xs text-indigo-700 font-medium truncate">{d}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {(deptUser.departments ?? (deptUser.department ? [deptUser.department] : [])).map(d => (
+                        <span key={d} className="text-xs text-indigo-700 font-semibold px-1 py-0.5 bg-indigo-50 rounded">{d}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div>
