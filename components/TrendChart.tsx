@@ -123,21 +123,26 @@ export default function TrendChart({ title, conta, agrupamento, dre, departament
           ) : (
             <ResponsiveContainer width="100%" height={420}>
               <LineChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
-                <YAxis tickFormatter={v => formatCurrency(v)} tick={{ fontSize: 10 }} width={90} />
-                <Tooltip formatter={(v) => (v != null ? formatCurrency(Number(v)) : '')} />
-                <Legend />
-                <Line type="monotone" dataKey="budget" name="Budget" stroke="#6366f1" strokeWidth={2}
-                  dot={{ r: 3 }} connectNulls={false} />
-                <Line type="monotone" dataKey="razao" name="Realizado" stroke="#10b981" strokeWidth={2}
-                  dot={{ r: 3 }} connectNulls={false} />
+                <CartesianGrid vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="periodo" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                <YAxis tickFormatter={v => formatCurrency(v)} tick={{ fontSize: 10, fill: '#94a3b8' }} width={90} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }}
+                  labelStyle={{ color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}
+                  itemStyle={{ color: '#fff', fontWeight: 700 }}
+                  formatter={(v) => (v != null ? formatCurrency(Number(v)) : '')}
+                />
+                <Legend wrapperStyle={{ fontSize: 11, color: '#64748b' }} />
+                <Line type="monotone" dataKey="budget" name="Budget" stroke="#cbd5e1" strokeWidth={2}
+                  dot={{ r: 3, fill: '#cbd5e1' }} connectNulls={false} />
+                <Line type="monotone" dataKey="razao" name="Realizado" stroke="#334155" strokeWidth={2.5}
+                  dot={{ r: 3, fill: '#334155' }} connectNulls={false} />
                 {showForecast && (
                   <>
-                    <Line type="monotone" dataKey="budgetFc" name="Budget (Forecast)" stroke="#6366f1"
-                      strokeWidth={2} strokeDasharray="5 5" dot={false} connectNulls />
-                    <Line type="monotone" dataKey="razaoFc" name="Real (Forecast)" stroke="#10b981"
-                      strokeWidth={2} strokeDasharray="5 5" dot={false} connectNulls />
+                    <Line type="monotone" dataKey="budgetFc" name="Budget (Forecast)" stroke="#94a3b8"
+                      strokeWidth={1.5} strokeDasharray="5 5" dot={false} connectNulls />
+                    <Line type="monotone" dataKey="razaoFc" name="Real (Forecast)" stroke="#d97706"
+                      strokeWidth={1.5} strokeDasharray="5 5" dot={false} connectNulls />
                   </>
                 )}
               </LineChart>

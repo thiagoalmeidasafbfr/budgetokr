@@ -403,30 +403,15 @@ function ConfigModal({
 
           {/* GroupBy */}
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-2">Dimensão de análise</label>
-            <div className="grid grid-cols-1 gap-1.5">
-              {([
-                ['agrupamento_arvore', 'Agrupamento DRE',   'Ex: Receitas Comerciais, Despesas Operacionais'],
-                ['dre',               'Categoria DRE',      'Ex: Receitas, Custos, EBITDA'],
-                ['conta_contabil',    'Conta Contábil',     'Ex: Receita de Licenciamento, Salários'],
-                ['centro_custo',      'Centro de Custo',    'Quais CCs geram mais receita/despesa'],
-                ['contrapartida',     'Contrapartida',      'Clientes, fornecedores ou parceiros'],
-              ] as const).map(([v, lbl, desc]) => (
-                <button key={v} onClick={() => setGroupBy(v)}
-                  className={cn(
-                    'flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition-colors',
-                    groupBy === v
-                      ? 'border-gray-800 bg-gray-800 text-white'
-                      : 'border-gray-200 text-gray-700 hover:bg-gray-50'
-                  )}>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold leading-tight">{lbl}</p>
-                    <p className={cn('text-[10px] leading-tight mt-0.5', groupBy === v ? 'text-gray-300' : 'text-gray-400')}>{desc}</p>
-                  </div>
-                  {groupBy === v && <span className="text-[10px] font-bold flex-shrink-0">✓</span>}
-                </button>
-              ))}
-            </div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Dimensão de análise</label>
+            <select value={groupBy} onChange={e => setGroupBy(e.target.value as ExecChartConfig['groupBy'])}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300">
+              <option value="agrupamento_arvore">Agrupamento DRE</option>
+              <option value="dre">Categoria DRE</option>
+              <option value="conta_contabil">Conta Contábil</option>
+              <option value="centro_custo">Centro de Custo</option>
+              <option value="contrapartida">Contrapartida</option>
+            </select>
           </div>
 
           {/* Field + TopN */}
