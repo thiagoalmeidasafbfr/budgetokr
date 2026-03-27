@@ -11,6 +11,30 @@ import {
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/components/ThemeProvider'
 
+// ─── Per-icon accent colors ───────────────────────────────────────────────────
+const iconColors = new Map<React.ElementType, string>([
+  [LayoutDashboard, 'text-blue-400'],
+  [LineChart,       'text-emerald-400'],
+  [PieChart,        'text-violet-400'],
+  [GitCompare,      'text-violet-400'],
+  [Layers,          'text-orange-400'],
+  [Landmark,        'text-yellow-400'],
+  [Briefcase,       'text-cyan-400'],
+  [ListTree,        'text-teal-400'],
+  [MessageSquare,   'text-pink-400'],
+  [Gauge,           'text-amber-400'],
+  [Target,          'text-rose-400'],
+  [FileText,        'text-sky-400'],
+  [Database,        'text-purple-400'],
+  [Upload,          'text-green-400'],
+  [Shield,          'text-gray-400'],
+  [History,         'text-amber-300'],
+  [Building2,       'text-orange-300'],
+  [BookOpen,        'text-lime-400'],
+  [LayoutList,      'text-blue-300'],
+  [Users,           'text-indigo-400'],
+])
+
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
 type SessionUser = { userId: string; role: 'master' | 'dept'; department?: string }
@@ -247,7 +271,7 @@ export function Sidebar() {
         <img
           src="/botafogo.png"
           alt="Logo"
-          className="h-12 w-auto object-contain"
+          className="h-16 w-auto object-contain"
         />
       </div>
 
@@ -298,7 +322,7 @@ export function Sidebar() {
                   'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-default',
                   anyActive ? 'text-white' : 'text-white/30'
                 )}>
-                  <Icon size={13} className={anyActive ? 'text-white/80' : 'text-white/25'} />
+                  <Icon size={13} className={anyActive ? 'text-white/80' : (iconColors.get(Icon) ?? 'text-white/25')} />
                   <span>{item.label}</span>
                 </div>
                 <div className="ml-4 border-l border-white/[0.08] pl-1 space-y-0.5">
@@ -313,7 +337,7 @@ export function Sidebar() {
                             ? 'bg-white/10 text-white font-medium'
                             : 'text-white/50 hover:bg-white/[0.05] hover:text-white/80'
                         )}>
-                        {CIcon && <CIcon size={12} className={active ? 'text-white/80' : 'text-white/30'} />}
+                        {CIcon && <CIcon size={12} className={active ? 'text-white/80' : (iconColors.get(CIcon) ?? 'text-white/30')} />}
                         <span className="text-xs">{child.label}</span>
                         {active && <ChevronRight size={10} className="ml-auto text-white/40" />}
                       </Link>
@@ -339,7 +363,7 @@ export function Sidebar() {
                 'w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 transition-colors',
                 active ? 'bg-white/10' : 'bg-white/[0.04] group-hover:bg-white/[0.08]'
               )}>
-                <Icon size={14} className={active ? 'text-white/90' : 'text-white/35'} />
+                <Icon size={14} className={active ? 'text-white/90' : (iconColors.get(Icon) ?? 'text-white/35')} />
               </div>
               <div className="flex-1 min-w-0">
                 <p className={cn('text-sm font-medium leading-tight', active ? 'text-white' : 'text-white/70')}>

@@ -1799,7 +1799,7 @@ export default function DeptDashboardPage() {
             selPeriodos={selPeriods.length > 0 ? selPeriods : allPeriodos.filter(p => p.startsWith(selYear ?? '2026'))}
             allDepts={[]}
             deptName={selDept}
-            canEdit={isMaster}
+            canEdit={true}
           />
         </SortableDeptSection>
       )

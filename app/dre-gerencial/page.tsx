@@ -26,8 +26,8 @@ interface SavedView {
   createdAt: string
 }
 
-const STORAGE_KEY = 'dre_gerencial_views'
-const ACTIVE_VIEW_KEY = 'dre_gerencial_active'
+const storageKey  = (userId: string) => `dre_gerencial_views_${userId}`
+const activeKey   = (userId: string) => `dre_gerencial_active_${userId}`
 
 // ─── Helper: apply exclusions to raw data ─────────────────────────────────────
 
@@ -372,15 +372,30 @@ export default function DreGerencialPage() {
   const [activeView,  setActiveView]  = useState<string>('')
   const [saveName,    setSaveName]    = useState('')
   const [showSaveModal, setShowSaveModal] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string>('')
 
-  // ── Load saved views from localStorage ─────────────────────────────────────
+  // ── Init: detecta usuário e carrega visões salvas por userId ───────────────
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (raw) setSavedViews(JSON.parse(raw))
-      const active = localStorage.getItem(ACTIVE_VIEW_KEY)
-      if (active) setActiveView(active)
-    } catch { /* ignore */ }
+    async function init() {
+      try {
+        const me = await fetch('/api/me').then(r => r.ok ? r.json() : null).catch(() => null)
+        const userId: string = me?.userId ?? 'anon'
+        setCurrentUserId(userId)
+
+        // Se é usuário de departamento, pré-seleciona seus departamentos
+        if (me?.role === 'dept') {
+          const depts: string[] = me.departments ?? (me.department ? [me.department] : [])
+          if (depts.length) setSelDepts(depts)
+        }
+
+        // Carrega visões salvas por userId
+        const raw = localStorage.getItem(storageKey(userId))
+        if (raw) setSavedViews(JSON.parse(raw))
+        const active = localStorage.getItem(activeKey(userId))
+        if (active) setActiveView(active)
+      } catch { /* ignore */ }
+    }
+    init()
   }, [])
 
   // ── Fetch static structure ──────────────────────────────────────────────────
@@ -462,15 +477,15 @@ export default function DreGerencialPage() {
     setShowSaveModal(false)
     setSaveName('')
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-      localStorage.setItem(ACTIVE_VIEW_KEY, view.name)
+      localStorage.setItem(storageKey(currentUserId), JSON.stringify(next))
+      localStorage.setItem(activeKey(currentUserId), view.name)
     } catch { /* ignore */ }
   }
 
   function loadView(view: SavedView) {
     setExclusions(new Set(view.exclusions))
     setActiveView(view.name)
-    try { localStorage.setItem(ACTIVE_VIEW_KEY, view.name) } catch { /* ignore */ }
+    try { localStorage.setItem(activeKey(currentUserId), view.name) } catch { /* ignore */ }
   }
 
   function deleteView(name: string) {
@@ -478,15 +493,15 @@ export default function DreGerencialPage() {
     setSavedViews(next)
     if (activeView === name) setActiveView('')
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-      localStorage.removeItem(ACTIVE_VIEW_KEY)
+      localStorage.setItem(storageKey(currentUserId), JSON.stringify(next))
+      localStorage.removeItem(activeKey(currentUserId))
     } catch { /* ignore */ }
   }
 
   function clearExclusions() {
     setExclusions(new Set())
     setActiveView('')
-    try { localStorage.removeItem(ACTIVE_VIEW_KEY) } catch { /* ignore */ }
+    try { localStorage.removeItem(activeKey(currentUserId)) } catch { /* ignore */ }
   }
 
   const exclusionCount = exclusions.size
