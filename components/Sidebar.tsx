@@ -3,35 +3,13 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import {
-  LayoutDashboard, TrendingUp, LineChart, GitCompare,
+  LayoutDashboard, LineChart, GitCompare,
   Target, Layers, FileText, Database, Upload,
   ChevronRight, ChevronDown, Building2, BookOpen, LayoutList, Gauge,
-  LogOut, User, ListTree, Shield, Landmark, Moon, Sun, History, MessageSquare, BarChart2, Briefcase, Users,
+  LogOut, User, ListTree, Shield, Landmark, Moon, Sun, History, MessageSquare, Briefcase, Users, PieChart,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/components/ThemeProvider'
-
-// ─── Per-icon accent colors ──────────────────────────────────────────────────────
-const iconColors = new Map<React.ElementType, string>([
-  [LayoutDashboard, 'text-blue-400'],
-  [LineChart,       'text-emerald-400'],
-  [GitCompare,      'text-violet-400'],
-  [Layers,          'text-orange-400'],
-  [Landmark,        'text-yellow-400'],
-  [Briefcase,       'text-cyan-400'],
-  [ListTree,        'text-teal-400'],
-  [MessageSquare,   'text-pink-400'],
-  [Gauge,           'text-amber-400'],
-  [Target,          'text-rose-400'],
-  [FileText,        'text-sky-400'],
-  [Database,        'text-purple-400'],
-  [Upload,          'text-green-400'],
-  [Shield,          'text-gray-500'],
-  [History,         'text-amber-300'],
-  [Building2,       'text-orange-300'],
-  [BookOpen,        'text-lime-400'],
-  [LayoutList,      'text-blue-300'],
-])
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -60,6 +38,12 @@ const nav: NavItem[] = [
     icon: LineChart,
     label: 'DRE',
     sublabel: 'P&L · Resultado',
+  },
+  {
+    type: 'link', href: '/dre-gerencial',
+    icon: PieChart,
+    label: 'DRE Gerencial',
+    sublabel: 'Visão personalizada por exclusão',
   },
   {
     type: 'link', href: '/analise',
@@ -128,10 +112,10 @@ const nav: NavItem[] = [
   {
     type: 'group', icon: Database, label: 'Dimensões', masterOnly: true,
     children: [
-      { href: '/dimensoes/centros-custo',      label: 'Centros de Custo',      icon: Building2  },
-      { href: '/dimensoes/contas-contabeis',  label: 'Contas Contábeis',      icon: BookOpen   },
-      { href: '/dimensoes/dre',               label: 'Estrutura DRE',         icon: LayoutList },
-      { href: '/dimensoes/unidades-negocio',  label: 'Unidades de Negócio',   icon: Briefcase  },
+      { href: '/dimensoes/centros-custo',     label: 'Centros de Custo',    icon: Building2  },
+      { href: '/dimensoes/contas-contabeis',  label: 'Contas Contábeis',    icon: BookOpen   },
+      { href: '/dimensoes/dre',              label: 'Estrutura DRE',       icon: LayoutList },
+      { href: '/dimensoes/unidades-negocio', label: 'Unidades de Negócio', icon: Briefcase  },
     ],
   },
   {
@@ -180,7 +164,6 @@ export function Sidebar() {
   const [user, setUser] = useState<SessionUser | null>(null)
   const [loaded, setLoaded] = useState(false)
 
-  // Sections that are collapsed — initialised from defaultCollapsed flags
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => {
     const s = new Set<string>()
     nav.forEach(item => { if (item.type === 'section' && item.defaultCollapsed) s.add(item.label) })
@@ -189,7 +172,6 @@ export function Sidebar() {
 
   useEffect(() => {
     if (pathname === '/login' || pathname === '/logout') {
-      // Clear stale user so the next login loads fresh data
       setUser(null)
       setLoaded(true)
       return
@@ -209,15 +191,11 @@ export function Sidebar() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname])
 
-  // If the active page is inside a collapsed section, auto-expand it
   useEffect(() => {
     if (!loaded) return
     let currentSection = ''
     for (const item of nav) {
       if (item.type === 'section') { currentSection = item.label; continue }
-      const href = item.type === 'link' ? item.href
-        : item.type === 'group' ? item.children[0]?.href
-        : null
       const anyActive = item.type === 'link'
         ? (item.href === '/' ? pathname === '/' : pathname.startsWith(item.href))
         : item.type === 'group'
@@ -259,28 +237,18 @@ export function Sidebar() {
   const isActive = (href: string) =>
     href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/')
 
-  // Track which section we're currently inside while rendering
   let currentSection = ''
 
   return (
-    <aside className="w-60 flex-shrink-0 bg-[#111111] border-r border-white/[0.06] flex flex-col h-screen sticky top-0">
-      {/* Logo */}
-      <div className="px-4 py-4 border-b border-white/[0.06] flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden p-[3px]">
-            <img
-              src="/botafogo.png"
-              alt="Botafogo"
-              className="w-full h-full object-contain"
-            />
-          </div>
-          <div>
-            <p className="font-semibold text-white text-sm leading-tight tracking-wide">Glorioso Finance</p>
-            <p className="text-[11px] text-[#888] leading-tight tracking-wide">Botafogo F.R.</p>
-          </div>
-        </div>
-        {/* Thin gold accent line */}
-        <div className="mt-3 h-px bg-gradient-to-r from-amber-600/40 via-amber-400/20 to-transparent" />
+    <aside className="w-60 flex-shrink-0 bg-[#3a3a3a] border-r border-white/[0.06] flex flex-col h-screen sticky top-0">
+
+      {/* Logo — apenas a imagem, sem textos */}
+      <div className="px-5 py-5 border-b border-white/[0.07] flex-shrink-0 flex items-center justify-center">
+        <img
+          src="/botafogo.png"
+          alt="Logo"
+          className="h-12 w-auto object-contain"
+        />
       </div>
 
       {/* Nav */}
@@ -303,25 +271,24 @@ export function Sidebar() {
                 key={item.label}
                 onClick={() => toggleSection(item.label)}
                 className={cn(
-                  'w-full flex items-center gap-1 px-3 pb-1 hover:text-gray-400 transition-colors group',
+                  'w-full flex items-center gap-1 px-3 pb-1 hover:text-white/60 transition-colors group',
                   i === 0 ? 'pt-1' : 'pt-4'
                 )}
               >
-                <p className="text-[10px] font-semibold text-[#555] uppercase tracking-widest group-hover:text-[#777] flex-1 text-left">
+                <p className="text-[10px] font-semibold text-white/30 uppercase tracking-widest group-hover:text-white/50 flex-1 text-left">
                   {item.label}
                 </p>
                 {isCollapsed
-                  ? <ChevronRight size={10} className="text-[#444] group-hover:text-[#666]" />
-                  : <ChevronDown  size={10} className="text-[#444] group-hover:text-[#666]" />
+                  ? <ChevronRight size={10} className="text-white/20 group-hover:text-white/40" />
+                  : <ChevronDown  size={10} className="text-white/20 group-hover:text-white/40" />
                 }
               </button>
             )
           }
 
-          // Hide items when their section is collapsed
           if (collapsedSections.has(currentSection)) return null
 
-          // ── Group (always-open sub-list with label) ────────────────────────
+          // ── Group ────────────────────────────────────────────────────────
           if (item.type === 'group') {
             const Icon = item.icon
             const anyActive = item.children.some(c => isActive(c.href))
@@ -329,12 +296,12 @@ export function Sidebar() {
               <div key={item.label}>
                 <div className={cn(
                   'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-default',
-                  anyActive ? 'text-amber-400' : 'text-[#555]'
+                  anyActive ? 'text-white' : 'text-white/30'
                 )}>
-                  <Icon size={13} className={anyActive ? 'text-amber-400' : 'text-[#555]'} />
+                  <Icon size={13} className={anyActive ? 'text-white/80' : 'text-white/25'} />
                   <span>{item.label}</span>
                 </div>
-                <div className="ml-4 border-l border-white/[0.07] pl-1 space-y-0.5">
+                <div className="ml-4 border-l border-white/[0.08] pl-1 space-y-0.5">
                   {item.children.map(child => {
                     const active = isActive(child.href)
                     const CIcon = child.icon
@@ -343,12 +310,12 @@ export function Sidebar() {
                         className={cn(
                           'flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-lg text-sm transition-colors',
                           active
-                            ? 'bg-amber-500/[0.08] text-amber-300 font-medium'
-                            : 'text-[#aaa] hover:bg-white/[0.04] hover:text-white'
+                            ? 'bg-white/10 text-white font-medium'
+                            : 'text-white/50 hover:bg-white/[0.05] hover:text-white/80'
                         )}>
-                        {CIcon && <CIcon size={12} className={active ? 'text-amber-400' : 'text-[#666]'} />}
+                        {CIcon && <CIcon size={12} className={active ? 'text-white/80' : 'text-white/30'} />}
                         <span className="text-xs">{child.label}</span>
-                        {active && <ChevronRight size={10} className="ml-auto text-amber-500/70" />}
+                        {active && <ChevronRight size={10} className="ml-auto text-white/40" />}
                       </Link>
                     )
                   })}
@@ -365,26 +332,26 @@ export function Sidebar() {
               className={cn(
                 'flex items-center gap-3 px-3 py-2 rounded-lg transition-colors group',
                 active
-                  ? 'bg-amber-500/[0.08] text-white'
-                  : 'text-[#999] hover:bg-white/[0.04] hover:text-gray-200'
+                  ? 'bg-white/10 text-white'
+                  : 'text-white/50 hover:bg-white/[0.05] hover:text-white/80'
               )}>
               <div className={cn(
                 'w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 transition-colors',
-                active ? 'bg-amber-500/10' : 'bg-white/[0.03] group-hover:bg-white/[0.07]'
+                active ? 'bg-white/10' : 'bg-white/[0.04] group-hover:bg-white/[0.08]'
               )}>
-                <Icon size={14} className={active ? 'text-amber-400' : (iconColors.get(Icon) ?? 'text-[#666]')} />
+                <Icon size={14} className={active ? 'text-white/90' : 'text-white/35'} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className={cn('text-sm font-medium leading-tight', active ? 'text-white' : 'text-[#ccc]')}>
+                <p className={cn('text-sm font-medium leading-tight', active ? 'text-white' : 'text-white/70')}>
                   {item.label}
                 </p>
                 {item.sublabel && (
-                  <p className={cn('text-[11px] leading-tight mt-0.5 truncate', active ? 'text-[#aaa]' : 'text-[#666]')}>
+                  <p className={cn('text-[11px] leading-tight mt-0.5 truncate', active ? 'text-white/50' : 'text-white/30')}>
                     {item.sublabel}
                   </p>
                 )}
               </div>
-              {active && <div className="w-0.5 h-4 rounded-full bg-amber-400/70 flex-shrink-0" />}
+              {active && <div className="w-0.5 h-4 rounded-full bg-white/50 flex-shrink-0" />}
             </Link>
           )
         })}
@@ -392,28 +359,28 @@ export function Sidebar() {
 
       {/* Footer */}
       {user && (
-        <div className="flex-shrink-0 px-3 py-2 border-t border-white/[0.06] bg-black/30">
+        <div className="flex-shrink-0 px-3 py-2 border-t border-white/[0.07] bg-black/20">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0">
-              <User size={12} className="text-amber-400/80" />
+            <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
+              <User size={12} className="text-white/60" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-[#ddd] truncate">{user.userId}</p>
-              <p className="text-[10px] text-[#555] truncate">
+              <p className="text-xs font-medium text-white/80 truncate">{user.userId}</p>
+              <p className="text-[10px] text-white/30 truncate">
                 {user.role === 'master' ? 'Administrador' : (user.department || 'Departamento')}
               </p>
             </div>
             <button
               onClick={toggleTheme}
               title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
-              className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-white/[0.07] text-[#555] hover:text-[#aaa] transition-colors flex-shrink-0"
+              className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-white/[0.08] text-white/30 hover:text-white/60 transition-colors flex-shrink-0"
             >
               {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
             </button>
             <button
               onClick={handleLogout}
               title="Sair"
-              className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-red-500/10 hover:text-red-400 text-[#555] transition-colors flex-shrink-0 text-[10px] font-medium"
+              className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-red-500/10 hover:text-red-400 text-white/30 transition-colors flex-shrink-0 text-[10px] font-medium"
             >
               <LogOut size={11} />
             </button>
