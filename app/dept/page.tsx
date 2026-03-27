@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Plus, Settings, Edit2, Trash2, Save, X, BarChart3, TrendingUp, TrendingDown, Target, ExternalLink, Download, CheckSquare, Square, ArrowUpDown, Columns3, ChevronRight, ChevronDown } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -51,6 +51,7 @@ interface MedidaCard {
     num_razao: number; num_budget: number
     den_razao: number; den_budget: number
   }>
+  _dept?: string
 }
 
 interface CapexProjeto {
@@ -889,7 +890,7 @@ function MedidaPinModal({ departamento, onClose, onRefresh }: MedidaPinModalProp
 
 // ─── Medida Display Card ───────────────────────────────────────────────────────
 
-function MedidaDisplayCard({ card }: { card: MedidaCard }) {
+function MedidaDisplayCard({ card, dept }: { card: MedidaCard; dept?: string }) {
   const sorted = Object.entries(card.byPeriodo)
     .sort(([a], [b]) => a.localeCompare(b))
   const sparkDataFixed = sorted.slice(-6).map(([periodo, vals]) => ({
@@ -946,6 +947,7 @@ function MedidaDisplayCard({ card }: { card: MedidaCard }) {
           <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5" style={{ backgroundColor: card.medida.cor }} />
           <p className="text-sm font-semibold text-gray-800 truncate">{card.medida.nome}</p>
           {unidade && <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full flex-shrink-0">{unidade}</span>}
+          {dept && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 truncate max-w-[80px]">{dept}</span>}
         </div>
 
         {sorted.length > 0 ? (
@@ -1006,9 +1008,10 @@ interface KpiCardProps {
   kpi: KpiManual
   valores: KpiValor[]
   onEditValores?: () => void
+  dept?: string
 }
 
-function KpiCard({ kpi, valores, onEditValores }: KpiCardProps) {
+function KpiCard({ kpi, valores, onEditValores, dept }: KpiCardProps) {
   const sorted = [...valores].sort((a, b) => a.periodo.localeCompare(b.periodo))
   const latest = sorted[sorted.length - 1]
   const sparkData = sorted.slice(-6).map(d => ({ ...d, label: shortPeriodo(d.periodo) }))
@@ -1026,18 +1029,21 @@ function KpiCard({ kpi, valores, onEditValores }: KpiCardProps) {
     <Card className="flex flex-col">
       <CardContent className="p-4 flex flex-col gap-2 flex-1">
         <div className="flex items-start justify-between">
-          <div className="flex items-center gap-1.5 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
             <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: kpi.cor }} />
             <p className="text-sm font-semibold text-gray-800 truncate">{kpi.nome}</p>
           </div>
-          {onEditValores && (
-            <button
-              onClick={onEditValores}
-              className="text-xs text-gray-400 hover:text-indigo-600 flex items-center gap-0.5 flex-shrink-0 ml-1"
-            >
-              <Edit2 size={11} />
-            </button>
-          )}
+          <div className="flex items-center gap-1 flex-shrink-0 ml-1">
+            {dept && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-full font-medium truncate max-w-[80px]">{dept}</span>}
+            {onEditValores && (
+              <button
+                onClick={onEditValores}
+                className="text-xs text-gray-400 hover:text-indigo-600 flex items-center gap-0.5"
+              >
+                <Edit2 size={11} />
+              </button>
+            )}
+          </div>
         </div>
 
         {latest != null ? (
@@ -1148,6 +1154,10 @@ export default function DeptDashboardPage() {
   const [userRole,         setUserRole]         = useState<'master' | 'dept' | null>(null)
   const [forcedDept,       setForcedDept]       = useState<string | null>(null)
   const [forcedDepts,      setForcedDepts]      = useState<string[]>([])
+  const [combineDepts,     setCombineDepts]     = useState(false)
+  const [allDeptsData,     setAllDeptsData]     = useState<Record<string, DashboardData>>({})
+  const [allDeptsKpis,     setAllDeptsKpis]     = useState<KpiManual[]>([])
+  const [allDeptsKpiValores, setAllDeptsKpiValores] = useState<Record<number, KpiValor[]>>({})
   const [dreView,          setDreView]          = useState<'resumida' | 'completa'>('resumida')
   const [dreFullData,      setDreFullData]      = useState<DRERow[]>([])
   const [dreHierarchy,     setDreHierarchy]     = useState<Array<{ agrupamento_arvore: string; dre: string; ordem_dre: number }>>([])
@@ -1225,15 +1235,53 @@ export default function DeptDashboardPage() {
     setLoading(false)
   }, [])
 
+  const loadAllDepts = useCallback(async (depts: string[], periods: string[]) => {
+    setLoading(true)
+    const results = await Promise.all(
+      depts.map(async d => {
+        const params = new URLSearchParams({ departamento: d })
+        if (periods.length) params.set('periodos', periods.join(','))
+        const res = await fetch(`/api/dept-dashboard?${params}`, { cache: 'no-store' })
+        return { dept: d, data: res.ok ? (await res.json() as DashboardData) : null }
+      })
+    )
+    const dataMap: Record<string, DashboardData> = {}
+    for (const { dept, data } of results) {
+      if (data) dataMap[dept] = data
+    }
+    setAllDeptsData(dataMap)
+    setLoading(false)
+  }, [])
+
+  const loadAllKpis = useCallback(async (depts: string[]) => {
+    const allNested = await Promise.all(
+      depts.map(d =>
+        fetch(`/api/kpis?${new URLSearchParams({ departamento: d })}`, { cache: 'no-store' })
+          .then(r => r.ok ? r.json() as Promise<KpiManual[]> : Promise.resolve<KpiManual[]>([]))
+      )
+    )
+    const combined = allNested.flat()
+    setAllDeptsKpis(combined)
+  }, [])
+
   useEffect(() => {
     if (isFirstDept.current) { isFirstDept.current = false; return }
+    if (combineDepts) return
     loadDashboard(selDept, selPeriods)
-  }, [selDept, selPeriods, loadDashboard])
+  }, [selDept, selPeriods, combineDepts, loadDashboard])
 
-  const loadDreCompleta = useCallback(async (dept: string, periods: string[]) => {
-    if (!dept) return
+  // Reload all-depts data when combine is toggled on or periods change while combined
+  useEffect(() => {
+    if (!combineDepts || forcedDepts.length < 2) return
+    loadAllDepts(forcedDepts, selPeriods)
+    loadAllKpis(forcedDepts)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [combineDepts, selPeriods])
+
+  const loadDreCompleta = useCallback(async (depts: string[], periods: string[]) => {
+    if (!depts.length) return
     setDreFullLoading(true)
-    const p = new URLSearchParams({ departamentos: dept })
+    const p = new URLSearchParams({ departamentos: depts.join(',') })
     if (periods.length) p.set('periodos', periods.join(','))
     const [hier, linhas, data] = await Promise.all([
       fetch('/api/dre?type=hierarchy').then(r => r.json()),
@@ -1247,8 +1295,11 @@ export default function DeptDashboardPage() {
   }, [])
 
   useEffect(() => {
-    if (dreView === 'completa' && selDept) loadDreCompleta(selDept, selPeriods)
-  }, [dreView, selDept, selPeriods, loadDreCompleta])
+    if (dreView !== 'completa') return
+    const depts = combineDepts && forcedDepts.length > 1 ? forcedDepts : (selDept ? [selDept] : [])
+    if (depts.length) loadDreCompleta(depts, selPeriods)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dreView, selDept, selPeriods, combineDepts, loadDreCompleta])
 
   // Load KPIs for selected department
   const loadKpis = useCallback(async (dept: string) => {
@@ -1277,11 +1328,81 @@ export default function DeptDashboardPage() {
     })
   }, [kpis])
 
+  // Load KPI valores for combined allDeptsKpis
+  useEffect(() => {
+    if (!allDeptsKpis.length) { setAllDeptsKpiValores({}); return }
+    const fetches = allDeptsKpis.map(k =>
+      fetch(`/api/kpis/valores?kpiId=${k.id}`, { cache: 'no-store' })
+        .then(r => r.ok ? r.json() : [])
+        .then((vals: KpiValor[]) => [k.id, vals] as [number, KpiValor[]])
+    )
+    Promise.all(fetches).then(pairs => {
+      const map: Record<number, KpiValor[]> = {}
+      for (const [id, vals] of pairs) map[id] = vals
+      setAllDeptsKpiValores(map)
+    })
+  }, [allDeptsKpis])
+
   // ── Aggregates ────────────────────────────────────────────────────────────
 
-  const byPeriodo   = dashData?.byPeriodo   ?? []
-  const dreGrupos   = dashData?.dreGrupos   ?? []
-  const medidaCards = dashData?.medidaCards ?? []
+  // Computed combined values (when combining multiple departments)
+  const combinedByPeriodo = useMemo(() => {
+    if (!combineDepts || !Object.keys(allDeptsData).length) return []
+    const acc: Record<string, AnaliseRow> = {}
+    for (const data of Object.values(allDeptsData)) {
+      for (const r of data.byPeriodo) {
+        if (!acc[r.periodo]) acc[r.periodo] = { ...r, budget: 0, razao: 0, variacao: 0, variacao_pct: 0 }
+        acc[r.periodo].budget += r.budget
+        acc[r.periodo].razao  += r.razao
+      }
+    }
+    return Object.values(acc).map(r => ({ ...r, variacao: r.razao - r.budget, variacao_pct: r.budget ? (r.razao - r.budget) / Math.abs(r.budget) * 100 : 0 }))
+  }, [combineDepts, allDeptsData])
+
+  const combinedDreGrupos = useMemo(() => {
+    if (!combineDepts || !Object.keys(allDeptsData).length) return []
+    const acc: Record<string, DreGrupo> = {}
+    for (const data of Object.values(allDeptsData)) {
+      for (const g of data.dreGrupos) {
+        if (!acc[g.dre]) acc[g.dre] = { ...g, budget: 0, razao: 0 }
+        acc[g.dre].budget += g.budget
+        acc[g.dre].razao  += g.razao
+      }
+    }
+    return Object.values(acc)
+  }, [combineDepts, allDeptsData])
+
+  const combinedMedidaCards = useMemo(() => {
+    if (!combineDepts || !Object.keys(allDeptsData).length) return []
+    const cards: MedidaCard[] = []
+    for (const [dept, data] of Object.entries(allDeptsData)) {
+      for (const card of data.medidaCards) {
+        cards.push({ ...card, _dept: dept })
+      }
+    }
+    return cards
+  }, [combineDepts, allDeptsData])
+
+  const combinedCapexProjetos = useMemo(() => {
+    if (!combineDepts || !Object.keys(allDeptsData).length) return []
+    const acc: Record<string, CapexProjeto> = {}
+    for (const data of Object.values(allDeptsData)) {
+      for (const p of data.capexProjetos) {
+        const key = p.nome_projeto || '—'
+        if (!acc[key]) acc[key] = { ...p, budget: 0, razao: 0, variacao: 0, variacao_pct: 0 }
+        acc[key].budget += p.budget
+        acc[key].razao  += p.razao
+      }
+    }
+    return Object.values(acc).map(p => ({ ...p, variacao: p.razao - p.budget, variacao_pct: p.budget ? (p.razao - p.budget) / Math.abs(p.budget) * 100 : 0 }))
+  }, [combineDepts, allDeptsData])
+
+  const byPeriodo   = combineDepts ? combinedByPeriodo   : (dashData?.byPeriodo   ?? [])
+  const dreGrupos   = combineDepts ? combinedDreGrupos   : (dashData?.dreGrupos   ?? [])
+  const medidaCards = combineDepts ? combinedMedidaCards : (dashData?.medidaCards ?? [])
+  const activeKpis        = combineDepts ? allDeptsKpis       : kpis
+  const activeKpiValores  = combineDepts ? allDeptsKpiValores : kpiValores
+  const activeCapex       = combineDepts ? combinedCapexProjetos : (dashData?.capexProjetos ?? [])
 
   // Aggregate across selected periods for summary cards
   const totals = byPeriodo.reduce(
@@ -1341,20 +1462,34 @@ export default function DeptDashboardPage() {
 
         {/* Para dept users: exibe o nome do departamento ou seletor se tiver múltiplos */}
         {!isMaster && forcedDepts.length > 0 && (
-          <div className="p-3 border-b border-gray-100">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Departamento</p>
+          <div className="p-3 border-b border-gray-100 space-y-2">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Departamento</p>
             {forcedDepts.length === 1 ? (
               <p className="text-sm font-semibold text-indigo-700 px-1">{forcedDepts[0]}</p>
             ) : (
-              <select
-                value={selDept}
-                onChange={e => { setSelDept(e.target.value); setForcedDept(e.target.value) }}
-                className="w-full text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-2 py-1 outline-none cursor-pointer"
-              >
-                {forcedDepts.map(d => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
+              <>
+                <select
+                  value={selDept}
+                  onChange={e => { setSelDept(e.target.value); setForcedDept(e.target.value) }}
+                  disabled={combineDepts}
+                  className="w-full text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-2 py-1 outline-none cursor-pointer disabled:opacity-50 disabled:cursor-default"
+                >
+                  {forcedDepts.map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => setCombineDepts(v => !v)}
+                  className={cn(
+                    'w-full text-xs font-medium px-2 py-1.5 rounded-lg border transition-colors',
+                    combineDepts
+                      ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300 hover:text-indigo-600'
+                  )}
+                >
+                  {combineDepts ? '✓ Combinando todos' : 'Combinar departamentos'}
+                </button>
+              </>
             )}
           </div>
         )}
@@ -1439,8 +1574,11 @@ export default function DeptDashboardPage() {
             {/* Header */}
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">{selDept}</h1>
+                <h1 className="text-2xl font-bold text-gray-900">
+                  {combineDepts ? forcedDepts.join(' + ') : selDept}
+                </h1>
                 <p className="text-gray-500 text-sm mt-0.5">
+                  {combineDepts && <span className="text-indigo-600 font-medium mr-1">[Combinado]</span>}
                   {selPeriods.length > 0
                     ? `${selPeriods.length} período(s) selecionado(s)`
                     : 'Todos os períodos'}
@@ -1511,7 +1649,7 @@ export default function DeptDashboardPage() {
                   </div>
                 )}
               </div>
-              {kpis.length === 0 && medidaCards.length === 0 ? (
+              {activeKpis.length === 0 && medidaCards.length === 0 ? (
                 <Card>
                   <CardContent className="py-10 flex flex-col items-center gap-2">
                     <Target size={28} className="text-gray-300" />
@@ -1531,14 +1669,15 @@ export default function DeptDashboardPage() {
               ) : (
                 <div className="grid grid-cols-3 gap-4">
                   {medidaCards.map((card, i) => (
-                    <MedidaDisplayCard key={`m-${i}`} card={card} />
+                    <MedidaDisplayCard key={`m-${i}`} card={card} dept={card._dept} />
                   ))}
-                  {kpis.map(kpi => (
+                  {activeKpis.map(kpi => (
                     <KpiCard
-                      key={kpi.id}
+                      key={`${kpi.id}-${kpi.departamento}`}
                       kpi={kpi}
-                      valores={kpiValores[kpi.id] ?? []}
+                      valores={activeKpiValores[kpi.id] ?? []}
                       onEditValores={isMaster ? () => setEditValoresKpi(kpi) : undefined}
+                      dept={combineDepts ? kpi.departamento : undefined}
                     />
                   ))}
                 </div>
@@ -1640,7 +1779,7 @@ export default function DeptDashboardPage() {
             )}
 
             {/* Section 4 — CAPEX por Projeto */}
-            {(dashData?.capexProjetos?.length ?? 0) > 0 && (
+            {activeCapex.length > 0 && (
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold text-gray-700">CAPEX — Investimentos por Projeto</CardTitle>
@@ -1658,7 +1797,7 @@ export default function DeptDashboardPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {dashData!.capexProjetos.map((row, i) => (
+                        {activeCapex.map((row, i) => (
                           <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
                             <td className="px-5 py-3 font-medium text-gray-900">{row.nome_projeto || '—'}</td>
                             <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.budget)}</td>
@@ -1677,11 +1816,11 @@ export default function DeptDashboardPage() {
                       <tfoot>
                         <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
                           <td className="px-5 py-3">Total CAPEX</td>
-                          <td className="px-5 py-3 text-right">{formatCurrency(dashData!.capexProjetos.reduce((s, r) => s + r.budget, 0))}</td>
-                          <td className="px-5 py-3 text-right">{formatCurrency(dashData!.capexProjetos.reduce((s, r) => s + r.razao, 0))}</td>
+                          <td className="px-5 py-3 text-right">{formatCurrency(activeCapex.reduce((s, r) => s + r.budget, 0))}</td>
+                          <td className="px-5 py-3 text-right">{formatCurrency(activeCapex.reduce((s, r) => s + r.razao, 0))}</td>
                           {(() => {
-                            const capexTotal = dashData!.capexProjetos.reduce((s, r) => s + r.variacao, 0)
-                            const capexBudgetTotal = dashData!.capexProjetos.reduce((s, r) => s + r.budget, 0)
+                            const capexTotal = activeCapex.reduce((s, r) => s + r.variacao, 0)
+                            const capexBudgetTotal = activeCapex.reduce((s, r) => s + r.budget, 0)
                             return (
                               <>
                                 <td className={cn('px-5 py-3 text-right', colorForVariance(capexTotal))}>
