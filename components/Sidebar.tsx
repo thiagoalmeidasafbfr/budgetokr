@@ -267,12 +267,11 @@ export function Sidebar() {
       {/* Logo */}
       <div className="px-4 py-4 border-b border-white/[0.06] flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
+          <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden p-[3px]">
             <img
               src="/botafogo.png"
               alt="Botafogo"
-              className="w-8 h-8 object-contain"
-              style={{ filter: 'invert(1) opacity(0.9)' }}
+              className="w-full h-full object-contain"
             />
           </div>
           <div>

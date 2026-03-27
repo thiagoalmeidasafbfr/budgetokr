@@ -25,7 +25,7 @@ export function YearFilter({ periodos, selYear, onChange, className }: YearFilte
           className={cn(
             'px-3 py-1 rounded-lg text-sm font-medium transition-colors',
             selYear === null
-              ? 'bg-indigo-600 text-white shadow-sm'
+              ? 'bg-gray-800 text-white shadow-sm'
               : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
           )}
         >
@@ -38,7 +38,7 @@ export function YearFilter({ periodos, selYear, onChange, className }: YearFilte
             className={cn(
               'px-3 py-1 rounded-lg text-sm font-medium transition-colors',
               selYear === y
-                ? 'bg-indigo-600 text-white shadow-sm'
+                ? 'bg-gray-800 text-white shadow-sm'
                 : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
             )}
           >

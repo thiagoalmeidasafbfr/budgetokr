@@ -36,6 +36,8 @@ const DashboardCharts = dynamic(() => import('@/components/DashboardCharts'), {
   loading: () => <div className="grid grid-cols-1 lg:grid-cols-2 gap-4"><ChartSkeleton /><ChartSkeleton /></div>,
 })
 
+const ExecCharts = dynamic(() => import('@/components/ExecCharts'), { ssr: false })
+
 function ChartSkeleton() {
   return <Card><CardContent className="p-6"><div className="h-[230px] bg-gray-50 rounded-lg animate-pulse" /></CardContent></Card>
 }
@@ -218,6 +220,12 @@ export default function Dashboard() {
   const sortedWidgets = [...widgets].sort((a, b) => a.order - b.order)
   const isWidgetVisible = (id: WidgetId) => widgets.find(w => w.id === id)?.visible ?? true
 
+  // Props for ExecCharts
+  const selPeriodos = selYear
+    ? allPeriodos.filter(p => p.startsWith(selYear))
+    : allPeriodos
+  const allDepts = [...new Set(analise.map(r => r.nome_departamento?.trim() || r.departamento).filter(Boolean))]
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -335,6 +343,8 @@ export default function Dashboard() {
         )
         return null
       })}
+
+      <ExecCharts selPeriodos={selPeriodos} allDepts={allDepts} />
     </div>
   )
 }
