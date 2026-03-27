@@ -797,11 +797,11 @@ export default function DREPage() {
         <div className="flex-1 min-w-0 space-y-3">
           {/* View toggle */}
           <div className="flex items-center gap-2">
-            <div className="flex bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5">
+            <div className="flex bg-gray-100 border border-gray-200 rounded-lg p-0.5 gap-0.5">
               {([['total', 'Consolidado'], ['periodo', 'Mensal'], ['trimestre', 'Trimestral'], ['comparativo', 'Comparativo'], ['cascata', 'Cascata']] as const).map(([v, label]) => (
                 <button key={v} onClick={() => setViewMode(v)}
                   className={cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-                    viewMode === v ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+                    viewMode === v ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800 hover:bg-white')}>
                   {label}
                 </button>
               ))}
