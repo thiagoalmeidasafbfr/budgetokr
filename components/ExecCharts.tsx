@@ -22,6 +22,7 @@ export interface ExecChartConfig {
   palette: string
   valueFormat: 'currency' | 'percent'
   labelPosition: 'inside' | 'outside' | 'none'
+  groupBy: 'agrupamento_arvore' | 'contrapartida'
 }
 
 interface ChartItem {
@@ -103,13 +104,14 @@ function ExecTooltip({
 // ─── Single chart card ────────────────────────────────────────────────────────
 
 function ExecChartCard({
-  config, selPeriodos, allDepts, canEdit,
+  config, selPeriodos, allDepts, canEdit, contextDept,
   onEdit, onDelete,
 }: {
   config: ExecChartConfig
   selPeriodos: string[]
   allDepts: string[]
   canEdit: boolean
+  contextDept: string
   onEdit: () => void
   onDelete: () => void
 }) {
@@ -120,9 +122,16 @@ function ExecChartCard({
     setLoading(true)
     try {
       const p = new URLSearchParams({ topN: String(config.topN), field: config.field })
-      if (config.departamentos.length) p.set('departamentos', config.departamentos.join(','))
-      if (selPeriodos.length)          p.set('periodos',      selPeriodos.join(','))
-      if (config.dreGroup)             p.set('dreGroup',      config.dreGroup)
+      // Always scope to the dept context — if config has explicit depts, use those;
+      // otherwise fall back to the page's dept (so master sees per-dept data too)
+      const depts = config.departamentos.length
+        ? config.departamentos
+        : contextDept !== '__dashboard__' ? [contextDept] : []
+      if (depts.length)       p.set('departamentos', depts.join(','))
+      if (selPeriodos.length) p.set('periodos',      selPeriodos.join(','))
+      if (config.dreGroup)    p.set('dreGroup',      config.dreGroup)
+      if (config.groupBy && config.groupBy !== 'agrupamento_arvore')
+        p.set('groupBy', config.groupBy)
       const res = await fetch(`/api/exec-chart?${p}`, { cache: 'no-store' })
       if (res.ok) {
         const { items: d } = await res.json()
@@ -133,7 +142,7 @@ function ExecChartCard({
     } finally {
       setLoading(false)
     }
-  }, [config, selPeriodos])
+  }, [config, selPeriodos, contextDept])
 
   useEffect(() => { load() }, [load])
 
@@ -189,6 +198,7 @@ function ExecChartCard({
           <p className="text-sm font-semibold text-gray-800 truncate">{config.title}</p>
           <p className="text-xs text-gray-400 mt-0.5">
             {fieldLabel} · Top {config.topN}
+            {config.groupBy === 'contrapartida' && <span className="ml-1 text-amber-600">· Contrapartida</span>}
             {config.dreGroup && <span className="ml-1">· {config.dreGroup}</span>}
           </p>
         </div>
@@ -302,6 +312,7 @@ function ConfigModal({
   const [palette,       setPalette]       = useState(config?.palette       ?? DEFAULT_PALETTE)
   const [valueFormat,   setValueFormat]   = useState<ExecChartConfig['valueFormat']>(config?.valueFormat   ?? 'currency')
   const [labelPosition, setLabelPosition] = useState<ExecChartConfig['labelPosition']>(config?.labelPosition ?? 'inside')
+  const [groupBy,       setGroupBy]       = useState<ExecChartConfig['groupBy']>(config?.groupBy ?? 'agrupamento_arvore')
   const [dreGroups,     setDreGroups]     = useState<string[]>([])
 
   useEffect(() => {
@@ -317,7 +328,7 @@ function ConfigModal({
       title: title.trim(),
       chartType, field, topN,
       departamentos, dreGroup,
-      palette, valueFormat, labelPosition,
+      palette, valueFormat, labelPosition, groupBy,
     })
   }
 
@@ -363,6 +374,23 @@ function ConfigModal({
                   </button>
                 )
               })}
+            </div>
+          </div>
+
+          {/* GroupBy */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Nível de detalhe</label>
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+              {([
+                ['agrupamento_arvore', 'Grupos DRE'],
+                ['contrapartida',      'Contrapartida (clientes/fornecedores)'],
+              ] as const).map(([v, lbl]) => (
+                <button key={v} onClick={() => setGroupBy(v)}
+                  className={cn('flex-1 py-2 px-2 font-medium transition-colors text-center',
+                    groupBy === v ? 'bg-gray-800 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+                  {lbl}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -581,6 +609,7 @@ export default function ExecCharts({
               selPeriodos={selPeriodos}
               allDepts={allDepts}
               canEdit={canEdit}
+              contextDept={deptName}
               onEdit={() => handleEdit(c)}
               onDelete={() => handleDelete(c.id)}
             />
