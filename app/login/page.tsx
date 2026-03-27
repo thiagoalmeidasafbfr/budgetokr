@@ -1,7 +1,7 @@
 'use client'
 import { useState, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { TrendingUp, Loader2, AlertCircle } from 'lucide-react'
+import { Loader2, AlertCircle } from 'lucide-react'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -43,14 +43,12 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         {/* Logo */}
-        <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-10 h-10 bg-gray-900 rounded-xl flex items-center justify-center shadow-md">
-            <TrendingUp size={18} className="text-white" />
-          </div>
-          <div>
-            <p className="font-bold text-gray-900 dark:text-white text-lg leading-tight">Glorioso Finance</p>
-            <p className="text-xs text-gray-400 dark:text-slate-400 leading-tight">Botafogo F.R.</p>
-          </div>
+        <div className="flex items-center justify-center mb-8">
+          <img
+            src="/botafogo.png"
+            alt="Logo"
+            className="h-20 w-auto object-contain"
+          />
         </div>
 
         {/* Card */}
