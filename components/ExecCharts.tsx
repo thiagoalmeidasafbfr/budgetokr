@@ -118,16 +118,21 @@ function ExecChartCard({
 
   const load = useCallback(async () => {
     setLoading(true)
-    const p = new URLSearchParams({ topN: String(config.topN), field: config.field })
-    if (config.departamentos.length) p.set('departamentos', config.departamentos.join(','))
-    if (selPeriodos.length)          p.set('periodos',      selPeriodos.join(','))
-    if (config.dreGroup)             p.set('dreGroup',      config.dreGroup)
-    const res = await fetch(`/api/exec-chart?${p}`, { cache: 'no-store' })
-    if (res.ok) {
-      const { items: d } = await res.json()
-      setItems(d ?? [])
+    try {
+      const p = new URLSearchParams({ topN: String(config.topN), field: config.field })
+      if (config.departamentos.length) p.set('departamentos', config.departamentos.join(','))
+      if (selPeriodos.length)          p.set('periodos',      selPeriodos.join(','))
+      if (config.dreGroup)             p.set('dreGroup',      config.dreGroup)
+      const res = await fetch(`/api/exec-chart?${p}`, { cache: 'no-store' })
+      if (res.ok) {
+        const { items: d } = await res.json()
+        setItems(d ?? [])
+      }
+    } catch {
+      // network error — leave items as-is
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [config, selPeriodos])
 
   useEffect(() => { load() }, [load])
@@ -488,28 +493,40 @@ function ConfigModal({
 export default function ExecCharts({
   selPeriodos,
   allDepts,
-  storageKey = 'exec-charts-v1',
+  deptName   = '__dashboard__',
   canEdit    = true,
 }: {
   selPeriodos: string[]
   allDepts: string[]
-  storageKey?: string
+  deptName?: string
   canEdit?: boolean
 }) {
-  const [charts,    setCharts]    = useState<ExecChartConfig[]>([])
-  const [showModal, setShowModal] = useState(false)
-  const [editing,   setEditing]   = useState<ExecChartConfig | null>(null)
+  const [charts,      setCharts]      = useState<ExecChartConfig[]>([])
+  const [cfgLoading,  setCfgLoading]  = useState(true)
+  const [showModal,   setShowModal]   = useState(false)
+  const [editing,     setEditing]     = useState<ExecChartConfig | null>(null)
 
+  // Load configs from server
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(storageKey)
-      if (saved) setCharts(JSON.parse(saved))
-    } catch {}
-  }, [storageKey])
+    setCfgLoading(true)
+    fetch(`/api/exec-chart-config?dept_name=${encodeURIComponent(deptName)}`, { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : { configs: [] })
+      .then(({ configs }) => setCharts(Array.isArray(configs) ? configs : []))
+      .catch(() => setCharts([]))
+      .finally(() => setCfgLoading(false))
+  }, [deptName])
 
-  const persist = (next: ExecChartConfig[]) => {
+  const persist = async (next: ExecChartConfig[]) => {
     setCharts(next)
-    localStorage.setItem(storageKey, JSON.stringify(next))
+    try {
+      await fetch('/api/exec-chart-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dept_name: deptName, configs: next }),
+      })
+    } catch {
+      // silently ignore save errors — UI already updated
+    }
   }
 
   const handleSave = (c: ExecChartConfig) => {
@@ -520,6 +537,13 @@ export default function ExecCharts({
 
   const handleDelete = (id: string) => persist(charts.filter(c => c.id !== id))
   const handleEdit   = (c: ExecChartConfig) => { setEditing(c); setShowModal(true) }
+
+  if (cfgLoading) return (
+    <div className="flex items-center gap-2 py-4 text-sm text-gray-400">
+      <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+      Carregando gráficos…
+    </div>
+  )
 
   // If read-only and nothing configured, render nothing
   if (!canEdit && charts.length === 0) return null

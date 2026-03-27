@@ -288,3 +288,14 @@ ALTER TABLE user_departamentos DISABLE ROW LEVEL SECURITY;
 
 -- ─── Usuário inicial (ajuste a senha!) ───────────────────────────────────────
 -- INSERT INTO app_users (username, password, role) VALUES ('admin', 'admin123', 'master');
+
+-- ─── Gráficos Executivos por Departamento ────────────────────────────────────
+-- Armazena as configurações de gráficos executivos por departamento.
+-- dept_name = '__dashboard__' para o dashboard global (master).
+CREATE TABLE IF NOT EXISTS exec_chart_configs (
+  id          BIGSERIAL PRIMARY KEY,
+  dept_name   TEXT NOT NULL UNIQUE,
+  configs     JSONB NOT NULL DEFAULT '[]',
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE exec_chart_configs DISABLE ROW LEVEL SECURITY;
