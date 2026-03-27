@@ -5,6 +5,16 @@ import type { FilterColumn } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
+/** Para dept users: intersecta os depts solicitados com os permitidos.
+ *  Se nenhum solicitado → retorna todos os permitidos.
+ *  Para master users (forcedDepts = undefined) → retorna solicitados como estão. */
+function resolveDepts(forcedDepts: string[] | undefined, requested: string[]): string[] | undefined {
+  if (!forcedDepts?.length) return requested.length ? requested : undefined
+  if (!requested.length) return forcedDepts
+  const intersected = requested.filter(d => forcedDepts.includes(d))
+  return intersected.length > 0 ? intersected : forcedDepts
+}
+
 export async function GET(req: NextRequest) {
   try {
     const sp   = new URL(req.url).searchParams
@@ -36,9 +46,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (type === 'centros') {
-      const depts = forcedDepts?.length
-        ? forcedDepts
-        : sp.get('departamentos')?.split(',').filter(Boolean) ?? []
+      const depts = resolveDepts(forcedDepts, sp.get('departamentos')?.split(',').filter(Boolean) ?? [])
       let result = await getCentrosByDepartamentos(depts)
       // Aplica restrição individual de centros se configurada
       if (userCentros !== null) {
@@ -48,9 +56,7 @@ export async function GET(req: NextRequest) {
     }
 
     const periodos      = sp.get('periodos')?.split(',').filter(Boolean)
-    const departamentos = forcedDepts?.length
-      ? forcedDepts
-      : sp.get('departamentos')?.split(',').filter(Boolean)
+    const departamentos = resolveDepts(forcedDepts, sp.get('departamentos')?.split(',').filter(Boolean) ?? [])
 
     // Aplica permissões individuais de centros:
     // intersecta com o que o usuário selecionou na UI (se houver)

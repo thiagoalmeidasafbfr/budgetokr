@@ -55,9 +55,10 @@ export async function GET(req: NextRequest) {
           : [])
     : undefined
 
+  const requested = sp.get('departamentos')?.split(',').filter(Boolean) ?? []
   const departamentos = forcedDepts?.length
-    ? forcedDepts
-    : sp.get('departamentos')?.split(',').filter(Boolean) ?? []
+    ? (requested.length ? requested.filter(d => forcedDepts!.includes(d)) || forcedDepts : forcedDepts)
+    : requested
   const periodos = sp.get('periodos')?.split(',').filter(Boolean) ?? []
   const projetos = sp.get('projetos')?.split(',').filter(Boolean) ?? []
   const groupByProjeto = sp.get('groupByProjeto') !== 'false'
