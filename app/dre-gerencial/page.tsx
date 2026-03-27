@@ -1,6 +1,6 @@
 'use client'
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { ChevronRight, ChevronDown, Settings2, Eye, EyeOff, RotateCcw, Save, Trash2, X, Check, Filter } from 'lucide-react'
+import { ChevronRight, ChevronDown, Settings2, EyeOff, RotateCcw, Save, Trash2, X, Check } from 'lucide-react'
 import { YearFilter } from '@/components/YearFilter'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -363,6 +363,7 @@ export default function DreGerencialPage() {
   const [selYear,     setSelYear]     = useState<string | null>('2026')
   const [selDepts,    setSelDepts]    = useState<string[]>([])
   const [departamentos, setDepartamentos] = useState<string[]>([])
+  const [periodos,    setPeriodos]    = useState<string[]>([])
   const [loading,     setLoading]     = useState(false)
   const [panelOpen,   setPanelOpen]   = useState(true)
   const [exclusions,  setExclusions]  = useState<Set<ExclusionKey>>(new Set())
@@ -388,10 +389,12 @@ export default function DreGerencialPage() {
       fetch('/api/dre?type=linhas').then(r => r.json()),
       fetch('/api/dre?type=hierarchy').then(r => r.json()),
       fetch('/api/dre?type=distinct&col=departamento').then(r => r.json()),
-    ]).then(([linhas, hier, depts]) => {
+      fetch('/api/dre?type=distinct&col=periodo').then(r => r.json()),
+    ]).then(([linhas, hier, depts, pers]) => {
       setDreLinhas(Array.isArray(linhas) ? linhas : [])
       setHierarchy(Array.isArray(hier) ? hier : [])
       setDepartamentos(Array.isArray(depts) ? depts : [])
+      setPeriodos(Array.isArray(pers) ? pers : [])
     }).catch(console.error)
   }, [])
 
@@ -539,7 +542,7 @@ export default function DreGerencialPage() {
 
         {/* Filters */}
         <div className="flex items-center gap-2">
-          <YearFilter value={selYear} onChange={setSelYear} />
+          <YearFilter periodos={periodos} selYear={selYear} onChange={setSelYear} />
           <button
             onClick={() => setPanelOpen(v => !v)}
             className={cn(
