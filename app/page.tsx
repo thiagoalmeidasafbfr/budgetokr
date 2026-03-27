@@ -221,9 +221,12 @@ export default function Dashboard() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-500 text-sm mt-0.5">Visão consolidada Budget vs Razão</p>
+        <div className="flex items-center gap-3">
+          <img src="/botafogo.png" alt="Botafogo" className="w-9 h-9 object-contain opacity-80" />
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+            <p className="text-gray-500 text-sm mt-0.5">Visão consolidada Budget vs Razão</p>
+          </div>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <YearFilter periodos={allPeriodos} selYear={selYear} onChange={setSelYear} />
