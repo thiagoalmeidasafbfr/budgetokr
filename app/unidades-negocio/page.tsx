@@ -295,6 +295,28 @@ export default function UnidadesNegocioPage() {
     })
   }
 
+  const openDetModal = (
+    name: string,
+    unidade: string,
+    dre?: string,
+    agrupamento?: string,
+    conta?: string,
+    tipo: 'budget' | 'razao' | 'ambos' = 'ambos',
+  ) => {
+    const node = {
+      name, dre, agrupamento, conta,
+      isGroup: false, depth: 0, ordem: 0,
+      budget: 0, razao: 0, variacao: 0, variacao_pct: 0,
+      children: [], byPeriod: {},
+    } as TreeNode
+    setDetModal({
+      x: 0, y: 0, node, tipo,
+      periodos:      selPeriods.length ? selPeriods : undefined,
+      unidades:      [unidade],
+      departamentos: deptUser ? (deptUser.departments ?? (deptUser.department ? [deptUser.department] : [])) : undefined,
+    })
+  }
+
   const expandAll = () => {
     const keys = new Set<string>()
     for (const un of tree) {
@@ -328,22 +350,25 @@ export default function UnidadesNegocioPage() {
 
   // ── Value cell components ─────────────────────────────────────────────────
   const TotalCells = ({
-    n, bold, onCtx,
+    n, bold, onCtx, onDet,
   }: {
     n: { budget: number; razao: number; variacao: number; variacao_pct: number }
     bold?: boolean
     onCtx?: (tipo: 'budget' | 'razao' | 'ambos') => (e: React.MouseEvent) => void
+    onDet?: (tipo: 'budget' | 'razao') => (e: React.MouseEvent) => void
   }) => (
     <>
       <td
-        className={cn('px-5 py-2.5 text-right tabular-nums whitespace-nowrap', bold ? 'font-semibold text-gray-800' : 'text-gray-600')}
+        className={cn('px-5 py-2.5 text-right tabular-nums whitespace-nowrap cursor-pointer', bold ? 'font-semibold text-gray-800' : 'text-gray-600')}
         onContextMenu={onCtx?.('budget')}
+        onClick={onDet?.('budget')}
       >
         {n.budget !== 0 ? formatCurrency(n.budget) : <span className="text-gray-300">—</span>}
       </td>
       <td
-        className={cn('px-5 py-2.5 text-right tabular-nums whitespace-nowrap', bold ? 'font-semibold text-gray-800' : 'text-gray-600')}
+        className={cn('px-5 py-2.5 text-right tabular-nums whitespace-nowrap cursor-pointer', bold ? 'font-semibold text-gray-800' : 'text-gray-600')}
         onContextMenu={onCtx?.('razao')}
+        onClick={onDet?.('razao')}
       >
         {n.razao !== 0 ? formatCurrency(n.razao) : <span className="text-gray-300">—</span>}
       </td>
@@ -509,18 +534,18 @@ export default function UnidadesNegocioPage() {
                       return (
                         <React.Fragment key={unKey}>
                           {/* Level 1: Unidade */}
-                          <tr className="border-b bg-gray-100/70 hover:bg-gray-100 cursor-pointer cursor-context-menu"
-                            onClick={() => toggle(unKey)}
+                          <tr className="border-b bg-gray-100/70 hover:bg-gray-100 cursor-pointer"
+                            onClick={() => openDetModal(un.unidade, un.unidade)}
                             onContextMenu={e => openCtxMenu(e, un.unidade, un.unidade)}>
                             <td className="px-5 py-2.5 font-bold text-gray-900">
                               <div className="flex items-center gap-1.5">
-                                <span className="flex-shrink-0">
+                                <button className="flex-shrink-0 p-0.5 hover:bg-gray-300 rounded" onClick={e => { e.stopPropagation(); toggle(unKey) }}>
                                   {unExpanded ? <ChevronDown size={15} className="text-gray-600" /> : <ChevronRight size={15} className="text-gray-600" />}
-                                </span>
+                                </button>
                                 {un.unidade || <span className="italic text-gray-400">sem unidade</span>}
                               </div>
                             </td>
-                            {isTotalView ? <TotalCells n={un} bold onCtx={tipo => e => { e.stopPropagation(); openCtxMenu(e, un.unidade, un.unidade, undefined, undefined, undefined, tipo) }} /> : <PeriodCells periodos={un.periodos} />}
+                            {isTotalView ? <TotalCells n={un} bold onCtx={tipo => e => { e.stopPropagation(); openCtxMenu(e, un.unidade, un.unidade, undefined, undefined, undefined, tipo) }} onDet={tipo => e => { e.stopPropagation(); openDetModal(un.unidade, un.unidade, undefined, undefined, undefined, tipo) }} /> : <PeriodCells periodos={un.periodos} />}
                           </tr>
 
                           {unExpanded && un.dre_groups.map(dreNode => {
@@ -529,18 +554,18 @@ export default function UnidadesNegocioPage() {
                             return (
                               <React.Fragment key={dreKey}>
                                 {/* Level 2: DRE */}
-                                <tr className="border-b border-gray-100 bg-gray-50/50 hover:bg-gray-50 cursor-pointer cursor-context-menu"
-                                  onClick={() => toggle(dreKey)}
+                                <tr className="border-b border-gray-100 bg-gray-50/50 hover:bg-gray-50 cursor-pointer"
+                                  onClick={() => openDetModal(dreNode.dre, un.unidade, dreNode.dre)}
                                   onContextMenu={e => openCtxMenu(e, dreNode.dre, un.unidade, dreNode.dre)}>
                                   <td className="py-2 font-semibold text-gray-800" style={{ paddingLeft: 40 }}>
                                     <div className="flex items-center gap-1.5">
-                                      <span className="flex-shrink-0">
+                                      <button className="flex-shrink-0 p-0.5 hover:bg-gray-200 rounded" onClick={e => { e.stopPropagation(); toggle(dreKey) }}>
                                         {dreExpanded ? <ChevronDown size={13} className="text-gray-500" /> : <ChevronRight size={13} className="text-gray-500" />}
-                                      </span>
+                                      </button>
                                       {dreNode.dre}
                                     </div>
                                   </td>
-                                    {isTotalView ? <TotalCells n={dreNode} onCtx={tipo => e => { e.stopPropagation(); openCtxMenu(e, dreNode.dre, un.unidade, dreNode.dre, undefined, undefined, tipo) }} /> : <PeriodCells periodos={dreNode.periodos} />}
+                                    {isTotalView ? <TotalCells n={dreNode} onCtx={tipo => e => { e.stopPropagation(); openCtxMenu(e, dreNode.dre, un.unidade, dreNode.dre, undefined, undefined, tipo) }} onDet={tipo => e => { e.stopPropagation(); openDetModal(dreNode.dre, un.unidade, dreNode.dre, undefined, undefined, tipo) }} /> : <PeriodCells periodos={dreNode.periodos} />}
                                 </tr>
 
                                 {dreExpanded && dreNode.agrupamentos.map(ag => {
@@ -549,24 +574,25 @@ export default function UnidadesNegocioPage() {
                                   return (
                                     <React.Fragment key={agKey}>
                                       {/* Level 3: Agrupamento */}
-                                      <tr className="border-b border-gray-50 hover:bg-gray-50/20 cursor-pointer cursor-context-menu"
-                                        onClick={() => toggle(agKey)}
+                                      <tr className="border-b border-gray-50 hover:bg-gray-50/20 cursor-pointer"
+                                        onClick={() => openDetModal(ag.agrupamento, un.unidade, dreNode.dre, ag.agrupamento)}
                                         onContextMenu={e => openCtxMenu(e, ag.agrupamento, un.unidade, dreNode.dre, ag.agrupamento)}>
                                         <td className="py-2 font-medium text-gray-600 text-xs" style={{ paddingLeft: 64 }}>
                                           <div className="flex items-center gap-1.5">
-                                            <span className="flex-shrink-0">
+                                            <button className="flex-shrink-0 p-0.5 hover:bg-gray-200 rounded" onClick={e => { e.stopPropagation(); toggle(agKey) }}>
                                               {agExpanded ? <ChevronDown size={12} className="text-gray-400" /> : <ChevronRight size={12} className="text-gray-400" />}
-                                            </span>
+                                            </button>
                                             {ag.agrupamento}
                                           </div>
                                         </td>
-                                        {isTotalView ? <TotalCells n={ag} onCtx={tipo => e => { e.stopPropagation(); openCtxMenu(e, ag.agrupamento, un.unidade, dreNode.dre, ag.agrupamento, undefined, tipo) }} /> : <PeriodCells periodos={ag.periodos} />}
+                                        {isTotalView ? <TotalCells n={ag} onCtx={tipo => e => { e.stopPropagation(); openCtxMenu(e, ag.agrupamento, un.unidade, dreNode.dre, ag.agrupamento, undefined, tipo) }} onDet={tipo => e => { e.stopPropagation(); openDetModal(ag.agrupamento, un.unidade, dreNode.dre, ag.agrupamento, undefined, tipo) }} /> : <PeriodCells periodos={ag.periodos} />}
                                       </tr>
 
                                       {/* Level 4: Conta contábil */}
                                       {agExpanded && ag.contas.map(ct => (
                                         <tr key={`${agKey}::${ct.numero}`}
-                                          className="border-b border-gray-50/60 hover:bg-gray-50/30 cursor-context-menu"
+                                          className="border-b border-gray-50/60 hover:bg-gray-50/30 cursor-pointer"
+                                          onClick={() => openDetModal(ct.nome, un.unidade, dreNode.dre, ag.agrupamento, ct.numero)}
                                           onContextMenu={e => openCtxMenu(e, ct.nome, un.unidade, dreNode.dre, ag.agrupamento, ct.numero)}>
                                           <td className="py-1.5 text-gray-400 text-xs" style={{ paddingLeft: 88 }}>
                                             <span className="pl-2 border-l-2 border-gray-100">
@@ -574,7 +600,7 @@ export default function UnidadesNegocioPage() {
                                               {ct.nome}
                                             </span>
                                           </td>
-                                          {isTotalView ? <TotalCells n={ct} onCtx={tipo => e => { e.stopPropagation(); openCtxMenu(e, ct.nome, un.unidade, dreNode.dre, ag.agrupamento, ct.numero, tipo) }} /> : <PeriodCells periodos={ct.periodos} />}
+                                          {isTotalView ? <TotalCells n={ct} onCtx={tipo => e => { e.stopPropagation(); openCtxMenu(e, ct.nome, un.unidade, dreNode.dre, ag.agrupamento, ct.numero, tipo) }} onDet={tipo => e => { e.stopPropagation(); openDetModal(ct.nome, un.unidade, dreNode.dre, ag.agrupamento, ct.numero, tipo) }} /> : <PeriodCells periodos={ct.periodos} />}
                                         </tr>
                                       ))}
                                     </React.Fragment>

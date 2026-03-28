@@ -109,6 +109,15 @@ export default function DREPage() {
     })
   }
 
+  const openDetModal = (node: TreeNode, periodo?: string, tipo: 'budget' | 'razao' | 'ambos' = 'ambos') => {
+    setDetModal({
+      x: 0, y: 0, node, periodo, tipo,
+      departamentos: selDepts.length ? selDepts : undefined,
+      periodos:      selPeriods.length ? selPeriods : undefined,
+      centros:       selCentros.length ? selCentros : undefined,
+    })
+  }
+
   useEffect(() => {
     async function init() {
       const me = await fetch('/api/me').then(r => r.ok ? r.json() : null).catch(() => null)
@@ -556,6 +565,14 @@ export default function DREPage() {
             </button>
           )}
           <button
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2"
+            onClick={() => {
+              openCommentDialog(ctxMenu.node, ctxMenu.tipo === 'razao' ? 'realizado' : 'budget', ctxMenu.periodo)
+              setCtxMenu(null)
+            }}>
+            <MessageSquare size={13} /> Comentário
+          </button>
+          <button
             className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2"
             onClick={() => {
               setTrendTarget({
@@ -857,8 +874,9 @@ export default function DREPage() {
                     {flatRows.map((row, i) => (
                       <tr key={i} data-row={row.name}
                         onContextMenu={e => openCtxMenu(e, row, undefined, 'ambos')}
+                        onClick={() => openDetModal(row, undefined, 'ambos')}
                         className={cn(
-                          'border-b transition-colors cursor-context-menu',
+                          'border-b transition-colors cursor-pointer',
                           row.isGroup
                             ? 'bg-gray-50/80 hover:bg-gray-100/80'
                             : 'border-gray-50 hover:bg-gray-50',
@@ -871,7 +889,7 @@ export default function DREPage() {
                           style={{ paddingLeft: `${20 + row.depth * 24}px` }}>
                           <div className="flex items-center gap-1.5">
                             {row.isGroup && !row.isSubtotal ? (
-                              <button onClick={() => toggleExpand(row.agrupamento || row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                              <button onClick={e => { e.stopPropagation(); toggleExpand(row.agrupamento || row.name) }} className="p-0.5 hover:bg-gray-200 rounded">
                                 {expanded.has(row.agrupamento || row.name)
                                   ? <ChevronDown size={14} className="text-gray-400" />
                                   : <ChevronRight size={14} className="text-gray-400" />}
@@ -889,7 +907,7 @@ export default function DREPage() {
                           return (
                             <td
                               onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, undefined, 'budget') }}
-                              onClick={() => openCommentDialog(row, 'budget')}
+                              onClick={e => { e.stopPropagation(); openDetModal(row, undefined, 'budget') }}
                               className={cn('px-5 py-2.5 text-right cursor-pointer relative select-none',
                                 row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-600')}>
                               <span className="relative inline-block">
@@ -911,7 +929,7 @@ export default function DREPage() {
                           return (
                             <td
                               onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, undefined, 'razao') }}
-                              onClick={() => openCommentDialog(row, 'realizado')}
+                              onClick={e => { e.stopPropagation(); openDetModal(row, undefined, 'razao') }}
                               className={cn('px-5 py-2.5 text-right cursor-pointer relative select-none',
                                 row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-600')}>
                               <span className="relative inline-block">
@@ -987,8 +1005,9 @@ export default function DREPage() {
                         return (
                           <tr key={i} data-row={row.name}
                             onContextMenu={e => openCtxMenu(e, row, undefined, 'ambos')}
+                            onClick={() => openDetModal(row, undefined, 'ambos')}
                             className={cn(
-                              'border-b transition-colors cursor-context-menu',
+                              'border-b transition-colors cursor-pointer',
                               row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50',
                             )}>
                             <td className={cn('px-4 py-2 sticky left-0 bg-white z-10',
@@ -998,7 +1017,7 @@ export default function DREPage() {
                               style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
                               <div className="flex items-center gap-1">
                                 {row.isGroup && !row.isSubtotal ? (
-                                  <button onClick={() => toggleExpand(row.agrupamento || row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                  <button onClick={e => { e.stopPropagation(); toggleExpand(row.agrupamento || row.name) }} className="p-0.5 hover:bg-gray-200 rounded">
                                     {expanded.has(row.agrupamento || row.name)
                                       ? <ChevronDown size={13} className="text-gray-400" />
                                       : <ChevronRight size={13} className="text-gray-400" />}
@@ -1018,7 +1037,7 @@ export default function DREPage() {
                               return (
                                 <td key={p}
                                   onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'ambos') }}
-                                  onClick={() => openCommentDialog(row, 'realizado', p)}
+                                  onClick={e => { e.stopPropagation(); openDetModal(row, p, 'ambos') }}
                                   className="px-1 py-2 text-center border-l-2 border-black cursor-pointer">
                                   <span className="relative inline-block">
                                     {hasData ? (
@@ -1093,8 +1112,9 @@ export default function DREPage() {
                       {flatRows.map((row, i) => (
                         <tr key={i} data-row={row.name}
                           onContextMenu={e => openCtxMenu(e, row, undefined, 'ambos')}
+                          onClick={() => openDetModal(row, undefined, 'ambos')}
                           className={cn(
-                            'border-b transition-colors cursor-context-menu',
+                            'border-b transition-colors cursor-pointer',
                             row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50',
                           )}>
                           <td className={cn('px-4 py-2 sticky left-0 bg-white z-10',
@@ -1104,7 +1124,7 @@ export default function DREPage() {
                             style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
                             <div className="flex items-center gap-1">
                               {row.isGroup && !row.isSubtotal ? (
-                                <button onClick={() => toggleExpand(row.agrupamento || row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                <button onClick={e => { e.stopPropagation(); toggleExpand(row.agrupamento || row.name) }} className="p-0.5 hover:bg-gray-200 rounded">
                                   {expanded.has(row.agrupamento || row.name)
                                     ? <ChevronDown size={13} className="text-gray-400" />
                                     : <ChevronRight size={13} className="text-gray-400" />}
@@ -1125,7 +1145,7 @@ export default function DREPage() {
                                 {/* Budget cell */}
                                 <td
                                   onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'budget') }}
-                                  onClick={() => openCommentDialog(row, 'budget', p)}
+                                  onClick={e => { e.stopPropagation(); openDetModal(row, p, 'budget') }}
                                   className={cn('px-2 py-2 text-right text-xs border-l-2 border-black cursor-pointer relative select-none',
                                     row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
                                   <span className="relative inline-block">
@@ -1141,7 +1161,7 @@ export default function DREPage() {
                                 {/* Realizado cell */}
                                 <td
                                   onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openCtxMenu(e, row, p, 'razao') }}
-                                  onClick={() => openCommentDialog(row, 'realizado', p)}
+                                  onClick={e => { e.stopPropagation(); openDetModal(row, p, 'razao') }}
                                   className={cn('px-2 py-2 text-right text-xs border-l border-gray-200 cursor-pointer relative select-none',
                                     row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
                                   <span className="relative inline-block">
@@ -1206,7 +1226,8 @@ export default function DREPage() {
                         return (
                           <tr key={i} data-row={row.name}
                             onContextMenu={e => openCtxMenu(e, row, undefined, 'ambos')}
-                            className={cn('border-b transition-colors cursor-context-menu',
+                            onClick={() => openDetModal(row, undefined, 'ambos')}
+                            className={cn('border-b transition-colors cursor-pointer',
                               row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50')}>
                             <td className={cn('px-4 py-2 sticky left-0 bg-white z-10',
                               row.isSubtotal ? 'font-bold text-gray-900 bg-gray-50/80'
@@ -1215,7 +1236,7 @@ export default function DREPage() {
                               style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
                               <div className="flex items-center gap-1">
                                 {row.isGroup && !row.isSubtotal ? (
-                                  <button onClick={() => toggleExpand(row.agrupamento || row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                  <button onClick={e => { e.stopPropagation(); toggleExpand(row.agrupamento || row.name) }} className="p-0.5 hover:bg-gray-200 rounded">
                                     {expanded.has(row.agrupamento || row.name)
                                       ? <ChevronDown size={13} className="text-gray-400" />
                                       : <ChevronRight size={13} className="text-gray-400" />}
@@ -1416,7 +1437,9 @@ export default function DREPage() {
                             const deltaPct = safePct(deltaRazao, vB.razao)
                             return (
                               <tr key={i} data-row={row.name}
-                                className={cn('border-b transition-colors cursor-context-menu',
+                                onContextMenu={e => openCtxMenu(e, row, undefined, 'ambos')}
+                                onClick={() => openDetModal(row, undefined, 'ambos')}
+                                className={cn('border-b transition-colors cursor-pointer',
                                   row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50')}>
                                 <td className={cn('px-4 py-2 sticky left-0 bg-white z-10',
                                   row.isSubtotal ? 'font-bold text-gray-900 bg-gray-50/80'
@@ -1425,7 +1448,7 @@ export default function DREPage() {
                                   style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
                                   <div className="flex items-center gap-1">
                                     {row.isGroup && !row.isSubtotal ? (
-                                      <button onClick={() => toggleExpand(row.agrupamento || row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                      <button onClick={e => { e.stopPropagation(); toggleExpand(row.agrupamento || row.name) }} className="p-0.5 hover:bg-gray-200 rounded">
                                         {expanded.has(row.agrupamento || row.name)
                                           ? <ChevronDown size={13} className="text-gray-400" />
                                           : <ChevronRight size={13} className="text-gray-400" />}
@@ -1435,17 +1458,17 @@ export default function DREPage() {
                                   </div>
                                 </td>
                                 {/* Period A */}
-                                <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, node: row, tipo: 'budget', departamentos: selDepts.length ? selDepts : undefined, periodos: periodsForKey(compA), centros: selCentros.length ? selCentros : undefined }) }} className={cn('px-2 py-2 text-right text-xs border-l-2 border-gray-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, node: row, tipo: 'budget', departamentos: selDepts.length ? selDepts : undefined, periodos: periodsForKey(compA), centros: selCentros.length ? selCentros : undefined }) }} onClick={e => { e.stopPropagation(); setDetModal({ x: 0, y: 0, node: row, tipo: 'budget', departamentos: selDepts.length ? selDepts : undefined, periodos: periodsForKey(compA), centros: selCentros.length ? selCentros : undefined }) }} className={cn('px-2 py-2 text-right text-xs border-l-2 border-gray-200 cursor-pointer', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
                                   {formatCurrency(vA.budget)}
                                 </td>
-                                <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, node: row, tipo: 'razao', departamentos: selDepts.length ? selDepts : undefined, periodos: periodsForKey(compA), centros: selCentros.length ? selCentros : undefined }) }} className={cn('px-2 py-2 text-right text-xs border-l border-gray-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, node: row, tipo: 'razao', departamentos: selDepts.length ? selDepts : undefined, periodos: periodsForKey(compA), centros: selCentros.length ? selCentros : undefined }) }} onClick={e => { e.stopPropagation(); setDetModal({ x: 0, y: 0, node: row, tipo: 'razao', departamentos: selDepts.length ? selDepts : undefined, periodos: periodsForKey(compA), centros: selCentros.length ? selCentros : undefined }) }} className={cn('px-2 py-2 text-right text-xs border-l border-gray-200 cursor-pointer', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
                                   {formatCurrency(vA.razao)}
                                 </td>
                                 {/* Period B */}
-                                <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, node: row, tipo: 'budget', departamentos: selDepts.length ? selDepts : undefined, periodos: periodsForKey(compB), centros: selCentros.length ? selCentros : undefined }) }} className={cn('px-2 py-2 text-right text-xs border-l-2 border-emerald-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, node: row, tipo: 'budget', departamentos: selDepts.length ? selDepts : undefined, periodos: periodsForKey(compB), centros: selCentros.length ? selCentros : undefined }) }} onClick={e => { e.stopPropagation(); setDetModal({ x: 0, y: 0, node: row, tipo: 'budget', departamentos: selDepts.length ? selDepts : undefined, periodos: periodsForKey(compB), centros: selCentros.length ? selCentros : undefined }) }} className={cn('px-2 py-2 text-right text-xs border-l-2 border-emerald-200 cursor-pointer', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
                                   {formatCurrency(vB.budget)}
                                 </td>
-                                <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, node: row, tipo: 'razao', departamentos: selDepts.length ? selDepts : undefined, periodos: periodsForKey(compB), centros: selCentros.length ? selCentros : undefined }) }} className={cn('px-2 py-2 text-right text-xs border-l border-gray-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
+                                <td onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, node: row, tipo: 'razao', departamentos: selDepts.length ? selDepts : undefined, periodos: periodsForKey(compB), centros: selCentros.length ? selCentros : undefined }) }} onClick={e => { e.stopPropagation(); setDetModal({ x: 0, y: 0, node: row, tipo: 'razao', departamentos: selDepts.length ? selDepts : undefined, periodos: periodsForKey(compB), centros: selCentros.length ? selCentros : undefined }) }} className={cn('px-2 py-2 text-right text-xs border-l border-gray-200 cursor-pointer', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>
                                   {formatCurrency(vB.razao)}
                                 </td>
                                 {/* Delta */}
