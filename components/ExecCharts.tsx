@@ -17,6 +17,7 @@ export interface ExecChartConfig {
   chartType: 'pie' | 'donut' | 'bar_h' | 'bar_v'
   field: 'razao' | 'budget' | 'variacao'
   topN: number
+  sortOrder: 'desc' | 'asc'
   departamentos: string[]
   dreGroup: string
   palette: string
@@ -121,7 +122,7 @@ function ExecChartCard({
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const p = new URLSearchParams({ topN: String(config.topN), field: config.field })
+      const p = new URLSearchParams({ topN: String(config.topN), field: config.field, sortOrder: config.sortOrder ?? 'desc' })
       // Always scope to the dept context — if config has explicit depts, use those;
       // otherwise fall back to the page's dept (so master sees per-dept data too)
       const depts = config.departamentos.length
@@ -331,6 +332,7 @@ function ConfigModal({
   const [chartType,     setChartType]     = useState<ExecChartConfig['chartType']>(config?.chartType     ?? 'bar_h')
   const [field,         setField]         = useState<ExecChartConfig['field']>(config?.field             ?? 'razao')
   const [topN,          setTopN]          = useState(config?.topN          ?? 5)
+  const [sortOrder,     setSortOrder]     = useState<ExecChartConfig['sortOrder']>(config?.sortOrder     ?? 'desc')
   const [departamentos, setDepartamentos] = useState<string[]>(config?.departamentos                     ?? [])
   const [dreGroup,      setDreGroup]      = useState(config?.dreGroup      ?? '')
   const [palette,       setPalette]       = useState(config?.palette       ?? DEFAULT_PALETTE)
@@ -350,7 +352,7 @@ function ConfigModal({
     onSave({
       id:   config?.id ?? Date.now().toString(),
       title: title.trim(),
-      chartType, field, topN,
+      chartType, field, topN, sortOrder,
       departamentos, dreGroup,
       palette, valueFormat, labelPosition, groupBy,
     })
@@ -430,6 +432,24 @@ function ConfigModal({
               <input type="number" min={1} max={20} value={topN}
                 onChange={e => setTopN(Math.min(20, Math.max(1, parseInt(e.target.value) || 5)))}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300" />
+            </div>
+          </div>
+
+          {/* Sort order */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Ordenação</label>
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+              {([
+                ['desc', '↓ Maior primeiro', 'Receitas, maiores valores positivos'],
+                ['asc',  '↑ Menor primeiro', 'Despesas, maiores valores negativos'],
+              ] as const).map(([v, lbl, hint]) => (
+                <button key={v} onClick={() => setSortOrder(v)}
+                  title={hint}
+                  className={cn('flex-1 py-2 font-medium transition-colors',
+                    sortOrder === v ? 'bg-gray-800 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+                  {lbl}
+                </button>
+              ))}
             </div>
           </div>
 
