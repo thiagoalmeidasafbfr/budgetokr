@@ -1,13 +1,19 @@
 'use client'
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { ChevronRight, ChevronDown, Settings2, EyeOff, RotateCcw, Save, Trash2, X, Check } from 'lucide-react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { ChevronRight, ChevronDown, Settings2, EyeOff, RotateCcw, Save, Trash2, X, Check, Filter, Download } from 'lucide-react'
 import { YearFilter } from '@/components/YearFilter'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { formatCurrency, formatPct, cn } from '@/lib/utils'
-import { buildTreeFromLinhas } from '@/lib/dre-utils'
+import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
+import { buildTreeFromLinhas, flattenTree, toQuarterLabel, groupByQuarter, sortQuarterLabels } from '@/lib/dre-utils'
 import type { DRERow, DREAccountRow, DRELinha, TreeNode } from '@/lib/dre-utils'
+import dynamic from 'next/dynamic'
+
+const WaterfallChart = dynamic(() => import('@/components/DreWaterfallChart'), {
+  ssr: false,
+  loading: () => <Card><CardContent className="p-5"><div className="h-[420px] bg-gray-50 rounded-lg animate-pulse" /></CardContent></Card>,
+})
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -356,76 +362,109 @@ function ExclusionPanel({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function DreGerencialPage() {
-  const [rawData,     setRawData]     = useState<DRERow[]>([])
-  const [accountData, setAccountData] = useState<DREAccountRow[]>([])
-  const [hierarchy,   setHierarchy]   = useState<Hierarchy[]>([])
-  const [dreLinhas,   setDreLinhas]   = useState<DRELinha[]>([])
-  const [selYear,     setSelYear]     = useState<string | null>('2026')
-  const [selDepts,    setSelDepts]    = useState<string[]>([])
+  // ── Dados ────────────────────────────────────────────────────────────────────
+  const [rawData,       setRawData]       = useState<DRERow[]>([])
+  const [accountData,   setAccountData]   = useState<DREAccountRow[]>([])
+  const [hierarchy,     setHierarchy]     = useState<Hierarchy[]>([])
+  const [dreLinhas,     setDreLinhas]     = useState<DRELinha[]>([])
   const [departamentos, setDepartamentos] = useState<string[]>([])
-  const [periodos,    setPeriodos]    = useState<string[]>([])
-  const [loading,     setLoading]     = useState(false)
-  const [panelOpen,   setPanelOpen]   = useState(true)
-  const [exclusions,  setExclusions]  = useState<Set<ExclusionKey>>(new Set())
-  const [expanded,    setExpanded]    = useState<Set<string>>(new Set())
-  const [savedViews,  setSavedViews]  = useState<SavedView[]>([])
-  const [activeView,  setActiveView]  = useState<string>('')
-  const [saveName,    setSaveName]    = useState('')
+  const [periodos,      setPeriodos]      = useState<string[]>([])
+  const [loading,       setLoading]       = useState(false)
+  // ── Filtros ──────────────────────────────────────────────────────────────────
+  const [selYear,       setSelYear]       = useState<string | null>('2026')
+  const [selDepts,      setSelDepts]      = useState<string[]>([])
+  const [selPeriods,    setSelPeriods]    = useState<string[]>([])
+  const [selCentros,    setSelCentros]    = useState<string[]>([])
+  const [expandedYears, setExpandedYears] = useState<Set<string>>(new Set(['2026']))
+  const [centrosDisp,   setCentrosDisp]   = useState<Array<{ cc: string; nome: string }>>([])
+  const [deptUser,      setDeptUser]      = useState<{ department?: string; departments?: string[] } | null>(null)
+  // ── Visualização ─────────────────────────────────────────────────────────────
+  const [expanded,      setExpanded]      = useState<Set<string>>(new Set())
+  const [viewMode,      setViewMode]      = useState<'total' | 'periodo' | 'trimestre' | 'cascata' | 'comparativo'>('total')
+  const [compMode,      setCompMode]      = useState<'mes' | 'trimestre' | 'ano'>('trimestre')
+  const [compA,         setCompA]         = useState<string>('')
+  const [compB,         setCompB]         = useState<string>('')
+  const [periodView,    setPeriodView]    = useState<'compact' | 'full'>('full')
+  // ── Exclusões ────────────────────────────────────────────────────────────────
+  const [panelOpen,     setPanelOpen]     = useState(true)
+  const [exclusions,    setExclusions]    = useState<Set<ExclusionKey>>(new Set())
+  const [savedViews,    setSavedViews]    = useState<SavedView[]>([])
+  const [activeView,    setActiveView]    = useState<string>('')
+  const [saveName,      setSaveName]      = useState('')
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string>('')
+  const isFirstRef = useRef(true)
 
-  // ── Init: detecta usuário e carrega visões salvas por userId ───────────────
+  // ── Init ────────────────────────────────────────────────────────────────────
   useEffect(() => {
     async function init() {
       try {
         const me = await fetch('/api/me').then(r => r.ok ? r.json() : null).catch(() => null)
         const userId: string = me?.userId ?? 'anon'
         setCurrentUserId(userId)
+        const meDepts: string[] = me?.departments ?? (me?.department ? [me.department] : [])
+        const isDept = me?.role === 'dept' && meDepts.length > 0
+        if (isDept) setDeptUser({ department: meDepts[0], departments: meDepts })
 
-        // Se é usuário de departamento, pré-seleciona seus departamentos
-        if (me?.role === 'dept') {
-          const depts: string[] = me.departments ?? (me.department ? [me.department] : [])
-          if (depts.length) setSelDepts(depts)
-        }
-
-        // Carrega visões salvas por userId
         const raw = localStorage.getItem(storageKey(userId))
         if (raw) setSavedViews(JSON.parse(raw))
         const active = localStorage.getItem(activeKey(userId))
         if (active) setActiveView(active)
+
+        const [linhas, hier, depts, dates] = await Promise.all([
+          fetch('/api/dre?type=linhas').then(r => r.json()),
+          fetch('/api/dre?type=hierarchy').then(r => r.json()),
+          fetch('/api/dre?type=distinct&col=nome_departamento').then(r => r.json()),
+          fetch('/api/dre?type=distinct&col=data_lancamento').then(r => r.json()),
+        ])
+        setDreLinhas(Array.isArray(linhas) ? linhas : [])
+        setHierarchy(Array.isArray(hier) ? hier : [])
+        setDepartamentos(Array.isArray(depts) ? depts : [])
+        const allPeriods = ([...new Set(
+          (Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean)
+        )].sort() as string[])
+        setPeriodos(allPeriods)
+
+        const now = new Date()
+        const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+        const curMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
+        const ytd = allPeriods.filter(p => p.startsWith('2026') && p <= curMonth)
+        const initPeriods = ytd.length > 0 ? ytd : allPeriods.filter(p => p.startsWith('2026'))
+        const initDepts = isDept ? meDepts : []
+        if (initDepts.length) setSelDepts(initDepts)
+        if (initPeriods.length) setSelPeriods(initPeriods)
+        fetchData(initDepts, initPeriods, [])
       } catch { /* ignore */ }
     }
     init()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ── Fetch static structure ──────────────────────────────────────────────────
+  // ── Centros de custo ────────────────────────────────────────────────────────
   useEffect(() => {
-    Promise.all([
-      fetch('/api/dre?type=linhas').then(r => r.json()),
-      fetch('/api/dre?type=hierarchy').then(r => r.json()),
-      fetch('/api/dre?type=distinct&col=departamento').then(r => r.json()),
-      fetch('/api/dre?type=distinct&col=periodo').then(r => r.json()),
-    ]).then(([linhas, hier, depts, pers]) => {
-      setDreLinhas(Array.isArray(linhas) ? linhas : [])
-      setHierarchy(Array.isArray(hier) ? hier : [])
-      setDepartamentos(Array.isArray(depts) ? depts : [])
-      setPeriodos(Array.isArray(pers) ? pers : [])
-    }).catch(console.error)
-  }, [])
+    if (!selDepts.length) { setCentrosDisp([]); return }
+    const p = new URLSearchParams({ type: 'centros', departamentos: selDepts.join(',') })
+    fetch(`/api/dre?${p}`).then(r => r.json()).then(data => {
+      const avail = Array.isArray(data) ? (data as Array<{ cc: string; nome: string }>) : []
+      setCentrosDisp(avail)
+      setSelCentros(prev => prev.filter(c => avail.some(d => d.cc === c)))
+    })
+  }, [selDepts])
 
   // ── Fetch DRE data ──────────────────────────────────────────────────────────
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (depts: string[], periods: string[], centros: string[]) => {
     setLoading(true)
     try {
       const params = new URLSearchParams()
-      if (selYear) params.set('periodos', Array.from({ length: 12 }, (_, i) => `${selYear}-${String(i + 1).padStart(2, '0')}`).join(','))
-      if (selDepts.length) params.set('departamentos', selDepts.join(','))
-
+      if (depts.length)   params.set('departamentos', depts.join(','))
+      if (periods.length) params.set('periodos', periods.join(','))
+      if (centros.length) params.set('centros', centros.join(','))
+      const acctParams = new URLSearchParams(params)
+      acctParams.set('type', 'accounts')
       const [dreData, acctData] = await Promise.all([
         fetch(`/api/dre?${params}`).then(r => r.json()),
-        fetch(`/api/dre?type=accounts&${params}`).then(r => r.json()),
+        fetch(`/api/dre?${acctParams}`).then(r => r.json()),
       ])
-
       setRawData(Array.isArray(dreData) ? dreData : [])
       setAccountData(Array.isArray(acctData) ? acctData : [])
     } catch (e) {
@@ -433,16 +472,52 @@ export default function DreGerencialPage() {
     } finally {
       setLoading(false)
     }
-  }, [selYear, selDepts])
+  }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  // ── Reload reativo com debounce ─────────────────────────────────────────────
+  useEffect(() => {
+    if (isFirstRef.current) { isFirstRef.current = false; return }
+    const t = setTimeout(() => fetchData(selDepts, selPeriods, selCentros), 150)
+    return () => clearTimeout(t)
+  }, [selDepts, selPeriods, selCentros, fetchData])
 
-  // ── Build tree with exclusions applied ─────────────────────────────────────
+  // ── Year filter handler ─────────────────────────────────────────────────────
+  const handleYearChange = (year: string | null) => {
+    setSelYear(year)
+    if (!year) { setSelPeriods([]); return }
+    const now = new Date()
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const curMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
+    const ytd = periodos.filter(p => p.startsWith(year) && p <= curMonth)
+    const newPeriods = ytd.length > 0 ? ytd : periodos.filter(p => p.startsWith(year))
+    setSelPeriods(newPeriods)
+    setExpandedYears(new Set([year]))
+  }
+
+  // ── Tree com exclusões ──────────────────────────────────────────────────────
   const tree = useMemo((): TreeNode[] => {
     if (!rawData.length || !dreLinhas.length) return []
     const { rows, accounts } = applyExclusions(rawData, accountData, exclusions)
     return buildTreeFromLinhas(rows, hierarchy, dreLinhas, accounts)
   }, [rawData, accountData, hierarchy, dreLinhas, exclusions])
+
+  // ── Dados derivados ──────────────────────────────────────────────────────────
+  const dataPeriods = useMemo(
+    () => [...new Set(rawData.map(r => r.periodo).filter(Boolean))].sort(),
+    [rawData]
+  )
+
+  const periodsByYear = useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const p of periodos) {
+      const y = p.substring(0, 4)
+      if (!map.has(y)) map.set(y, [])
+      map.get(y)!.push(p)
+    }
+    return [...map.entries()].sort(([a], [b]) => b.localeCompare(a))
+  }, [periodos])
+
+  const flatRows = useMemo(() => flattenTree(tree, expanded), [tree, expanded])
 
   // ── Exclusion toggle ────────────────────────────────────────────────────────
   function toggleExclusion(key: ExclusionKey) {
@@ -454,13 +529,38 @@ export default function DreGerencialPage() {
     setActiveView('')
   }
 
-  // ── Tree expand ─────────────────────────────────────────────────────────────
+  // ── Expand / collapse ───────────────────────────────────────────────────────
   function toggleExpand(name: string) {
     setExpanded(prev => {
       const next = new Set(prev)
       next.has(name) ? next.delete(name) : next.add(name)
       return next
     })
+  }
+
+  function expandAll() {
+    const groups = new Set<string>()
+    for (const h of hierarchy) {
+      if (h.dre) groups.add(h.dre)
+      if (h.agrupamento_arvore) groups.add(h.agrupamento_arvore)
+    }
+    setExpanded(groups)
+  }
+  const collapseAll = () => setExpanded(new Set())
+
+  // ── Export CSV ──────────────────────────────────────────────────────────────
+  const exportCSV = () => {
+    const header = viewMode === 'total'
+      ? ['Linha DRE', 'Budget', 'Razão', 'Variação', '%']
+      : ['Linha DRE', ...dataPeriods.flatMap(p => [`Budget ${formatPeriodo(p)}`, `Razão ${formatPeriodo(p)}`])]
+    const rows = flatRows.map(r => {
+      if (viewMode === 'total') return ['  '.repeat(r.depth) + r.name, r.budget, r.razao, r.variacao, r.variacao_pct.toFixed(2)]
+      return ['  '.repeat(r.depth) + r.name, ...dataPeriods.flatMap(p => [r.byPeriod[p]?.budget ?? 0, r.byPeriod[p]?.razao ?? 0])]
+    })
+    const csv = [header, ...rows].map(r => r.join(';')).join('\n')
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = 'dre-gerencial.csv'; a.click()
   }
 
   // ── Save view ───────────────────────────────────────────────────────────────
@@ -557,7 +657,8 @@ export default function DreGerencialPage() {
 
         {/* Filters */}
         <div className="flex items-center gap-2">
-          <YearFilter periodos={periodos} selYear={selYear} onChange={setSelYear} />
+          <YearFilter periodos={periodos} selYear={selYear} onChange={handleYearChange} />
+          <Button variant="outline" size="sm" onClick={exportCSV}><Download size={13} /> CSV</Button>
           <button
             onClick={() => setPanelOpen(v => !v)}
             className={cn(
@@ -588,6 +689,132 @@ export default function DreGerencialPage() {
       </div>
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
+
+        {/* Filter Sidebar */}
+        <aside className="w-52 flex-shrink-0 bg-white border-r border-gray-200 overflow-y-auto p-3 space-y-3">
+          <Card>
+            <CardContent className="p-3 space-y-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                <Filter size={11} /> Filtros
+              </p>
+              {deptUser ? (
+                <div>
+                  <p className="text-xs font-medium text-gray-600 mb-1">
+                    {(deptUser.departments?.length ?? 0) > 1 ? 'Departamentos' : 'Departamento'}
+                  </p>
+                  {(deptUser.departments?.length ?? 0) > 1 ? (
+                    <div className="space-y-0.5 max-h-36 overflow-y-auto">
+                      {deptUser.departments!.map(d => (
+                        <label key={d} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                          <input type="checkbox" checked={selDepts.includes(d)}
+                            onChange={e => setSelDepts(prev => e.target.checked ? [...prev, d] : prev.filter(x => x !== d))}
+                            className="w-3 h-3 accent-gray-800" />
+                          <span className="text-xs text-gray-700 font-medium truncate">{d}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {(deptUser.departments ?? (deptUser.department ? [deptUser.department] : [])).map(d => (
+                        <span key={d} className="text-xs text-gray-700 font-semibold px-1 py-0.5 bg-gray-50 rounded">{d}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <p className="text-xs font-medium text-gray-600 mb-1">Departamentos</p>
+                  <div className="space-y-0.5 max-h-36 overflow-y-auto">
+                    {departamentos.map(d => (
+                      <label key={d} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                        <input type="checkbox" checked={selDepts.includes(d)}
+                          onChange={e => setSelDepts(prev => e.target.checked ? [...prev, d] : prev.filter(x => x !== d))}
+                          className="w-3 h-3 accent-gray-800" />
+                        <span className="text-xs text-gray-600 truncate">{d || '—'}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {selDepts.length > 0 && centrosDisp.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-gray-700 mb-1 flex items-center gap-1">
+                    <ChevronRight size={10} /> Centros de Custo
+                  </p>
+                  <div className="space-y-0.5 max-h-32 overflow-y-auto pl-2 border-l-2 border-gray-100">
+                    {centrosDisp.map(c => (
+                      <label key={c.cc} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                        <input type="checkbox" checked={selCentros.includes(c.cc)}
+                          onChange={e => setSelCentros(prev => e.target.checked ? [...prev, c.cc] : prev.filter(x => x !== c.cc))}
+                          className="w-3 h-3 accent-gray-800" />
+                        <span className="text-xs text-gray-600 truncate" title={c.nome}>{c.nome || c.cc}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div>
+                <p className="text-xs font-medium text-gray-600 mb-1">Períodos</p>
+                <div className="space-y-0.5 max-h-52 overflow-y-auto">
+                  {periodsByYear.map(([year, months]) => {
+                    const selInYear = months.filter(m => selPeriods.includes(m))
+                    const allSel  = selInYear.length === months.length
+                    const someSel = selInYear.length > 0
+                    const isOpen  = expandedYears.has(year)
+                    return (
+                      <div key={year}>
+                        <div className="flex items-center gap-1 py-0.5 px-1 rounded hover:bg-gray-50 cursor-pointer select-none"
+                          onClick={() => setExpandedYears(prev => { const s = new Set(prev); s.has(year) ? s.delete(year) : s.add(year); return s })}>
+                          {isOpen ? <ChevronDown size={10} className="text-gray-400 flex-shrink-0" /> : <ChevronRight size={10} className="text-gray-400 flex-shrink-0" />}
+                          <input type="checkbox" checked={allSel}
+                            ref={el => { if (el) el.indeterminate = someSel && !allSel }}
+                            onClick={e => e.stopPropagation()}
+                            onChange={e => setSelPeriods(prev => e.target.checked ? [...new Set([...prev, ...months])] : prev.filter(p => !months.includes(p)))}
+                            className="w-3 h-3 accent-gray-800 flex-shrink-0" />
+                          <span className="text-xs font-semibold text-gray-700">{year}</span>
+                          {someSel && <span className="ml-auto text-[10px] text-gray-600 tabular-nums">{selInYear.length}/{months.length}</span>}
+                        </div>
+                        {isOpen && (
+                          <div className="ml-4 space-y-0.5">
+                            {months.map(m => (
+                              <label key={m} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                                <input type="checkbox" checked={selPeriods.includes(m)}
+                                  onChange={e => setSelPeriods(prev => e.target.checked ? [...prev, m] : prev.filter(x => x !== m))}
+                                  className="w-3 h-3 accent-gray-800" />
+                                <span className="text-xs text-gray-600">{formatPeriodo(m)}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+                {selPeriods.length > 0 && (
+                  <button onClick={() => setSelPeriods([])}
+                    className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 px-1 mt-1">
+                    <X size={10} /> Limpar períodos
+                  </button>
+                )}
+              </div>
+              {(selDepts.length > 0 || selCentros.length > 0) && (
+                <button onClick={() => { setSelDepts([]); setSelCentros([]) }}
+                  className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 px-1">
+                  <X size={10} /> Limpar filtros dept
+                </button>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3 space-y-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Visualização</p>
+              <div className="flex flex-col gap-1">
+                <button onClick={expandAll} className="text-xs text-gray-700 hover:text-gray-800 text-left px-1">Expandir todos</button>
+                <button onClick={collapseAll} className="text-xs text-gray-700 hover:text-gray-800 text-left px-1">Recolher todos</button>
+              </div>
+            </CardContent>
+          </Card>
+        </aside>
 
         {/* Exclusion Panel */}
         {panelOpen && (
@@ -624,62 +851,373 @@ export default function DreGerencialPage() {
           </aside>
         )}
 
-        {/* DRE Table */}
-        <main className="flex-1 overflow-auto p-6">
-          {exclusionCount > 0 && (
-            <div className="mb-4 flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5">
-              <EyeOff size={13} className="flex-shrink-0" />
-              <span>
-                Visão gerencial ativa — {exclusionCount} {exclusionCount === 1 ? 'item excluído' : 'itens excluídos'} do cálculo.
-                {activeView && <strong className="ml-1">Visão: &quot;{activeView}&quot;</strong>}
-              </span>
+        {/* Main content */}
+        <main className="flex-1 overflow-auto p-4 space-y-3">
+          {/* View mode toggle + active filter badges */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex bg-gray-100 border border-gray-200 rounded-lg p-0.5 gap-0.5">
+              {([['total', 'Consolidado'], ['periodo', 'Mensal'], ['trimestre', 'Trimestral'], ['comparativo', 'Comparativo'], ['cascata', 'Cascata']] as const).map(([v, label]) => (
+                <button key={v} onClick={() => setViewMode(v)}
+                  className={cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                    viewMode === v ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800 hover:bg-white')}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {(selDepts.length > 0 || selPeriods.length > 0 || selCentros.length > 0) && (
+              <div className="flex flex-wrap gap-1 ml-2">
+                {selDepts.map(d => <Badge key={d} variant="secondary" className="gap-1">{d}<button onClick={() => setSelDepts(p => p.filter(x => x !== d))}><X size={9} /></button></Badge>)}
+                {selCentros.map(c => {
+                  const nome = centrosDisp.find(x => x.cc === c)?.nome ?? c
+                  return <Badge key={c} variant="secondary" className="gap-1 bg-gray-50 text-gray-700 border-gray-200">{nome}<button onClick={() => setSelCentros(p => p.filter(x => x !== c))}><X size={9} /></button></Badge>
+                })}
+                {selPeriods.map(p => <Badge key={p} variant="outline" className="gap-1">{formatPeriodo(p)}<button onClick={() => setSelPeriods(prev => prev.filter(x => x !== p))}><X size={9} /></button></Badge>)}
+              </div>
+            )}
+            {exclusionCount > 0 && (
+              <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 ml-auto">
+                <EyeOff size={12} className="flex-shrink-0" />
+                <span>{exclusionCount} {exclusionCount === 1 ? 'item excluído' : 'itens excluídos'}{activeView && <strong className="ml-1">— {activeView}</strong>}</span>
+              </div>
+            )}
+          </div>
+
+          {loading && (
+            <div className="flex items-center justify-center h-40">
+              <div className="w-5 h-5 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
             </div>
           )}
 
-          <Card>
-            <CardContent className="p-0">
-              {loading ? (
-                <div className="p-8 space-y-3">
-                  {[1,2,3,4,5,6,7].map(i => (
-                    <div key={i} className="h-8 bg-gray-100 rounded-md animate-pulse" style={{ width: `${85 - i * 5}%` }} />
+          {/* ── Consolidado ── */}
+          {!loading && viewMode === 'total' && (
+            <Card>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-gray-50">
+                      <th className="text-left px-5 py-3 font-medium text-gray-500">Demonstrativo Gerencial</th>
+                      <th className="text-right px-5 py-3 font-medium text-gray-500">Vlr. Orçado</th>
+                      <th className="text-right px-5 py-3 font-medium text-gray-500">Vlr. Realizado</th>
+                      <th className="text-right px-5 py-3 font-medium text-gray-500">Var. Orçado x Real</th>
+                      <th className="text-right px-5 py-3 font-medium text-gray-500">% Var.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {flatRows.map((row, i) => (
+                      <tr key={i} className={cn('border-b transition-colors', row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50')}>
+                        <td className={cn('px-5 py-2.5', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : row.isAccount ? 'text-gray-500 text-xs' : 'text-gray-700')}
+                          style={{ paddingLeft: `${20 + row.depth * 24}px` }}>
+                          <div className="flex items-center gap-1.5">
+                            {row.isGroup && !row.isSubtotal ? (
+                              <button onClick={() => toggleExpand(row.agrupamento || row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                {expanded.has(row.agrupamento || row.name) ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
+                              </button>
+                            ) : <span className="w-5" />}
+                            {row.name}
+                          </div>
+                        </td>
+                        <td className={cn('px-5 py-2.5 text-right', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-600')}>{formatCurrency(row.budget)}</td>
+                        <td className={cn('px-5 py-2.5 text-right', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-600')}>{formatCurrency(row.razao)}</td>
+                        <td className={cn('px-5 py-2.5 text-right font-semibold', colorForVariance(row.variacao))}>{formatCurrency(row.variacao)}</td>
+                        <td className="px-5 py-2.5 text-right">
+                          <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(row.variacao))}>{formatPct(row.variacao_pct)}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+
+          {/* ── Mensal ── */}
+          {!loading && viewMode === 'periodo' && (
+            <Card>
+              <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-gray-100">
+                <p className="text-xs text-gray-400">{dataPeriods.length} período(s)</p>
+                <div className="flex bg-gray-100 rounded-md p-0.5 gap-0.5">
+                  {([['compact', 'Compacto'], ['full', 'Completo']] as const).map(([v, l]) => (
+                    <button key={v} onClick={() => setPeriodView(v)}
+                      className={cn('px-2.5 py-1 rounded text-xs font-medium transition-colors', periodView === v ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700')}>{l}</button>
                   ))}
                 </div>
-              ) : tree.length === 0 ? (
-                <div className="p-12 text-center text-gray-400 text-sm">
-                  Nenhum dado disponível para o período selecionado.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+              </div>
+              <div className="overflow-x-auto">
+                {periodView === 'compact' ? (
+                  <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-gray-50 border-b border-gray-200">
-                        <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                          Linha DRE
-                        </th>
-                        <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                          Orçado
-                        </th>
-                        <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                          Realizado
-                        </th>
-                        <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                          Variação
-                        </th>
-                        <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                          %
-                        </th>
+                      <tr className="border-b bg-gray-50">
+                        <th className="text-left px-4 py-2 font-medium text-gray-500 sticky left-0 bg-gray-50 z-10 min-w-[220px]">Demonstrativo</th>
+                        {dataPeriods.map(p => <th key={p} className="text-center px-1.5 py-2 font-medium text-gray-400 text-xs border-l-2 border-black min-w-[68px]">{formatPeriodo(p).replace(' ', '\u00a0')}</th>)}
+                        <th className="text-right px-3 py-2 font-medium text-gray-500 text-xs border-l border-gray-200 bg-gray-50">Orçado</th>
+                        <th className="text-right px-3 py-2 font-medium text-gray-500 text-xs">Realizado</th>
+                        <th className="text-right px-3 py-2 font-medium text-gray-500 text-xs">Var.</th>
+                        <th className="text-right px-3 py-2 font-medium text-gray-500 text-xs">%</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {tree.map(node => (
-                        <DreRow key={node.name} node={node} expanded={expanded} onToggle={toggleExpand} />
+                    <tbody>
+                      {flatRows.map((row, i) => {
+                        const totB = dataPeriods.reduce((s, p) => s + (row.byPeriod[p]?.budget ?? 0), 0)
+                        const totR = dataPeriods.reduce((s, p) => s + (row.byPeriod[p]?.razao  ?? 0), 0)
+                        const totV = totR - totB
+                        const totP = totB ? (totV / Math.abs(totB)) * 100 : 0
+                        return (
+                          <tr key={i} className={cn('border-b transition-colors', row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50')}>
+                            <td className={cn('px-4 py-2 sticky left-0 bg-white z-10', row.isSubtotal ? 'font-bold text-gray-900 bg-gray-50/80' : row.isGroup ? 'font-medium text-gray-800 bg-gray-50/80' : 'text-gray-700')} style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
+                              <div className="flex items-center gap-1">
+                                {row.isGroup && !row.isSubtotal ? (
+                                  <button onClick={() => toggleExpand(row.agrupamento || row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                    {expanded.has(row.agrupamento || row.name) ? <ChevronDown size={13} className="text-gray-400" /> : <ChevronRight size={13} className="text-gray-400" />}
+                                  </button>
+                                ) : <span className="w-4" />}
+                                <span className="truncate">{row.name}</span>
+                              </div>
+                            </td>
+                            {dataPeriods.map(p => {
+                              const cell = row.byPeriod[p] ?? { budget: 0, razao: 0 }
+                              const v = cell.razao - cell.budget
+                              const pct = cell.budget ? (v / Math.abs(cell.budget)) * 100 : 0
+                              const hasData = cell.budget !== 0 || cell.razao !== 0
+                              return (
+                                <td key={p} className="px-1 py-2 text-center border-l-2 border-black">
+                                  {hasData ? (
+                                    <span title={`Orç: ${formatCurrency(cell.budget)}\nReal: ${formatCurrency(cell.razao)}\nVar: ${formatCurrency(v)}`}
+                                      className={cn('inline-block text-xs font-semibold px-1.5 py-0.5 rounded-full min-w-[52px] text-center', bgColorForVariance(v), colorForVariance(v))}>
+                                      {formatPct(pct)}
+                                    </span>
+                                  ) : <span className="text-gray-200 text-xs">—</span>}
+                                </td>
+                              )
+                            })}
+                            <td className={cn('px-3 py-2 text-right text-xs border-l border-gray-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>{formatCurrency(totB)}</td>
+                            <td className={cn('px-3 py-2 text-right text-xs', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>{formatCurrency(totR)}</td>
+                            <td className={cn('px-3 py-2 text-right text-xs font-semibold', colorForVariance(totV))}>{formatCurrency(totV)}</td>
+                            <td className="px-3 py-2 text-right text-xs"><span className={cn('text-xs font-medium px-1.5 py-0.5 rounded-full', bgColorForVariance(totV))}>{formatPct(totP)}</span></td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="text-left px-4 py-2 font-medium text-gray-500 sticky left-0 bg-gray-50 z-10 min-w-[240px]">Demonstrativo Gerencial</th>
+                        {dataPeriods.map(p => <th key={p} colSpan={3} className="text-center px-1 py-2 font-medium text-gray-600 border-l-2 border-black bg-gray-50">{formatPeriodo(p)}</th>)}
+                      </tr>
+                      <tr className="border-b bg-gray-50/50">
+                        <th className="sticky left-0 bg-gray-50/50 z-10" />
+                        {dataPeriods.map(p => (
+                          <React.Fragment key={p}>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-black">Orçado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Realizado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Var.</th>
+                          </React.Fragment>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {flatRows.map((row, i) => (
+                        <tr key={i} className={cn('border-b transition-colors', row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50')}>
+                          <td className={cn('px-4 py-2 sticky left-0 bg-white z-10', row.isSubtotal ? 'font-bold text-gray-900 bg-gray-50/80' : row.isGroup ? 'font-medium text-gray-800 bg-gray-50/80' : 'text-gray-700')} style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
+                            <div className="flex items-center gap-1">
+                              {row.isGroup && !row.isSubtotal ? (
+                                <button onClick={() => toggleExpand(row.agrupamento || row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                  {expanded.has(row.agrupamento || row.name) ? <ChevronDown size={13} className="text-gray-400" /> : <ChevronRight size={13} className="text-gray-400" />}
+                                </button>
+                              ) : <span className="w-4" />}
+                              <span className="truncate">{row.name}</span>
+                            </div>
+                          </td>
+                          {dataPeriods.map(p => {
+                            const cell = row.byPeriod[p] ?? { budget: 0, razao: 0 }
+                            const v = cell.razao - cell.budget
+                            return (
+                              <React.Fragment key={p}>
+                                <td className={cn('px-2 py-2 text-right text-xs border-l-2 border-black', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>{formatCurrency(cell.budget)}</td>
+                                <td className={cn('px-2 py-2 text-right text-xs border-l border-gray-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>{formatCurrency(cell.razao)}</td>
+                                <td className={cn('px-2 py-2 text-right text-xs font-semibold border-l border-gray-200', colorForVariance(v))}>{formatCurrency(v)}</td>
+                              </React.Fragment>
+                            )
+                          })}
+                        </tr>
                       ))}
                     </tbody>
                   </table>
+                )}
+              </div>
+            </Card>
+          )}
+
+          {/* ── Trimestral ── */}
+          {!loading && viewMode === 'trimestre' && (() => {
+            const allQ = sortQuarterLabels([...new Set(dataPeriods.map(p => toQuarterLabel(p)))])
+            return (
+              <Card>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="text-left px-4 py-2 font-medium text-gray-500 sticky left-0 bg-gray-50 z-10 min-w-[220px]">Demonstrativo Gerencial</th>
+                        {allQ.map(q => <th key={q} colSpan={3} className="text-center px-1 py-2 font-medium text-gray-600 border-l-2 border-black bg-gray-50">{q}</th>)}
+                      </tr>
+                      <tr className="border-b bg-gray-50/50">
+                        <th className="sticky left-0 bg-gray-50/50 z-10" />
+                        {allQ.map(q => (
+                          <React.Fragment key={q}>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-black">Orçado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Realizado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Var.</th>
+                          </React.Fragment>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {flatRows.map((row, i) => {
+                        const byQ = groupByQuarter(row.byPeriod)
+                        return (
+                          <tr key={i} className={cn('border-b transition-colors', row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50')}>
+                            <td className={cn('px-4 py-2 sticky left-0 bg-white z-10', row.isSubtotal ? 'font-bold text-gray-900 bg-gray-50/80' : row.isGroup ? 'font-medium text-gray-800 bg-gray-50/80' : 'text-gray-700')} style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
+                              <div className="flex items-center gap-1">
+                                {row.isGroup && !row.isSubtotal ? (
+                                  <button onClick={() => toggleExpand(row.agrupamento || row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                    {expanded.has(row.agrupamento || row.name) ? <ChevronDown size={13} className="text-gray-400" /> : <ChevronRight size={13} className="text-gray-400" />}
+                                  </button>
+                                ) : <span className="w-4" />}
+                                <span className="truncate">{row.name}</span>
+                              </div>
+                            </td>
+                            {allQ.map(q => {
+                              const cell = byQ[q] ?? { budget: 0, razao: 0 }
+                              const v = cell.razao - cell.budget
+                              return (
+                                <React.Fragment key={q}>
+                                  <td className={cn('px-2 py-2 text-right text-xs border-l-2 border-black', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>{formatCurrency(cell.budget)}</td>
+                                  <td className={cn('px-2 py-2 text-right text-xs border-l border-gray-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>{formatCurrency(cell.razao)}</td>
+                                  <td className={cn('px-2 py-2 text-right text-xs font-semibold border-l border-gray-200', colorForVariance(v))}>{formatCurrency(v)}</td>
+                                </React.Fragment>
+                              )
+                            })}
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </Card>
+            )
+          })()}
+
+          {/* ── Comparativo ── */}
+          {!loading && viewMode === 'comparativo' && (() => {
+            const monthOpts = dataPeriods
+            const quarterOpts = sortQuarterLabels([...new Set(dataPeriods.map(p => toQuarterLabel(p)))])
+            const yearOpts = [...new Set(dataPeriods.map(p => p.split('-')[0]))].sort()
+            const options = compMode === 'mes' ? monthOpts : compMode === 'trimestre' ? quarterOpts : yearOpts
+            const fmtOpt = (o: string) => compMode === 'mes' ? formatPeriodo(o) : o
+            const getVals = (row: TreeNode, key: string): { budget: number; razao: number } => {
+              if (compMode === 'mes') return row.byPeriod[key] ?? { budget: 0, razao: 0 }
+              if (compMode === 'trimestre') { const byQ = groupByQuarter(row.byPeriod); return byQ[key] ?? { budget: 0, razao: 0 } }
+              let b = 0, r = 0
+              for (const [p, v] of Object.entries(row.byPeriod)) { if (p.startsWith(key + '-')) { b += v.budget; r += v.razao } }
+              return { budget: b, razao: r }
+            }
+            const hasSel = compA && compB && compA !== compB
+            return (
+              <div className="space-y-3">
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-4 flex-wrap">
+                      <div className="flex bg-gray-100 rounded-md p-0.5 gap-0.5">
+                        {([['mes', 'Mês'], ['trimestre', 'Trimestre'], ['ano', 'Ano']] as const).map(([v, l]) => (
+                          <button key={v} onClick={() => { setCompMode(v); setCompA(''); setCompB('') }}
+                            className={cn('px-3 py-1.5 rounded text-xs font-medium transition-colors', compMode === v ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700')}>{l}</button>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <select value={compA} onChange={e => setCompA(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white outline-none focus:ring-2 focus:ring-gray-500">
+                          <option value="">Período A</option>
+                          {options.map(o => <option key={o} value={o}>{fmtOpt(o)}</option>)}
+                        </select>
+                        <span className="text-sm font-medium text-gray-400">vs</span>
+                        <select value={compB} onChange={e => setCompB(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white outline-none focus:ring-2 focus:ring-gray-500">
+                          <option value="">Período B</option>
+                          {options.map(o => <option key={o} value={o}>{fmtOpt(o)}</option>)}
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-1 border-l border-gray-200 pl-3">
+                        <span className="text-xs text-gray-400 mr-1">Rápido:</span>
+                        {compMode === 'mes' && monthOpts.length >= 2 && <button onClick={() => { setCompA(monthOpts[monthOpts.length-1]); setCompB(monthOpts[monthOpts.length-2]) }} className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium">MoM</button>}
+                        {compMode === 'trimestre' && quarterOpts.length >= 2 && <button onClick={() => { setCompA(quarterOpts[quarterOpts.length-1]); setCompB(quarterOpts[quarterOpts.length-2]) }} className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium">QoQ</button>}
+                        {compMode === 'ano' && yearOpts.length >= 2 && <button onClick={() => { setCompA(yearOpts[yearOpts.length-1]); setCompB(yearOpts[yearOpts.length-2]) }} className="text-xs px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 font-medium">YoY</button>}
+                      </div>
+                      {hasSel && <Badge variant="secondary" className="text-xs">{fmtOpt(compA)} vs {fmtOpt(compB)}</Badge>}
+                    </div>
+                  </CardContent>
+                </Card>
+                {hasSel ? (
+                  <Card>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-gray-50">
+                            <th className="text-left px-4 py-2 font-medium text-gray-500 sticky left-0 bg-gray-50 z-10 min-w-[220px]">Demonstrativo Gerencial</th>
+                            <th colSpan={2} className="text-center px-2 py-2 font-medium text-gray-700 border-l-2 border-gray-200 bg-gray-50/50">{fmtOpt(compA)}</th>
+                            <th colSpan={2} className="text-center px-2 py-2 font-medium text-emerald-600 border-l-2 border-emerald-200 bg-emerald-50/50">{fmtOpt(compB)}</th>
+                            <th colSpan={2} className="text-center px-2 py-2 font-medium text-gray-600 border-l-2 border-black bg-gray-100/50">Variação (A vs B)</th>
+                          </tr>
+                          <tr className="border-b bg-gray-50/50">
+                            <th className="sticky left-0 bg-gray-50/50 z-10" />
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-gray-200">Orçado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Realizado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-emerald-200">Orçado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">Realizado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l-2 border-black">Δ Realizado</th>
+                            <th className="text-right px-2 py-1.5 font-medium text-gray-400 text-xs border-l border-gray-200">% Var.</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {flatRows.map((row, i) => {
+                            const vA = getVals(row, compA), vB = getVals(row, compB)
+                            const delta = vA.razao - vB.razao
+                            const deltaPct = vB.razao ? (delta / Math.abs(vB.razao)) * 100 : 0
+                            return (
+                              <tr key={i} className={cn('border-b transition-colors', row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50')}>
+                                <td className={cn('px-4 py-2 sticky left-0 bg-white z-10', row.isSubtotal ? 'font-bold text-gray-900 bg-gray-50/80' : row.isGroup ? 'font-medium text-gray-800 bg-gray-50/80' : 'text-gray-700')} style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
+                                  <div className="flex items-center gap-1">
+                                    {row.isGroup && !row.isSubtotal ? (
+                                      <button onClick={() => toggleExpand(row.agrupamento || row.name)} className="p-0.5 hover:bg-gray-200 rounded">
+                                        {expanded.has(row.agrupamento || row.name) ? <ChevronDown size={13} className="text-gray-400" /> : <ChevronRight size={13} className="text-gray-400" />}
+                                      </button>
+                                    ) : <span className="w-4" />}
+                                    <span className="truncate">{row.name}</span>
+                                  </div>
+                                </td>
+                                <td className={cn('px-2 py-2 text-right text-xs border-l-2 border-gray-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>{formatCurrency(vA.budget)}</td>
+                                <td className={cn('px-2 py-2 text-right text-xs border-l border-gray-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>{formatCurrency(vA.razao)}</td>
+                                <td className={cn('px-2 py-2 text-right text-xs border-l-2 border-emerald-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>{formatCurrency(vB.budget)}</td>
+                                <td className={cn('px-2 py-2 text-right text-xs border-l border-gray-200', row.isSubtotal ? 'font-bold' : row.isGroup ? 'font-medium text-gray-700' : 'text-gray-600')}>{formatCurrency(vB.razao)}</td>
+                                <td className={cn('px-2 py-2 text-right text-xs font-semibold border-l-2 border-black', colorForVariance(delta))}>{formatCurrency(delta)}</td>
+                                <td className="px-2 py-2 text-right border-l border-gray-200"><span className={cn('text-xs font-medium px-1.5 py-0.5 rounded-full', bgColorForVariance(delta))}>{formatPct(deltaPct)}</span></td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                ) : (
+                  <Card><CardContent className="p-10 text-center text-gray-400 text-sm">Selecione dois períodos diferentes para comparar.</CardContent></Card>
+                )}
+              </div>
+            )
+          })()}
+
+          {/* ── Cascata ── */}
+          {!loading && viewMode === 'cascata' && dreLinhas.length > 0 && <WaterfallChart tree={tree} dreLinhas={dreLinhas} />}
+          {!loading && viewMode === 'cascata' && dreLinhas.length === 0 && (
+            <Card><CardContent className="p-10 text-center text-gray-400 text-sm">Importe a estrutura da DRE para visualizar o gráfico de cascata.</CardContent></Card>
+          )}
         </main>
       </div>
 
