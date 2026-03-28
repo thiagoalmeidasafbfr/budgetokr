@@ -15,8 +15,19 @@ export function formatCurrency(value: number, currency = 'BRL'): string {
 }
 
 export function formatPct(value: number): string {
+  if (!isFinite(value) || Math.abs(value) > 999.9) {
+    if (value > 0) return '+999.9%'
+    if (value < 0) return '-999.9%'
+    return '0.0%'
+  }
   const sign = value > 0 ? '+' : ''
   return `${sign}${value.toFixed(1)}%`
+}
+
+/** Calcula variação percentual com proteção contra denominadores próximos de zero */
+export function safePct(variacao: number, base: number): number {
+  if (Math.abs(base) < 0.01) return 0
+  return (variacao / Math.abs(base)) * 100
 }
 
 /** Converte "yyyy-mm-dd" → "dd/mm/yyyy" para exibição no formato brasileiro */

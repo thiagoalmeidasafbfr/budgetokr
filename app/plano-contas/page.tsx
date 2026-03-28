@@ -7,7 +7,7 @@ import { FilterSidebar } from '@/components/FilterSidebar'
 import { YearFilter } from '@/components/YearFilter'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
+import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn, safePct } from '@/lib/utils'
 
 interface TreeNode {
   numero: string
@@ -545,7 +545,7 @@ export default function PlanoContasPage() {
                               'text-xs px-1.5 py-0.5 rounded-full font-medium',
                               totalVariacao >= 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'
                             )}>
-                              {formatPct(totals.budget ? (totalVariacao / Math.abs(totals.budget)) * 100 : 0)}
+                              {formatPct(safePct(totalVariacao, totals.budget))}
                             </span>
                           )}
                         </td>

@@ -5,7 +5,7 @@ import { YearFilter } from '@/components/YearFilter'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
+import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn, safePct } from '@/lib/utils'
 import { buildTreeFromLinhas, flattenTree, toQuarterLabel, groupByQuarter, sortQuarterLabels } from '@/lib/dre-utils'
 import type { DRERow, DREAccountRow, DRELinha, TreeNode } from '@/lib/dre-utils'
 import dynamic from 'next/dynamic'
@@ -960,7 +960,7 @@ export default function DreGerencialPage() {
                         const totB = dataPeriods.reduce((s, p) => s + (row.byPeriod[p]?.budget ?? 0), 0)
                         const totR = dataPeriods.reduce((s, p) => s + (row.byPeriod[p]?.razao  ?? 0), 0)
                         const totV = totR - totB
-                        const totP = totB ? (totV / Math.abs(totB)) * 100 : 0
+                        const totP = safePct(totV, totB)
                         return (
                           <tr key={i} className={cn('border-b transition-colors', row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50')}>
                             <td className={cn('px-4 py-2 sticky left-0 bg-white z-10', row.isSubtotal ? 'font-bold text-gray-900 bg-gray-50/80' : row.isGroup ? 'font-medium text-gray-800 bg-gray-50/80' : 'text-gray-700')} style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
@@ -976,7 +976,7 @@ export default function DreGerencialPage() {
                             {dataPeriods.map(p => {
                               const cell = row.byPeriod[p] ?? { budget: 0, razao: 0 }
                               const v = cell.razao - cell.budget
-                              const pct = cell.budget ? (v / Math.abs(cell.budget)) * 100 : 0
+                              const pct = safePct(v, cell.budget)
                               const hasData = cell.budget !== 0 || cell.razao !== 0
                               return (
                                 <td key={p} className="px-1 py-2 text-center border-l-2 border-black">
@@ -1180,7 +1180,7 @@ export default function DreGerencialPage() {
                           {flatRows.map((row, i) => {
                             const vA = getVals(row, compA), vB = getVals(row, compB)
                             const delta = vA.razao - vB.razao
-                            const deltaPct = vB.razao ? (delta / Math.abs(vB.razao)) * 100 : 0
+                            const deltaPct = safePct(delta, vB.razao)
                             return (
                               <tr key={i} className={cn('border-b transition-colors', row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50')}>
                                 <td className={cn('px-4 py-2 sticky left-0 bg-white z-10', row.isSubtotal ? 'font-bold text-gray-900 bg-gray-50/80' : row.isGroup ? 'font-medium text-gray-800 bg-gray-50/80' : 'text-gray-700')} style={{ paddingLeft: `${16 + row.depth * 20}px` }}>

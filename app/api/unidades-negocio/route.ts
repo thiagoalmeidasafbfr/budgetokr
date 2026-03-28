@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { getSession } from '@/lib/session'
 import { getUserUnidades } from '@/lib/query'
+import { safePct } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -113,7 +114,7 @@ export async function GET(req: NextRequest) {
       budget:       r.budget ?? 0,
       razao:        r.razao  ?? 0,
       variacao:     (r.razao ?? 0) - (r.budget ?? 0),
-      variacao_pct: r.budget ? (((r.razao ?? 0) - (r.budget ?? 0)) / Math.abs(r.budget)) * 100 : 0,
+      variacao_pct: safePct((r.razao ?? 0) - (r.budget ?? 0), r.budget),
     })))
   } catch (e) {
     console.error(e)

@@ -5,7 +5,7 @@ import { YearFilter } from '@/components/YearFilter'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, getDeptColor, cn } from '@/lib/utils'
+import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, getDeptColor, cn, safePct } from '@/lib/utils'
 import { toQuarterLabel, groupByQuarter, sortQuarterLabels, buildTree, buildTreeFromLinhas, flattenTree } from '@/lib/dre-utils'
 import type { DRERow, DREAccountRow, TreeNode, DRELinha } from '@/lib/dre-utils'
 import dynamic from 'next/dynamic'
@@ -965,7 +965,7 @@ export default function DREPage() {
                         const rowTotBudget = dataPeriods.reduce((s, p) => s + (row.byPeriod[p]?.budget ?? 0), 0)
                         const rowTotRazao  = dataPeriods.reduce((s, p) => s + (row.byPeriod[p]?.razao  ?? 0), 0)
                         const rowTotVar    = rowTotRazao - rowTotBudget
-                        const rowTotPct    = rowTotBudget ? (rowTotVar / Math.abs(rowTotBudget)) * 100 : 0
+                        const rowTotPct    = safePct(rowTotVar, rowTotBudget)
                         return (
                           <tr key={i} data-row={row.name}
                             onContextMenu={e => openCtxMenu(e, row, undefined, 'ambos')}
@@ -992,7 +992,7 @@ export default function DREPage() {
                             {dataPeriods.map(p => {
                               const cell = row.byPeriod[p] ?? { budget: 0, razao: 0 }
                               const v    = cell.razao - cell.budget
-                              const pct  = cell.budget ? (v / Math.abs(cell.budget)) * 100 : 0
+                              const pct  = safePct(v, cell.budget)
                               const hasData = cell.budget !== 0 || cell.razao !== 0
                               // compact view shows "realizado" (razão) as the primary value
                               const ck  = `${row.name}||realizado||${p}`
@@ -1395,7 +1395,7 @@ export default function DREPage() {
                             const vA = getNodeValues(row, compA)
                             const vB = getNodeValues(row, compB)
                             const deltaRazao = vA.razao - vB.razao
-                            const deltaPct = vB.razao ? ((deltaRazao) / Math.abs(vB.razao)) * 100 : 0
+                            const deltaPct = safePct(deltaRazao, vB.razao)
                             return (
                               <tr key={i} data-row={row.name}
                                 className={cn('border-b transition-colors cursor-context-menu',
