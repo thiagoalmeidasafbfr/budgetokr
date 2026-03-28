@@ -646,12 +646,12 @@ export default function DREPage() {
         )
       })()}
 
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">DRE — Demonstrativo de Resultados</h1>
-          <p className="text-gray-500 text-sm mt-0.5">P&L por linha contábil · Budget vs Razão · Clique direito para detalhamento</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">DRE — Demonstrativo de Resultados</h1>
+          <p className="text-gray-500 text-sm mt-0.5">P&L por linha contábil · Budget vs Razão</p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
           <YearFilter periodos={periodos} selYear={selYear} onChange={handleYearChange} />
           <Button variant="outline" size="sm" onClick={exportCSV}><Download size={13} /> CSV</Button>
           <Button variant="outline" size="sm" onClick={handlePrint} className="no-print"><Printer size={13} /> PDF</Button>

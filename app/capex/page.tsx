@@ -155,12 +155,12 @@ export default function CapexPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">CAPEX — Investimentos</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">CAPEX — Investimentos</h1>
           <p className="text-gray-500 text-sm mt-0.5">Budget vs Realizado por projeto · {data.length.toLocaleString()} registros</p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
           <YearFilter periodos={periodos} selYear={selYear} onChange={y => setSelYear(y)} />
           <Button variant="outline" size="sm" onClick={exportCSV}><Download size={13} /> CSV</Button>
         </div>

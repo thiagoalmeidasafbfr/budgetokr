@@ -280,15 +280,15 @@ export default function PlanoContasPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Plano de Contas</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">Plano de Contas</h1>
           <p className="text-gray-500 text-sm mt-0.5">
             Análise hierárquica por nível do plano de contas · Budget vs Razão
             {data && <span className="ml-2 text-gray-400">· {data.totalContas} contas · {data.maxLevel} níveis</span>}
           </p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
           <YearFilter periodos={data?.periodos ?? []} selYear={selYear} onChange={setSelYear} />
           <Button variant="outline" size="sm" onClick={() => loadData(selDepts, selPeriods)}>
             <RefreshCw size={13} /> Atualizar

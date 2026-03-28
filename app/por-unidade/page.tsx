@@ -274,9 +274,9 @@ export default function PorUnidadePage() {
     <>
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Por Unidade de Negócio</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">Por Unidade de Negócio</h1>
           <p className="text-gray-500 text-sm mt-0.5">
             Budget vs Realizado · Expansível por DRE → Agrupamento → Conta
           </p>

@@ -100,6 +100,22 @@ body {
 .dark .ring-indigo-100 { --tw-ring-color: #312e81 !important; }
 .dark .ring-gray-100   { --tw-ring-color: #334155 !important; }
 
+/* ─── Mobile UX improvements ─────────────────────────────────────────────── */
+@media (max-width: 767px) {
+  /* Prevent double-tap zoom on interactive elements */
+  button, a, input, select, textarea {
+    touch-action: manipulation;
+  }
+  /* Ensure minimum tap target size */
+  button, a {
+    min-height: 36px;
+  }
+  /* Prevent iOS rubber-band scroll on fixed elements */
+  body {
+    overscroll-behavior: none;
+  }
+}
+
 /* ─── Print ──────────────────────────────────────────────────────────────── */
 @media print {
   .no-print { display: none !important; }

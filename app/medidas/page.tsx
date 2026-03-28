@@ -170,7 +170,7 @@ export default function MedidasPage() {
     <div className="max-w-4xl mx-auto space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Medidas</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">Medidas</h1>
           <p className="text-gray-500 text-sm mt-0.5">Defina KPIs como SG&A, COGS, Headcount usando filtros no star schema</p>
         </div>
         {editing === null && <Button onClick={() => { setForm(emptyForm()); setEditing(-1); setError(null) }}><Plus size={15} /> Nova Medida</Button>}
