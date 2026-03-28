@@ -48,7 +48,7 @@ function fromBase64(str: string): ArrayBuffer {
 
 // ─── Seal / Unseal ─────────────────────────────────────────────────────────────
 
-const SESSION_TTL_MS = 8 * 60 * 60 * 1000 // 8 horas — deve coincidir com maxAge do cookie
+export const SESSION_TTL_MS = 8 * 60 * 60 * 1000 // 8 horas — deve coincidir com maxAge do cookie
 
 export async function sealSession(user: SessionUser): Promise<string> {
   const sealed = { ...user, exp: Date.now() + SESSION_TTL_MS }
