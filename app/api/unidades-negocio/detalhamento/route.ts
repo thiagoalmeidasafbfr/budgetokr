@@ -85,6 +85,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ rows: allRows, truncated })
   } catch (e) {
     console.error('[unidades-negocio/detalhamento]', e)
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

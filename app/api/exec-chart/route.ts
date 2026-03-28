@@ -206,6 +206,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ items: buildTopN(rows, topN, field), dreGroups })
 
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    console.error('[exec-chart]', e)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, updated: upsertRows.length })
   } catch (e) {
     console.error('[plano-contas POST]', e)
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -91,7 +91,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ ok: true })
   } catch (e) {
     console.error('[plano-contas PUT]', e)
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -229,6 +229,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ tree, maxLevel, totalContas: contas.length, departamentos, periodos: periodosAll })
   } catch (e) {
     console.error('[plano-contas GET]', e)
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

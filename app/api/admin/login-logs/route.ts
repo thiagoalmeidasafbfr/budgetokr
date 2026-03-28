@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   }
 
   const { data: rows, count, error } = await query
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) { console.error('[admin/login-logs]', error.message); return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 }) }
 
   const total = count ?? 0
   return NextResponse.json({ rows: rows ?? [], total, page, pages: Math.ceil(total / limit) })

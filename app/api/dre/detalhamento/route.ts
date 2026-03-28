@@ -258,6 +258,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ rows, truncated })
   } catch (e) {
     console.error('[detalhamento]', e)
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

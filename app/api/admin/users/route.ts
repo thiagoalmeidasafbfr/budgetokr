@@ -62,7 +62,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ users: result })
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    console.error('[admin/users]', e)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -99,7 +100,8 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ ok: true })
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    console.error('[admin/users]', e)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -142,7 +144,8 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({ ok: true })
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    console.error('[admin/users]', e)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -158,6 +161,7 @@ export async function DELETE(req: NextRequest) {
     if (error) throw new Error(error.message)
     return NextResponse.json({ ok: true })
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    console.error('[admin/users]', e)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

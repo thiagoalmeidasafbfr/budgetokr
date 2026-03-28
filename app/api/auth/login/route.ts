@@ -5,6 +5,31 @@ import { getSupabase } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
+// ─── Rate Limiting (in-memory + database fallback) ───────────────────────────
+const MAX_ATTEMPTS = 5
+const WINDOW_MS    = 15 * 60 * 1000 // 15 minutos
+
+const attempts = new Map<string, { count: number; firstAttempt: number }>()
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now()
+  const record = attempts.get(ip)
+  if (!record || now - record.firstAttempt > WINDOW_MS) {
+    attempts.set(ip, { count: 1, firstAttempt: now })
+    return false
+  }
+  record.count++
+  return record.count > MAX_ATTEMPTS
+}
+
+// Limpa entradas expiradas a cada 5 minutos para evitar memory leak
+setInterval(() => {
+  const now = Date.now()
+  for (const [ip, record] of attempts) {
+    if (now - record.firstAttempt > WINDOW_MS) attempts.delete(ip)
+  }
+}, 5 * 60 * 1000)
+
 function getClientIp(req: NextRequest): string {
   return (
     req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
@@ -14,12 +39,38 @@ function getClientIp(req: NextRequest): string {
 }
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req)
+
+  // Rate limit check (in-memory)
+  if (isRateLimited(ip)) {
+    return NextResponse.json(
+      { error: 'Muitas tentativas. Aguarde 15 minutos.' },
+      { status: 429 }
+    )
+  }
+
   const body = await req.json()
   const userId   = (body.userId ?? '').trim()
   const password = body.password ?? ''
-
-  const ip = getClientIp(req)
   const ua = req.headers.get('user-agent') ?? ''
+
+  // Database-backed rate limit check (survives cold starts)
+  try {
+    const supabase = getSupabase()
+    const since = new Date(Date.now() - WINDOW_MS).toISOString()
+    const { count } = await supabase
+      .from('login_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('ip', ip)
+      .eq('success', false)
+      .gte('created_at', since)
+    if ((count ?? 0) >= MAX_ATTEMPTS) {
+      return NextResponse.json(
+        { error: 'Muitas tentativas. Aguarde 15 minutos.' },
+        { status: 429 }
+      )
+    }
+  } catch { /* fallback to in-memory only */ }
 
   const user = await validateUser(userId, password)
 
@@ -30,7 +81,7 @@ export async function POST(req: NextRequest) {
       user_id:    userId,
       role:       user?.role ?? null,
       department: user?.department ?? null,
-      success:    user ? true : false,
+      success:    !!user,
       ip,
       user_agent: ua.substring(0, 255),
     })
@@ -39,6 +90,9 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: 'Usuário ou senha inválidos' }, { status: 401 })
   }
+
+  // Login bem-sucedido: reseta o rate limit deste IP
+  attempts.delete(ip)
 
   const sealed = await sealSession(user)
 

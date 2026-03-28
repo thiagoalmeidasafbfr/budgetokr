@@ -29,7 +29,8 @@ export async function GET(req: NextRequest) {
     const centros = (data ?? []).map((r: { centro_custo: string }) => r.centro_custo)
     return NextResponse.json({ centros, configured: centros.length > 0 })
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    console.error('[admin/users/centros]', e)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -65,6 +66,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, configured: centros.length > 0 })
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    console.error('[admin/users/centros]', e)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
