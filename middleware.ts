@@ -15,6 +15,30 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Proteção CSRF: rejeita requisições mutantes de origens externas.
+  // Browsers sempre enviam Origin em cross-site requests. Se Origin estiver
+  // presente e for diferente do Host, a requisição veio de outro domínio.
+  // Requisições sem Origin (curl, Postman, server-to-server) são permitidas
+  // pois não carregam cookies de sessão do usuário.
+  if (
+    ['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method) &&
+    pathname.startsWith('/api/')
+  ) {
+    const origin = request.headers.get('origin')
+    const host   = request.headers.get('host')
+    if (origin && host) {
+      try {
+        const originHost = new URL(origin).host
+        if (originHost !== host) {
+          return NextResponse.json({ error: 'Origem inválida' }, { status: 403 })
+        }
+      } catch {
+        // Origin malformado → rejeita
+        return NextResponse.json({ error: 'Origem inválida' }, { status: 403 })
+      }
+    }
+  }
+
   // Rotas públicas passam direto
   if (PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))) {
     return NextResponse.next()
