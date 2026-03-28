@@ -45,7 +45,7 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="flex items-center justify-center mb-8">
           <img
-            src="/botafogo.png"
+            src="/lgloginbotafogo.png"
             alt="Logo"
             className="h-20 w-auto object-contain"
           />

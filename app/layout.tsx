@@ -7,6 +7,7 @@ import { ThemeProvider } from '@/components/ThemeProvider'
 export const metadata: Metadata = {
   title: 'Glorioso Finance',
   description: 'Plataforma de gestão financeira do Botafogo de Futebol e Regatas',
+  icons: { icon: '/lbotafogo.png' },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
