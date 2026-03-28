@@ -11,7 +11,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Arquivos estáticos e _next passam direto
-  if (pathname.startsWith('/_next') || pathname.startsWith('/favicon')) {
+  if (pathname.startsWith('/_next') || pathname.startsWith('/favicon') || pathname.match(/\.(png|jpg|jpeg|gif|svg|ico|webp)$/)) {
     return NextResponse.next()
   }
 
@@ -76,6 +76,6 @@ export const config = {
      * - favicon.ico
      * - api/upload (Edge runtime bufferiza o body → 413 para arquivos grandes)
      */
-    '/((?!_next/static|_next/image|favicon.ico|api/upload).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api/upload|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp)$).*)',
   ],
 }
