@@ -29,7 +29,7 @@ CREATE INDEX IF NOT EXISTS idx_lanc_conta      ON lancamentos(numero_conta_conta
 CREATE INDEX IF NOT EXISTS idx_lanc_data       ON lancamentos(data_lancamento);
 CREATE INDEX IF NOT EXISTS idx_lanc_tipo_cc    ON lancamentos(tipo, centro_custo);
 CREATE INDEX IF NOT EXISTS idx_lanc_tipo_conta ON lancamentos(tipo, numero_conta_contabil);
-ALTER TABLE lancamentos DISABLE ROW LEVEL SECURITY;
+ALTER TABLE lancamentos ENABLE ROW LEVEL SECURITY;
 
 -- ─── Dimensão: Unidades de Negócio ───────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS unidades_negocio (
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS unidades_negocio (
   unidade           TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_un_unidade ON unidades_negocio(unidade);
-ALTER TABLE unidades_negocio DISABLE ROW LEVEL SECURITY;
+ALTER TABLE unidades_negocio ENABLE ROW LEVEL SECURITY;
 
 -- ─── Dimensão: Centros de Custo ──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS centros_custo (
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS centros_custo (
 );
 CREATE INDEX IF NOT EXISTS idx_cc_depto ON centros_custo(departamento);
 CREATE INDEX IF NOT EXISTS idx_cc_area  ON centros_custo(area);
-ALTER TABLE centros_custo DISABLE ROW LEVEL SECURITY;
+ALTER TABLE centros_custo ENABLE ROW LEVEL SECURITY;
 
 -- ─── Dimensão: Contas Contábeis ──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS contas_contabeis (
@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS contas_contabeis (
 );
 CREATE INDEX IF NOT EXISTS idx_ca_arvore ON contas_contabeis(agrupamento_arvore);
 CREATE INDEX IF NOT EXISTS idx_ca_dre    ON contas_contabeis(dre);
-ALTER TABLE contas_contabeis DISABLE ROW LEVEL SECURITY;
+ALTER TABLE contas_contabeis ENABLE ROW LEVEL SECURITY;
 
 -- ─── Estrutura da DRE (linhas, subtotais, sinais) ────────────────────────────
 CREATE TABLE IF NOT EXISTS dre_linhas (
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS dre_linhas (
   negrito        BOOLEAN     NOT NULL DEFAULT FALSE,
   separador      BOOLEAN     NOT NULL DEFAULT FALSE
 );
-ALTER TABLE dre_linhas DISABLE ROW LEVEL SECURITY;
+ALTER TABLE dre_linhas ENABLE ROW LEVEL SECURITY;
 
 -- ─── KPIs Manuais ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS kpis_manuais (
@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS kpis_manuais (
   tem_budget   INTEGER     NOT NULL DEFAULT 0,
   created_at   TIMESTAMPTZ DEFAULT NOW()
 );
-ALTER TABLE kpis_manuais DISABLE ROW LEVEL SECURITY;
+ALTER TABLE kpis_manuais ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE IF NOT EXISTS kpi_valores (
   id       BIGSERIAL PRIMARY KEY,
@@ -104,7 +104,7 @@ CREATE TABLE IF NOT EXISTS kpi_valores (
   meta     NUMERIC,
   UNIQUE(kpi_id, periodo)
 );
-ALTER TABLE kpi_valores DISABLE ROW LEVEL SECURITY;
+ALTER TABLE kpi_valores ENABLE ROW LEVEL SECURITY;
 
 -- ─── Fato: CAPEX ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS capex (
@@ -127,7 +127,7 @@ CREATE INDEX IF NOT EXISTS idx_capex_cc      ON capex(centro_custo);
 CREATE INDEX IF NOT EXISTS idx_capex_conta   ON capex(numero_conta_contabil);
 CREATE INDEX IF NOT EXISTS idx_capex_data    ON capex(data_lancamento);
 CREATE INDEX IF NOT EXISTS idx_capex_projeto ON capex(nome_projeto);
-ALTER TABLE capex DISABLE ROW LEVEL SECURITY;
+ALTER TABLE capex ENABLE ROW LEVEL SECURITY;
 
 -- ─── Medidas (como "measures" do Power BI) ────────────────────────────────────
 CREATE TABLE IF NOT EXISTS medidas (
@@ -147,7 +147,7 @@ CREATE TABLE IF NOT EXISTS medidas (
   created_at                   TIMESTAMPTZ DEFAULT NOW(),
   updated_at                   TIMESTAMPTZ DEFAULT NOW()
 );
-ALTER TABLE medidas DISABLE ROW LEVEL SECURITY;
+ALTER TABLE medidas ENABLE ROW LEVEL SECURITY;
 
 -- ─── Dept Medidas ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS dept_medidas (
@@ -157,7 +157,7 @@ CREATE TABLE IF NOT EXISTS dept_medidas (
   ordem        INTEGER     NOT NULL DEFAULT 999,
   UNIQUE(departamento, medida_id)
 );
-ALTER TABLE dept_medidas DISABLE ROW LEVEL SECURITY;
+ALTER TABLE dept_medidas ENABLE ROW LEVEL SECURITY;
 
 -- ─── Usuários da aplicação ────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS app_users (
@@ -168,7 +168,7 @@ CREATE TABLE IF NOT EXISTS app_users (
   department TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
-ALTER TABLE app_users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE app_users ENABLE ROW LEVEL SECURITY;
 
 -- ─── Log de acessos ──────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS login_logs (
@@ -183,7 +183,7 @@ CREATE TABLE IF NOT EXISTS login_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_login_logs_user ON login_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_login_logs_date ON login_logs(created_at);
-ALTER TABLE login_logs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE login_logs ENABLE ROW LEVEL SECURITY;
 
 -- ─── Audit Log ───────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS audit_log (
@@ -200,7 +200,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS idx_audit_tabela   ON audit_log(tabela);
 CREATE INDEX IF NOT EXISTS idx_audit_registro ON audit_log(registro_id);
 CREATE INDEX IF NOT EXISTS idx_audit_date     ON audit_log(created_at);
-ALTER TABLE audit_log DISABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
 
 -- ─── Comentários / Tickets da DRE ────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS dre_comments (
@@ -226,7 +226,7 @@ CREATE TABLE IF NOT EXISTS dre_comments (
 );
 CREATE INDEX IF NOT EXISTS idx_dre_comments_linha ON dre_comments(dre_linha);
 CREATE INDEX IF NOT EXISTS idx_dre_comments_per   ON dre_comments(periodo);
-ALTER TABLE dre_comments DISABLE ROW LEVEL SECURITY;
+ALTER TABLE dre_comments ENABLE ROW LEVEL SECURITY;
 
 -- ─── Favoritos do usuário ─────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS user_favorites (
@@ -239,7 +239,7 @@ CREATE TABLE IF NOT EXISTS user_favorites (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_favorites_user ON user_favorites(usuario);
-ALTER TABLE user_favorites DISABLE ROW LEVEL SECURITY;
+ALTER TABLE user_favorites ENABLE ROW LEVEL SECURITY;
 
 -- ─── Permissões de Centros de Custo por Usuário (N:N) ────────────────────────
 -- Permite configurar quais centros de custo cada usuário pode visualizar.
@@ -255,7 +255,7 @@ CREATE TABLE IF NOT EXISTS user_centros_custo (
   CONSTRAINT fk_ucc_centro FOREIGN KEY (centro_custo) REFERENCES centros_custo(centro_custo) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_ucc_username ON user_centros_custo(username);
-ALTER TABLE user_centros_custo DISABLE ROW LEVEL SECURITY;
+ALTER TABLE user_centros_custo ENABLE ROW LEVEL SECURITY;
 
 -- ─── Permissões de Unidades de Negócio por Usuário (N:N) ─────────────────────
 -- Se o usuário não tiver nenhuma linha aqui, ele vê todas as unidades do seu
@@ -270,7 +270,7 @@ CREATE TABLE IF NOT EXISTS user_unidades_negocio (
   CONSTRAINT fk_uun_user FOREIGN KEY (username) REFERENCES app_users(username) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_uun_username ON user_unidades_negocio(username);
-ALTER TABLE user_unidades_negocio DISABLE ROW LEVEL SECURITY;
+ALTER TABLE user_unidades_negocio ENABLE ROW LEVEL SECURITY;
 
 -- ─── Departamentos por Usuário (N:N) ─────────────────────────────────────────
 -- Permite atribuir múltiplos departamentos a um usuário do tipo 'dept'.
@@ -284,7 +284,7 @@ CREATE TABLE IF NOT EXISTS user_departamentos (
   CONSTRAINT fk_ud_user FOREIGN KEY (username) REFERENCES app_users(username) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_ud_username ON user_departamentos(username);
-ALTER TABLE user_departamentos DISABLE ROW LEVEL SECURITY;
+ALTER TABLE user_departamentos ENABLE ROW LEVEL SECURITY;
 
 -- ─── Usuário inicial ─────────────────────────────────────────────────────────
 -- Crie o primeiro usuário via painel do Supabase ou via API com senha hasheada.
@@ -299,4 +299,4 @@ CREATE TABLE IF NOT EXISTS exec_chart_configs (
   configs     JSONB NOT NULL DEFAULT '[]',
   updated_at  TIMESTAMPTZ DEFAULT NOW()
 );
-ALTER TABLE exec_chart_configs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE exec_chart_configs ENABLE ROW LEVEL SECURITY;

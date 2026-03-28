@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
+import { getUserFromHeaders } from '@/lib/session'
+
+const UNAUTHORIZED = NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+const FORBIDDEN    = NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
 
 // GET /api/dimensoes?tipo=centros_custo|contas_contabeis&q=...
 export async function GET(req: NextRequest) {
+  const user = getUserFromHeaders(req)
+  if (!user) return UNAUTHORIZED
   try {
     const sp   = new URL(req.url).searchParams
     const tipo = sp.get('tipo') ?? 'centros_custo'
@@ -45,8 +51,11 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST: upsert single dimension row
+// POST: upsert single dimension row (master only)
 export async function POST(req: NextRequest) {
+  const user = getUserFromHeaders(req)
+  if (!user) return UNAUTHORIZED
+  if (user.role !== 'master') return FORBIDDEN
   try {
     const { tipo, ...body } = await req.json()
     const supabase = getSupabase()
@@ -105,8 +114,11 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// DELETE
+// DELETE (master only)
 export async function DELETE(req: NextRequest) {
+  const user = getUserFromHeaders(req)
+  if (!user) return UNAUTHORIZED
+  if (user.role !== 'master') return FORBIDDEN
   try {
     const sp   = new URL(req.url).searchParams
     const tipo = sp.get('tipo')

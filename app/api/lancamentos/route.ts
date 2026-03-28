@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
     const ano   = sp.get('ano')
 
     const user = await getSession()
+    if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
     // Para múltiplos departamentos, passa o primeiro (RPC suporta apenas um dept por query)
     const dept = user?.role === 'dept'
       ? ((user.departments?.[0] ?? user.department) ?? null)
@@ -45,8 +46,11 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST: insert single row
+// POST: insert single row (master only)
 export async function POST(req: NextRequest) {
+  const user = await getSession()
+  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  if (user.role !== 'master') return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
   try {
     const body = await req.json()
     const supabase = getSupabase()
@@ -72,10 +76,12 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH: update single field(s) — with audit logging
+// PATCH: update single field(s) — with audit logging (master only)
 export async function PATCH(req: NextRequest) {
+  const user = await getSession()
+  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  if (user.role !== 'master') return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
   try {
-    const user = await getSession()
     const { id, ...fields } = await req.json()
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
@@ -117,10 +123,12 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-// DELETE: remove row — with audit logging
+// DELETE: remove row — with audit logging (master only)
 export async function DELETE(req: NextRequest) {
+  const user = await getSession()
+  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  if (user.role !== 'master') return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
   try {
-    const user = await getSession()
     const id = new URL(req.url).searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 

@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
+import { getUserFromHeaders } from '@/lib/session'
 import { safePct } from '@/lib/utils'
 
 export async function GET(req: NextRequest) {
+  const user = getUserFromHeaders(req)
+  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+
   const sp = req.nextUrl.searchParams
   const type = sp.get('type')
 
@@ -48,12 +52,8 @@ export async function GET(req: NextRequest) {
   }
 
   // Main query via RPC
-  const forcedDepts = req.headers.get('x-user-role') === 'dept'
-    ? (req.headers.get('x-user-depts')
-        ? decodeURIComponent(req.headers.get('x-user-depts')!).split(',').filter(Boolean)
-        : req.headers.get('x-user-dept')
-          ? [decodeURIComponent(req.headers.get('x-user-dept')!)]
-          : [])
+  const forcedDepts = user.role === 'dept'
+    ? (user.departments?.length ? user.departments : (user.department ? [user.department] : []))
     : undefined
 
   const requested = sp.get('departamentos')?.split(',').filter(Boolean) ?? []

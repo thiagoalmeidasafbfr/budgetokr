@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getKpiValores, upsertKpiValores } from '@/lib/query'
+import { getUserFromHeaders } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
+  if (!getUserFromHeaders(req)) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
   try {
     const sp = new URL(req.url).searchParams
     const kpiId = sp.get('kpiId')
@@ -19,6 +21,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const user = getUserFromHeaders(req)
+  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  if (user.role !== 'master') return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
   try {
     const body = await req.json()
     const { kpiId, valores } = body

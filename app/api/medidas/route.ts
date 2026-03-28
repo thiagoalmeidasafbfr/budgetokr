@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
+import { getUserFromHeaders } from '@/lib/session'
+
+const UNAUTHORIZED = NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+const FORBIDDEN    = NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
 
 function parseRow(m: Record<string, unknown>) {
   return {
@@ -22,6 +26,7 @@ function parseRow(m: Record<string, unknown>) {
 }
 
 export async function GET(req: NextRequest) {
+  if (!getUserFromHeaders(req)) return UNAUTHORIZED
   try {
     const dept = new URL(req.url).searchParams.get('departamento') ?? ''
     const supabase = getSupabase()
@@ -39,6 +44,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const userP = getUserFromHeaders(req)
+  if (!userP) return UNAUTHORIZED
+  if (userP.role !== 'master') return FORBIDDEN
   try {
     const body = await req.json()
     const { nome, descricao, unidade, cor, tipo_fonte, tipo_medida, filtros,
@@ -70,6 +78,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
+  const userU = getUserFromHeaders(req)
+  if (!userU) return UNAUTHORIZED
+  if (userU.role !== 'master') return FORBIDDEN
   try {
     const body = await req.json()
     const { id, nome, descricao, unidade, cor, tipo_fonte, tipo_medida, filtros,
@@ -102,6 +113,9 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  const userPa = getUserFromHeaders(req)
+  if (!userPa) return UNAUTHORIZED
+  if (userPa.role !== 'master') return FORBIDDEN
   try {
     const { id, unidade } = await req.json()
     if (!id) return NextResponse.json({ error: 'id obrigatório' }, { status: 400 })
@@ -121,6 +135,9 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const userD = getUserFromHeaders(req)
+  if (!userD) return UNAUTHORIZED
+  if (userD.role !== 'master') return FORBIDDEN
   try {
     const id = new URL(req.url).searchParams.get('id')
     const supabase = getSupabase()
