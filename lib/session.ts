@@ -6,8 +6,12 @@ import { cookies } from 'next/headers'
 import { NextRequest } from 'next/server'
 
 export const COOKIE_NAME = 'budgetokr_session'
-export const SESSION_SECRET =
-  process.env.SESSION_SECRET || 'budgetokr-change-this-secret-in-production-32c'
+if (!process.env.SESSION_SECRET) {
+  throw new Error(
+    'SESSION_SECRET não definido. Gere um com: openssl rand -base64 64'
+  )
+}
+export const SESSION_SECRET = process.env.SESSION_SECRET
 
 export type SessionUser = {
   userId: string

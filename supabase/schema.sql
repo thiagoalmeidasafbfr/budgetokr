@@ -286,8 +286,9 @@ CREATE TABLE IF NOT EXISTS user_departamentos (
 CREATE INDEX IF NOT EXISTS idx_ud_username ON user_departamentos(username);
 ALTER TABLE user_departamentos DISABLE ROW LEVEL SECURITY;
 
--- ─── Usuário inicial (ajuste a senha!) ───────────────────────────────────────
--- INSERT INTO app_users (username, password, role) VALUES ('admin', 'admin123', 'master');
+-- ─── Usuário inicial ─────────────────────────────────────────────────────────
+-- Crie o primeiro usuário via painel do Supabase ou via API com senha hasheada.
+-- NUNCA insira senhas em texto puro no SQL.
 
 -- ─── Gráficos Executivos por Departamento ────────────────────────────────────
 -- Armazena as configurações de gráficos executivos por departamento.
