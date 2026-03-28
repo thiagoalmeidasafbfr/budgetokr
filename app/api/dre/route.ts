@@ -20,17 +20,9 @@ export async function GET(req: NextRequest) {
     const sp   = new URL(req.url).searchParams
     const type = sp.get('type') ?? 'dre'
 
-    const user = await getSession()
-    const forcedDepts = user?.role === 'dept'
-      ? (user.departments ?? (user.department ? [user.department] : []))
-      : undefined
-
-    // Permissões de centros de custo individuais (N:N)
-    // null = sem restrição por centro; string[] = lista de centros permitidos
-    const userCentros = (user?.role === 'dept' && user.userId)
-      ? await getUserCentros(user.userId)
-      : null
-
+    // hierarchy, linhas e distinct são dados estruturais públicos — não precisam
+    // de permissões de usuário, então pulamos getSession/getUserCentros aqui
+    // para evitar queries desnecessárias ao banco em cada requisição de inicialização.
     if (type === 'hierarchy') {
       return NextResponse.json(await getDREHierarchy())
     }
@@ -44,6 +36,18 @@ export async function GET(req: NextRequest) {
       if (!col) return NextResponse.json({ error: 'col required' }, { status: 400 })
       return NextResponse.json(await getDistinctValues(col))
     }
+
+    // Para os demais tipos, verifica sessão e permissões
+    const user = await getSession()
+    const forcedDepts = user?.role === 'dept'
+      ? (user.departments ?? (user.department ? [user.department] : []))
+      : undefined
+
+    // Permissões de centros de custo individuais (N:N)
+    // null = sem restrição por centro; string[] = lista de centros permitidos
+    const userCentros = (user?.role === 'dept' && user.userId)
+      ? await getUserCentros(user.userId)
+      : null
 
     if (type === 'centros') {
       const depts = resolveDepts(forcedDepts, sp.get('departamentos')?.split(',').filter(Boolean) ?? [])
