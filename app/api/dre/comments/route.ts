@@ -49,7 +49,8 @@ export async function GET(req: NextRequest) {
     if (error) throw new Error(error.message)
     return NextResponse.json(data ?? [])
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    console.error('[dre/comments]', e)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -95,7 +96,8 @@ export async function POST(req: NextRequest) {
     if (error) throw new Error(error.message)
     return NextResponse.json(data)
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    console.error('[dre/comments]', e)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -120,7 +122,8 @@ export async function PUT(req: NextRequest) {
     const { data } = await supabase.from('dre_comments').select('*').eq('id', id).single()
     return NextResponse.json(data)
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    console.error('[dre/comments]', e)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -151,6 +154,7 @@ export async function DELETE(req: NextRequest) {
     }
     return NextResponse.json({ success: true })
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    console.error('[dre/comments]', e)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

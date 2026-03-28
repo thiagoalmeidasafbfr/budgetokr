@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(kpis)
   } catch (e) {
     console.error(e)
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(kpi, { status: 201 })
   } catch (e) {
     console.error(e)
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -63,7 +63,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json(kpi)
   } catch (e) {
     console.error(e)
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -79,6 +79,6 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ ok: true })
   } catch (e) {
     console.error(e)
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

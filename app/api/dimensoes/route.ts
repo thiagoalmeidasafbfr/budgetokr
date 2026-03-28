@@ -47,7 +47,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ error: 'tipo inválido' }, { status: 400 })
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    console.error('[dimensoes]', e)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -110,7 +111,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: 'tipo inválido' }, { status: 400 })
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    console.error('[dimensoes]', e)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -131,6 +133,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    console.error('[dimensoes]', e)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

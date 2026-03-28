@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
     const total = count ?? 0
     return NextResponse.json({ rows: rows ?? [], total, page, pages: Math.ceil(total / limit) })
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    console.error('[audit]', e)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

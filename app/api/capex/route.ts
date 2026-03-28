@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
     p_group_projeto:  groupByProjeto,
     p_group_centro:   groupByCentro,
   })
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) { console.error('[capex]', error.message); return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 }) }
 
   return NextResponse.json(((data ?? []) as Array<{
     nome_projeto?: string; centro_custo?: string; nome_centro_custo?: string

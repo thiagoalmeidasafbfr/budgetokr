@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
       .from('user_unidades_negocio')
       .select('unidade')
       .eq('username', session.userId)
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) { console.error('[admin/users/unidades]', error.message); return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 }) }
     return NextResponse.json({ unidades: (data ?? []).map((r: { unidade: string }) => r.unidade), configured: (data ?? []).length > 0 })
   }
 
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
     .from('user_unidades_negocio')
     .select('unidade')
     .eq('username', username)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) { console.error('[admin/users/unidades]', error.message); return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 }) }
   return NextResponse.json({ unidades: (data ?? []).map((r: { unidade: string }) => r.unidade), configured: (data ?? []).length > 0 })
 }
 
@@ -51,13 +51,13 @@ export async function POST(req: NextRequest) {
     .from('user_unidades_negocio')
     .delete()
     .eq('username', username)
-  if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 })
+  if (delErr) { console.error('[admin/users/unidades]', delErr.message); return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 }) }
 
   // Insert new rows (if any)
   if (unidades?.length > 0) {
     const rows = unidades.map(u => ({ username, unidade: u }))
     const { error: insErr } = await supabase.from('user_unidades_negocio').insert(rows)
-    if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
+    if (insErr) { console.error('[admin/users/unidades]', insErr.message); return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 }) }
   }
 
   return NextResponse.json({ configured: unidades?.length > 0 })

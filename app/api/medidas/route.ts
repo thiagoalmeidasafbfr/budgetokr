@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(filtered)
   } catch (e) {
     console.error('[medidas GET]', e)
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(parseRow(data as Record<string, unknown>))
   } catch (e) {
     console.error('[medidas POST]', e)
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -108,7 +108,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json(parseRow(data as Record<string, unknown>))
   } catch (e) {
     console.error('[medidas PUT]', e)
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -130,7 +130,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json(parseRow(data as Record<string, unknown>))
   } catch (e) {
     console.error('[medidas PATCH]', e)
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -146,6 +146,6 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ success: true })
   } catch (e) {
     console.error('[medidas DELETE]', e)
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

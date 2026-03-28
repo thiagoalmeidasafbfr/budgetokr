@@ -71,10 +71,11 @@ export async function POST(req: NextRequest) {
           { dept_name, configs, updated_at: new Date().toISOString() },
           { onConflict: 'dept_name' }
         )
-      if (err2) return NextResponse.json({ error: err2.message }, { status: 500 })
+      if (err2) { console.error('[exec-chart-config]', err2.message); return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 }) }
     }
     return NextResponse.json({ ok: true })
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    console.error('[exec-chart-config]', e)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
