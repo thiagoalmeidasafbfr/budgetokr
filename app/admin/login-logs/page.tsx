@@ -75,9 +75,9 @@ export default function LoginLogsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Shield size={22} className="text-gray-600" />
             Log de Acessos
           </h1>
@@ -91,7 +91,7 @@ export default function LoginLogsPage() {
       </div>
 
       {/* Filter bar */}
-      <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
         <div className="relative flex-1 max-w-sm">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input

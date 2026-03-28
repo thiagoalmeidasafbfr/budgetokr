@@ -228,14 +228,12 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-gray-500 text-sm mt-0.5">Visão consolidada Budget vs Razão</p>
-          </div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-500 text-sm mt-0.5">Visão consolidada Budget vs Razão</p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
           <YearFilter periodos={allPeriodos} selYear={selYear} onChange={setSelYear} />
           {medidas.length > 0 && (
             <Link href="/medidas"><Button variant="outline" size="sm"><Target size={13} /> {medidas.length} Medida{medidas.length !== 1 ? 's' : ''}</Button></Link>
@@ -305,11 +303,11 @@ export default function Dashboard() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="border-b bg-gray-50">
-                <th className="text-left px-5 py-3 font-medium text-gray-500">Departamento</th>
-                <th className="text-right px-5 py-3 font-medium text-gray-500">Budget</th>
-                <th className="text-right px-5 py-3 font-medium text-gray-500">Razão</th>
-                <th className="text-right px-5 py-3 font-medium text-gray-500">Variação</th>
-                <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>
+                <th className="text-left px-3 md:px-5 py-2.5 font-medium text-gray-500">Departamento</th>
+                <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500">Budget</th>
+                <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500">Razão</th>
+                <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500">Variação</th>
+                <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500">%</th>
               </tr></thead>
               <tbody>
                 {Object.entries(byDept).map(([label, vals], i) => {
@@ -317,16 +315,16 @@ export default function Dashboard() {
                   const pct     = safePct(variacao, vals.budget)
                   return (
                     <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                      <td className="px-5 py-3 font-medium text-gray-900">
+                      <td className="px-3 md:px-5 py-2.5 font-medium text-gray-900">
                         {label}
                         {vals.codigo && vals.codigo !== label && (
                           <span className="ml-2 text-xs text-gray-400 font-normal">{vals.codigo}</span>
                         )}
                       </td>
-                      <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(vals.budget)}</td>
-                      <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(vals.razao)}</td>
-                      <td className={cn('px-5 py-3 text-right font-semibold', variacao >= 0 ? 'text-emerald-600' : 'text-red-500')}>{formatCurrency(variacao)}</td>
-                      <td className="px-5 py-3 text-right">
+                      <td className="px-3 md:px-5 py-2.5 text-right text-gray-600">{formatCurrency(vals.budget)}</td>
+                      <td className="px-3 md:px-5 py-2.5 text-right text-gray-600">{formatCurrency(vals.razao)}</td>
+                      <td className={cn('px-3 md:px-5 py-2.5 text-right font-semibold', variacao >= 0 ? 'text-emerald-600' : 'text-red-500')}>{formatCurrency(variacao)}</td>
+                      <td className="px-3 md:px-5 py-2.5 text-right">
                         <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', variacao >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600')}>
                           {formatPct(pct)}
                         </span>

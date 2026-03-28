@@ -16,14 +16,14 @@ export function YearFilter({ periodos, selYear, onChange, className }: YearFilte
   if (years.length <= 1) return null
 
   return (
-    <div className={cn('flex items-center gap-2', className)}>
-      <Calendar size={14} className="text-gray-400 flex-shrink-0" />
-      <span className="text-sm text-gray-500 flex-shrink-0">Ano:</span>
+    <div className={cn('flex items-center gap-1.5', className)}>
+      <Calendar size={13} className="text-gray-400 flex-shrink-0 hidden sm:block" />
+      <span className="text-xs text-gray-500 flex-shrink-0 hidden sm:inline">Ano:</span>
       <div className="flex gap-1 flex-wrap">
         <button
           onClick={() => onChange(null)}
           className={cn(
-            'px-3 py-1 rounded-lg text-sm font-medium transition-colors',
+            'px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
             selYear === null
               ? 'bg-gray-800 text-white shadow-sm'
               : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
@@ -36,7 +36,7 @@ export function YearFilter({ periodos, selYear, onChange, className }: YearFilte
             key={y}
             onClick={() => onChange(y)}
             className={cn(
-              'px-3 py-1 rounded-lg text-sm font-medium transition-colors',
+              'px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
               selYear === y
                 ? 'bg-gray-800 text-white shadow-sm'
                 : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'

@@ -48,7 +48,7 @@ export default function AuditPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+        <h1 className="text-xl md:text-2xl font-bold text-gray-900 flex items-center gap-2">
           <History size={22} className="text-gray-600" /> Audit Trail
         </h1>
         <p className="text-gray-500 text-sm mt-0.5">Histórico de alterações em lançamentos</p>
@@ -56,7 +56,7 @@ export default function AuditPage() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
             <Filter size={14} className="text-gray-400" />
             <select value={filterTabela} onChange={e => setFilterTabela(e.target.value)}
               className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-gray-400">

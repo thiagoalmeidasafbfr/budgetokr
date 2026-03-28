@@ -108,7 +108,7 @@ export default function KpisPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">KPIs Manuais</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">KPIs Manuais</h1>
           <p className="text-gray-500 text-sm mt-0.5">
             Configure os KPIs que aparecem nos dashboards de departamento · {kpis.length} KPI{kpis.length !== 1 ? 's' : ''} cadastrados
           </p>

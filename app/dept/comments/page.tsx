@@ -269,9 +269,9 @@ export default function DeptCommentsPage() {
   return (
     <div className="space-y-5 max-w-2xl">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900 flex items-center gap-2">
             <MessageSquare size={22} className="text-gray-600" /> Meus Comentários
           </h1>
           <p className="text-gray-500 text-sm mt-0.5">Seus comentários na DRE e respostas do master</p>

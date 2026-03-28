@@ -443,9 +443,9 @@ export default function CommentsLogPage() {
   return (
     <div className="space-y-5 max-w-3xl">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900 flex items-center gap-2">
             <MessageSquare size={22} className="text-gray-600" /> Tickets de Comentários
           </h1>
           <p className="text-gray-500 text-sm mt-0.5">Comentários dos departamentos · gerenciamento de tickets</p>

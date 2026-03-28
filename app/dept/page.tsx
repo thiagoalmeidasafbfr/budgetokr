@@ -1131,14 +1131,14 @@ function SummaryCard({ label, value, sub, icon: Icon, color }: {
 }) {
   return (
     <Card>
-      <CardContent className="p-4 flex items-start gap-3">
-        <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0', color)}>
-          <Icon size={16} className="text-white" />
+      <CardContent className="p-3 md:p-4 flex items-start gap-2 md:gap-3">
+        <div className={cn('w-8 h-8 md:w-9 md:h-9 rounded-xl flex items-center justify-center flex-shrink-0', color)}>
+          <Icon size={15} className="text-white" />
         </div>
         <div className="min-w-0">
-          <p className="text-xs text-gray-500">{label}</p>
-          <p className="text-lg font-bold text-gray-900 truncate">{value}</p>
-          {sub && <p className="text-xs text-gray-400">{sub}</p>}
+          <p className="text-[11px] md:text-xs text-gray-500 truncate">{label}</p>
+          <p className="text-sm md:text-lg font-bold text-gray-900 truncate">{value}</p>
+          {sub && <p className="text-[10px] md:text-xs text-gray-400 truncate">{sub}</p>}
         </div>
       </CardContent>
     </Card>
@@ -1557,7 +1557,7 @@ export default function DeptDashboardPage() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {medidaCards.map((card, i) => (
                   <MedidaDisplayCard key={`m-${i}`} card={card} dept={card._dept} />
                 ))}
@@ -1599,38 +1599,38 @@ export default function DeptDashboardPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-gray-50">
-                        <th className="text-left px-5 py-3 font-medium text-gray-500">DRE Gerencial</th>
-                        <th className="text-right px-5 py-3 font-medium text-gray-500 cursor-pointer select-none hover:text-gray-700">Budget</th>
-                        <th className="text-right px-5 py-3 font-medium text-gray-500 cursor-pointer select-none hover:text-gray-700">Realizado</th>
-                        <th className="text-right px-5 py-3 font-medium text-gray-500">Variação</th>
-                        <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>
-                        <th className="px-5 py-3" />
+                        <th className="text-left px-3 md:px-5 py-2.5 font-medium text-gray-500">DRE Gerencial</th>
+                        <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500 cursor-pointer select-none hover:text-gray-700">Budget</th>
+                        <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500 cursor-pointer select-none hover:text-gray-700">Realizado</th>
+                        <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500">Variação</th>
+                        <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500">%</th>
+                        <th className="px-2 py-2.5" />
                       </tr>
                     </thead>
                     <tbody>
                       {dreRows.map((row, i) => (
                         <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/40 transition-colors group">
-                          <td className="px-5 py-3 font-medium text-gray-900 cursor-pointer"
+                          <td className="px-3 md:px-5 py-2.5 font-medium text-gray-900 cursor-pointer"
                             onClick={() => setDetModal({ dre: row.dre, departamento: selDept, periodos: selPeriods, tipo: 'ambos' })}>
                             {row.dre}
                           </td>
-                          <td className="px-5 py-3 text-right text-gray-600 cursor-pointer hover:text-gray-700 hover:bg-gray-50/60"
+                          <td className="px-3 md:px-5 py-2.5 text-right text-gray-600 cursor-pointer hover:text-gray-700 hover:bg-gray-50/60"
                             onClick={() => setDetModal({ dre: row.dre, departamento: selDept, periodos: selPeriods, tipo: 'budget' })}>
                             {formatCurrency(row.budget)}
                           </td>
-                          <td className="px-5 py-3 text-right text-gray-600 cursor-pointer hover:text-emerald-700 hover:bg-emerald-50/60"
+                          <td className="px-3 md:px-5 py-2.5 text-right text-gray-600 cursor-pointer hover:text-emerald-700 hover:bg-emerald-50/60"
                             onClick={() => setDetModal({ dre: row.dre, departamento: selDept, periodos: selPeriods, tipo: 'razao' })}>
                             {formatCurrency(row.razao)}
                           </td>
-                          <td className={cn('px-5 py-3 text-right font-semibold', colorForVariance(row.variacao))}>
+                          <td className={cn('px-3 md:px-5 py-2.5 text-right font-semibold', colorForVariance(row.variacao))}>
                             {formatCurrency(row.variacao)}
                           </td>
-                          <td className="px-5 py-3 text-right">
+                          <td className="px-3 md:px-5 py-2.5 text-right">
                             <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(row.variacao))}>
                               {formatPct(row.variacao_pct)}
                             </span>
                           </td>
-                          <td className="px-3 py-3 text-gray-300 group-hover:text-gray-500 cursor-pointer"
+                          <td className="px-2 py-2.5 text-gray-300 group-hover:text-gray-500 cursor-pointer"
                             onClick={() => setDetModal({ dre: row.dre, departamento: selDept, periodos: selPeriods, tipo: 'ambos' })}>
                             <ExternalLink size={13} />
                           </td>
@@ -1639,13 +1639,13 @@ export default function DeptDashboardPage() {
                     </tbody>
                     <tfoot>
                       <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
-                        <td className="px-5 py-3">Total</td>
-                        <td className="px-5 py-3 text-right">{formatCurrency(dreRows.reduce((s, r) => s + r.budget, 0))}</td>
-                        <td className="px-5 py-3 text-right">{formatCurrency(dreRows.reduce((s, r) => s + r.razao, 0))}</td>
-                        <td className={cn('px-5 py-3 text-right', colorForVariance(totalVariacao))}>
+                        <td className="px-3 md:px-5 py-2.5">Total</td>
+                        <td className="px-3 md:px-5 py-2.5 text-right">{formatCurrency(dreRows.reduce((s, r) => s + r.budget, 0))}</td>
+                        <td className="px-3 md:px-5 py-2.5 text-right">{formatCurrency(dreRows.reduce((s, r) => s + r.razao, 0))}</td>
+                        <td className={cn('px-3 md:px-5 py-2.5 text-right', colorForVariance(totalVariacao))}>
                           {formatCurrency(totalVariacao)}
                         </td>
-                        <td className="px-5 py-3 text-right">
+                        <td className="px-3 md:px-5 py-2.5 text-right">
                           <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(totalVariacao))}>
                             {formatPct(totalVariacaoPct)}
                           </span>
@@ -1686,23 +1686,23 @@ export default function DeptDashboardPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-gray-50">
-                        <th className="text-left px-5 py-3 font-medium text-gray-500">Projeto</th>
-                        <th className="text-right px-5 py-3 font-medium text-gray-500">Budget</th>
-                        <th className="text-right px-5 py-3 font-medium text-gray-500">Realizado</th>
-                        <th className="text-right px-5 py-3 font-medium text-gray-500">Variação</th>
-                        <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>
+                        <th className="text-left px-3 md:px-5 py-2.5 font-medium text-gray-500">Projeto</th>
+                        <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500">Budget</th>
+                        <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500">Realizado</th>
+                        <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500">Variação</th>
+                        <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500">%</th>
                       </tr>
                     </thead>
                     <tbody>
                       {activeCapex.map((row, i) => (
                         <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                          <td className="px-5 py-3 font-medium text-gray-900">{row.nome_projeto || '—'}</td>
-                          <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.budget)}</td>
-                          <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.razao)}</td>
-                          <td className={cn('px-5 py-3 text-right font-semibold', colorForVariance(row.variacao))}>
+                          <td className="px-3 md:px-5 py-2.5 font-medium text-gray-900">{row.nome_projeto || '—'}</td>
+                          <td className="px-3 md:px-5 py-2.5 text-right text-gray-600">{formatCurrency(row.budget)}</td>
+                          <td className="px-3 md:px-5 py-2.5 text-right text-gray-600">{formatCurrency(row.razao)}</td>
+                          <td className={cn('px-3 md:px-5 py-2.5 text-right font-semibold', colorForVariance(row.variacao))}>
                             {formatCurrency(row.variacao)}
                           </td>
-                          <td className="px-5 py-3 text-right">
+                          <td className="px-3 md:px-5 py-2.5 text-right">
                             <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(row.variacao))}>
                               {formatPct(row.variacao_pct)}
                             </span>
@@ -1712,18 +1712,18 @@ export default function DeptDashboardPage() {
                     </tbody>
                     <tfoot>
                       <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
-                        <td className="px-5 py-3">Total CAPEX</td>
-                        <td className="px-5 py-3 text-right">{formatCurrency(activeCapex.reduce((s, r) => s + r.budget, 0))}</td>
-                        <td className="px-5 py-3 text-right">{formatCurrency(activeCapex.reduce((s, r) => s + r.razao, 0))}</td>
+                        <td className="px-3 md:px-5 py-2.5">Total CAPEX</td>
+                        <td className="px-3 md:px-5 py-2.5 text-right">{formatCurrency(activeCapex.reduce((s, r) => s + r.budget, 0))}</td>
+                        <td className="px-3 md:px-5 py-2.5 text-right">{formatCurrency(activeCapex.reduce((s, r) => s + r.razao, 0))}</td>
                         {(() => {
                           const capexTotal = activeCapex.reduce((s, r) => s + r.variacao, 0)
                           const capexBudgetTotal = activeCapex.reduce((s, r) => s + r.budget, 0)
                           return (
                             <>
-                              <td className={cn('px-5 py-3 text-right', colorForVariance(capexTotal))}>
+                              <td className={cn('px-3 md:px-5 py-2.5 text-right', colorForVariance(capexTotal))}>
                                 {formatCurrency(capexTotal)}
                               </td>
-                              <td className="px-5 py-3 text-right">
+                              <td className="px-3 md:px-5 py-2.5 text-right">
                                 <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(capexTotal))}>
                                   {formatPct(safePct(capexTotal, capexBudgetTotal))}
                                 </span>
@@ -1836,6 +1836,7 @@ export default function DeptDashboardPage() {
                   key={d}
                   onClick={() => {
                     setSelDept(d)
+                    setSidebarMobileExpanded(false)
                     const now = new Date()
                     const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
                     const curMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
@@ -1970,9 +1971,9 @@ export default function DeptDashboardPage() {
         ) : (
           <>
             {/* Header */}
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+              <div className="min-w-0">
+                <h1 className="text-xl md:text-2xl font-bold text-gray-900 truncate">
                   {combineDepts ? forcedDepts.join(' + ') : selDept}
                 </h1>
                 <p className="text-gray-500 text-sm mt-0.5">
@@ -1982,7 +1983,7 @@ export default function DeptDashboardPage() {
                     : 'Todos os períodos'}
                 </p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
                 <YearFilter
                   periodos={allPeriodos}
                   selYear={selYear}
@@ -1997,7 +1998,7 @@ export default function DeptDashboardPage() {
                   }}
                 />
                 {loading && (
-                  <div className="w-5 h-5 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
                 )}
                 <button
                   onClick={() => setEditLayout(v => !v)}
@@ -2016,7 +2017,7 @@ export default function DeptDashboardPage() {
             </div>
 
             {/* Section 1 — Summary Cards */}
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
               <SummaryCard
                 label="Total Budget"
                 value={formatCurrency(totals.budget)}
@@ -2054,7 +2055,7 @@ export default function DeptDashboardPage() {
             )}
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
               <SortableContext items={sectionOrder} strategy={verticalListSortingStrategy}>
-                <div className={cn("space-y-6", editLayout && "pl-8")}>
+                <div className={cn("space-y-6", editLayout && "md:pl-8")}>
                   {sectionOrder.map(id => renderSection(id))}
                 </div>
               </SortableContext>

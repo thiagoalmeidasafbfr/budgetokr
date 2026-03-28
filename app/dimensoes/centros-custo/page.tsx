@@ -51,7 +51,7 @@ export default function CentrosCustoPage() {
     <div className="space-y-4 max-w-5xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Centros de Custo</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">Centros de Custo</h1>
           <p className="text-gray-500 text-sm mt-0.5">{rows.length} registros</p>
         </div>
         <Button size="sm" onClick={startNew}><Plus size={14} /> Adicionar</Button>

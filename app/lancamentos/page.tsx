@@ -124,14 +124,14 @@ export default function LancamentosPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Lançamentos</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">Lançamentos</h1>
           <p className="text-gray-500 text-sm mt-0.5">
             {data?.total.toLocaleString() ?? '—'} registros · Edite clicando em qualquer célula
           </p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
           <YearFilter periodos={allPeriodos} selYear={selYear} onChange={y => { setSelYear(y); setPage(1) }} />
           <Button onClick={addRow} size="sm"><Plus size={14} /> Nova Linha</Button>
         </div>
