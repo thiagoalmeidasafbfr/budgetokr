@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { FilterSidebar } from '@/components/FilterSidebar'
-import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
+import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn, safePct } from '@/lib/utils'
 import { YearFilter } from '@/components/YearFilter'
 import dynamic from 'next/dynamic'
 
@@ -132,7 +132,7 @@ export default function CapexPage() {
       key,
       label: groupBy === 'periodo' ? formatPeriodo(key) : key,
       ...vals,
-      variacao_pct: vals.budget ? (vals.variacao / Math.abs(vals.budget)) * 100 : 0,
+      variacao_pct: safePct(vals.variacao, vals.budget),
     }))
     .sort((a, b) => groupBy === 'periodo'
       ? a.key.localeCompare(b.key)
@@ -224,7 +224,7 @@ export default function CapexPage() {
               <CardContent className="p-4">
                 <p className="text-xs text-gray-500">% Variação</p>
                 <p className={cn('text-lg font-bold', colorForVariance(totals.variacao))}>
-                  {formatPct(totals.budget ? (totals.variacao / Math.abs(totals.budget)) * 100 : 0)}
+                  {formatPct(safePct(totals.variacao, totals.budget))}
                 </p>
               </CardContent>
             </Card>
@@ -300,7 +300,7 @@ export default function CapexPage() {
                     <td className={cn('px-5 py-3 text-right', colorForVariance(totals.variacao))}>{formatCurrency(totals.variacao)}</td>
                     <td className="px-5 py-3 text-right">
                       <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(totals.variacao))}>
-                        {formatPct(totals.budget ? (totals.variacao / Math.abs(totals.budget)) * 100 : 0)}
+                        {formatPct(safePct(totals.variacao, totals.budget))}
                       </span>
                     </td>
                   </tr></tfoot>

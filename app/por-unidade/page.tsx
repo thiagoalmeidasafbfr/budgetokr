@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic'
 import { ChevronRight, ChevronDown, RefreshCw, Download, X, Filter, Calendar } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
+import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn, safePct } from '@/lib/utils'
 import type { ContextMenuState } from '@/components/DreDetalhamentoModal'
 
 const DetalhamentoModal = dynamic(() => import('@/components/DreDetalhamentoModal'), { ssr: false })
@@ -71,7 +71,7 @@ function buildTree(rows: PorUnidadeRow[]): TreeNode[] {
 
   const makeNode = (label: string, level: NodeLevel, key: string, budget: number, razao: number, children: TreeNode[]): TreeNode => {
     const variacao     = razao - budget
-    const variacao_pct = budget ? (variacao / Math.abs(budget)) * 100 : 0
+    const variacao_pct = safePct(variacao, budget)
     return { key, label, level, budget, razao, variacao, variacao_pct, children }
   }
 
@@ -250,7 +250,7 @@ export default function PorUnidadePage() {
     { budget: 0, razao: 0 }
   )
   const totalVariacao = totals.razao - totals.budget
-  const totalPct      = totals.budget ? (totalVariacao / Math.abs(totals.budget)) * 100 : 0
+  const totalPct      = safePct(totalVariacao, totals.budget)
 
   const years = [...new Set(periodos.map(p => p.substring(0, 4)).filter(Boolean))].sort()
   const visiblePeriods = selYear ? periodos.filter(p => p.startsWith(selYear)) : periodos
@@ -260,7 +260,7 @@ export default function PorUnidadePage() {
     const header = ['Unidade', 'DRE', 'Agrupamento', 'Conta', 'VLR Orçado', 'VLR Realizado', 'Variação', '%']
     const dataRows = allRows.map(r => {
       const variacao = r.razao - r.budget
-      const pct      = r.budget ? (variacao / Math.abs(r.budget)) * 100 : 0
+      const pct      = safePct(variacao, r.budget)
       return [r.unidade, r.dre, r.agrupamento, r.nome_conta || r.conta, r.budget, r.razao, variacao, pct.toFixed(2)]
     })
     const csv  = [header, ...dataRows].map(row => row.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')).join('\n')

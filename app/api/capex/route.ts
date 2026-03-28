@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
+import { safePct } from '@/lib/utils'
 
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams
@@ -82,6 +83,6 @@ export async function GET(req: NextRequest) {
     budget: r.budget ?? 0,
     razao: r.razao ?? 0,
     variacao: (r.razao ?? 0) - (r.budget ?? 0),
-    variacao_pct: r.budget ? (((r.razao ?? 0) - r.budget) / Math.abs(r.budget)) * 100 : 0,
+    variacao_pct: safePct((r.razao ?? 0) - (r.budget ?? 0), r.budget),
   })))
 }

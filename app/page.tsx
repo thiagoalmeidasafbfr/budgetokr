@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { BarChart3, TrendingDown, TrendingUp, Upload, Target, AlertCircle, Database, FileText, Settings2, Eye, EyeOff, ChevronUp, ChevronDown } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { formatCurrency, formatPct, formatPeriodo, cn } from '@/lib/utils'
+import { formatCurrency, formatPct, formatPeriodo, cn, safePct } from '@/lib/utils'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { YearFilter } from '@/components/YearFilter'
@@ -168,7 +168,7 @@ export default function Dashboard() {
   const displayRazao  = selYear && hasYtdData ? totalRazaoYtd  : (selYear ? totalRazaoFull  : (summary?.total_razao  ?? 0))
 
   const variacao    = displayRazao - displayBudget
-  const variacaoPct = displayBudget ? (variacao / Math.abs(displayBudget)) * 100 : 0
+  const variacaoPct = safePct(variacao, displayBudget)
 
   // YTD period label (e.g. "Jan–Mar/26")
   const ytdPeriods  = [...ytdPeriodSet].sort()
@@ -314,7 +314,7 @@ export default function Dashboard() {
               <tbody>
                 {Object.entries(byDept).map(([label, vals], i) => {
                   const variacao = vals.razao - vals.budget
-                  const pct     = vals.budget ? (variacao / Math.abs(vals.budget)) * 100 : 0
+                  const pct     = safePct(variacao, vals.budget)
                   return (
                     <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
                       <td className="px-5 py-3 font-medium text-gray-900">

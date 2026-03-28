@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Plus, Settings, Edit2, Trash2, Save, X, BarChart3, TrendingUp, TrendingDown, Target, ExternalLink, Download, CheckSquare, Square, ArrowUpDown, Columns3, ChevronRight, ChevronDown, GripVertical, LayoutDashboard } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn } from '@/lib/utils'
+import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn, safePct } from '@/lib/utils'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, LabelList,
@@ -1463,7 +1463,7 @@ export default function DeptDashboardPage() {
     { budget: 0, razao: 0 }
   )
   const totalVariacao = totals.razao - totals.budget
-  const totalVariacaoPct = totals.budget ? (totalVariacao / Math.abs(totals.budget)) * 100 : 0
+  const totalVariacaoPct = safePct(totalVariacao, totals.budget)
 
   // Chart data: budget vs razão per period
   const chartData = byPeriodo
@@ -1481,7 +1481,7 @@ export default function DeptDashboardPage() {
   const dreRows = dreGrupos.map(g => ({
     ...g,
     variacao:     g.razao - g.budget,
-    variacao_pct: g.budget ? ((g.razao - g.budget) / Math.abs(g.budget)) * 100 : 0,
+    variacao_pct: safePct(g.razao - g.budget, g.budget),
   }))
 
   // ── Layout persistence ────────────────────────────────────────────────────
@@ -1724,7 +1724,7 @@ export default function DeptDashboardPage() {
                               </td>
                               <td className="px-5 py-3 text-right">
                                 <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(capexTotal))}>
-                                  {formatPct(capexBudgetTotal ? (capexTotal / Math.abs(capexBudgetTotal)) * 100 : 0)}
+                                  {formatPct(safePct(capexTotal, capexBudgetTotal))}
                                 </span>
                               </td>
                             </>

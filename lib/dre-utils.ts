@@ -1,5 +1,6 @@
 // ─── Shared DRE tree-building utilities ──────────────────────────────────────
 // Used by app/dre/page.tsx and app/dept/page.tsx
+import { safePct } from '@/lib/utils'
 
 export interface DRELinha {
   id: number; ordem: number; nome: string; tipo: 'grupo' | 'subtotal'
@@ -81,7 +82,7 @@ function buildAccountChildren(
         name: c.nome ? `${num} — ${c.nome}` : num,
         isGroup: false, isAccount: true, depth: 2, ordem: 999,
         budget: b, razao: r, variacao: v,
-        variacao_pct: b ? (v / Math.abs(b)) * 100 : 0,
+        variacao_pct: safePct(v, b),
         children: [], byPeriod: byP, conta: num,
         dre, agrupamento,
       })
@@ -213,7 +214,7 @@ export function buildTreeFromLinhas(
         name: linha.nome, isGroup: true, isSubtotal: true, isBold: true,
         isSeparator: linha.separador === 1, depth: 0, ordem: linha.ordem,
         budget: subBudget, razao: subRazao, variacao: var_,
-        variacao_pct: subBudget ? (var_ / Math.abs(subBudget)) * 100 : 0,
+        variacao_pct: safePct(var_, subBudget),
         children: [], byPeriod: subByPeriod,
       })
     } else {
@@ -244,7 +245,7 @@ export function buildTreeFromLinhas(
         children.push({
           name: child, isGroup: acctChildren.length > 0, depth: 1, ordem: 999,
           budget: cb, razao: cr, variacao: cv,
-          variacao_pct: cb ? (cv / Math.abs(cb)) * 100 : 0,
+          variacao_pct: safePct(cv, cb),
           children: acctChildren, byPeriod: cByP, dre: linha.nome, agrupamento: child,
         })
       }
@@ -253,7 +254,7 @@ export function buildTreeFromLinhas(
         name: linha.nome, isGroup: true, isBold: linha.negrito === 1,
         isSeparator: linha.separador === 1, depth: 0, ordem: linha.ordem,
         budget, razao, variacao: var_,
-        variacao_pct: budget ? (var_ / Math.abs(budget)) * 100 : 0,
+        variacao_pct: safePct(var_, budget),
         children: children.sort((a, b) => a.name.localeCompare(b.name)),
         byPeriod, dre: linha.nome,
       })
@@ -322,7 +323,7 @@ export function buildTree(
       children.push({
         name: child, isGroup: acctChildren.length > 0, depth: 1, ordem: agg.ordem_dre,
         budget: agg.budget, razao: agg.razao, variacao,
-        variacao_pct: agg.budget ? (variacao / Math.abs(agg.budget)) * 100 : 0,
+        variacao_pct: safePct(variacao, agg.budget),
         children: acctChildren, byPeriod: agg.byPeriod, dre: parent, agrupamento: child,
       })
     }
@@ -344,7 +345,7 @@ export function buildTree(
     tree.push({
       name: parent, isGroup: true, depth: 0, ordem: groupOrdem,
       budget: groupBudget, razao: groupRazao, variacao,
-      variacao_pct: groupBudget ? (variacao / Math.abs(groupBudget)) * 100 : 0,
+      variacao_pct: safePct(variacao, groupBudget),
       children: children.sort((a, b) => (a.ordem - b.ordem) || a.name.localeCompare(b.name)),
       byPeriod: groupByPeriod, dre: parent,
     })
@@ -358,7 +359,7 @@ export function buildTree(
     tree.push({
       name, isGroup: false, depth: 0, ordem: agg.ordem_dre,
       budget: agg.budget, razao: agg.razao, variacao,
-      variacao_pct: agg.budget ? (variacao / Math.abs(agg.budget)) * 100 : 0,
+      variacao_pct: safePct(variacao, agg.budget),
       children: [], byPeriod: agg.byPeriod, dre, agrupamento: agrup,
     })
   }

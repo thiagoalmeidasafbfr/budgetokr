@@ -1,4 +1,5 @@
 import { getSupabase } from './supabase'
+import { safePct } from './utils'
 import type { FilterCondition, FilterColumn, FilterLogic, MedidaResultado, Medida } from './types'
 
 // ─── buildFilterSQL kept for reference / client-side use (not used server-side) ─
@@ -157,7 +158,7 @@ export async function getMedidaResultados(
       budget: vals.budget,
       razao:  vals.razao,
       variacao,
-      variacao_pct: vals.budget ? (variacao / Math.abs(vals.budget)) * 100 : 0,
+      variacao_pct: safePct(variacao, vals.budget),
     }
   })
 }
@@ -220,7 +221,7 @@ async function computeRatioMedida(
       budget,
       razao,
       variacao,
-      variacao_pct: budget ? (variacao / Math.abs(budget)) * 100 : 0,
+      variacao_pct: safePct(variacao, budget),
       is_ratio: true,
       numerador_budget:  v.num_budget,
       numerador_razao:   v.num_razao,
@@ -280,7 +281,7 @@ export async function getAnalise(
     budget:    (r['budget']  as number) ?? 0,
     razao:     (r['razao']   as number) ?? 0,
     variacao:  ((r['razao'] as number ?? 0) - (r['budget'] as number ?? 0)),
-    variacao_pct: r['budget'] ? (((r['razao'] as number ?? 0) - (r['budget'] as number)) / Math.abs(r['budget'] as number)) * 100 : 0,
+    variacao_pct: safePct(((r['razao'] as number ?? 0) - (r['budget'] as number ?? 0)), r['budget'] as number),
   }))
 }
 
