@@ -48,8 +48,11 @@ function fromBase64(str: string): ArrayBuffer {
 
 // ─── Seal / Unseal ─────────────────────────────────────────────────────────────
 
+const SESSION_TTL_MS = 8 * 60 * 60 * 1000 // 8 horas — deve coincidir com maxAge do cookie
+
 export async function sealSession(user: SessionUser): Promise<string> {
-  const payload = toBase64(enc.encode(JSON.stringify(user)))
+  const sealed = { ...user, exp: Date.now() + SESSION_TTL_MS }
+  const payload = toBase64(enc.encode(JSON.stringify(sealed)))
   const key = await getKey(SESSION_SECRET)
   const sig = await crypto.subtle.sign('HMAC', key, enc.encode(payload))
   return `${payload}.${toBase64(sig)}`
@@ -64,8 +67,11 @@ export async function unsealSession(sealed: string): Promise<SessionUser | null>
     const key = await getKey(SESSION_SECRET)
     const valid = await crypto.subtle.verify('HMAC', key, sigBytes, enc.encode(payload))
     if (!valid) return null
-    const user = JSON.parse(new TextDecoder().decode(new Uint8Array(fromBase64(payload)))) as SessionUser
-    if (!user?.userId) return null
+    const data = JSON.parse(new TextDecoder().decode(new Uint8Array(fromBase64(payload)))) as SessionUser & { exp?: number }
+    if (!data?.userId) return null
+    // Rejeita token expirado mesmo que o cookie ainda esteja presente
+    if (data.exp && Date.now() > data.exp) return null
+    const { exp: _, ...user } = data
     return user
   } catch {
     return null

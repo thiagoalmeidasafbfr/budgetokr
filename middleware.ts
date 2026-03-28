@@ -5,7 +5,7 @@ import { getSessionFromRequest, COOKIE_NAME } from '@/lib/session'
 const PUBLIC_PATHS = ['/login', '/logout', '/api/auth/login', '/api/auth/logout']
 
 // Rotas que usuários de dept podem acessar
-const DEPT_ALLOWED_PATHS = ['/dept', '/dre', '/dre-gerencial', '/analise', '/capex', '/unidades-negocio', '/api/dept-dashboard', '/api/dept-medidas', '/api/analise', '/api/dre', '/api/capex', '/api/kpis', '/api/kpis/valores', '/api/lancamentos', '/api/medidas', '/api/me', '/api/auth/logout', '/api/dimensoes', '/api/favorites', '/api/unidades-negocio', '/api/debug-dept']
+const DEPT_ALLOWED_PATHS = ['/dept', '/dre', '/dre-gerencial', '/analise', '/capex', '/unidades-negocio', '/api/dept-dashboard', '/api/dept-medidas', '/api/analise', '/api/dre', '/api/capex', '/api/kpis', '/api/kpis/valores', '/api/lancamentos', '/api/medidas', '/api/me', '/api/auth/logout', '/api/dimensoes', '/api/favorites', '/api/unidades-negocio']
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -13,6 +13,30 @@ export async function middleware(request: NextRequest) {
   // Arquivos estáticos e _next passam direto
   if (pathname.startsWith('/_next') || pathname.startsWith('/favicon') || pathname.match(/\.(png|jpg|jpeg|gif|svg|ico|webp)$/)) {
     return NextResponse.next()
+  }
+
+  // Proteção CSRF: rejeita requisições mutantes de origens externas.
+  // Browsers sempre enviam Origin em cross-site requests. Se Origin estiver
+  // presente e for diferente do Host, a requisição veio de outro domínio.
+  // Requisições sem Origin (curl, Postman, server-to-server) são permitidas
+  // pois não carregam cookies de sessão do usuário.
+  if (
+    ['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method) &&
+    pathname.startsWith('/api/')
+  ) {
+    const origin = request.headers.get('origin')
+    const host   = request.headers.get('host')
+    if (origin && host) {
+      try {
+        const originHost = new URL(origin).host
+        if (originHost !== host) {
+          return NextResponse.json({ error: 'Origem inválida' }, { status: 403 })
+        }
+      } catch {
+        // Origin malformado → rejeita
+        return NextResponse.json({ error: 'Origem inválida' }, { status: 403 })
+      }
+    }
   }
 
   // Rotas públicas passam direto
