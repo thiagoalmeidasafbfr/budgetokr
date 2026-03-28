@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
 import { getSupabase } from '@/lib/supabase'
+import { getSession } from '@/lib/session'
 
 export const maxDuration = 60
 
@@ -94,6 +95,9 @@ async function insertInChunks(
 }
 
 export async function POST(req: NextRequest) {
+  const user = await getSession()
+  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  if (user.role !== 'master') return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
   try {
     const sp = new URL(req.url).searchParams
     const ct = req.headers.get('content-type') ?? ''

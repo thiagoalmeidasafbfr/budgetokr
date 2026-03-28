@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getKpisManuais, upsertKpiManual, updateKpiManual, deleteKpiManual } from '@/lib/query'
+import { getUserFromHeaders } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
 
+const UNAUTHORIZED = NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+const FORBIDDEN    = NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+
 export async function GET(req: NextRequest) {
+  if (!getUserFromHeaders(req)) return UNAUTHORIZED
   try {
     const sp = new URL(req.url).searchParams
     const departamento = sp.get('departamento') ?? undefined
@@ -16,6 +21,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const user = getUserFromHeaders(req)
+  if (!user) return UNAUTHORIZED
+  if (user.role !== 'master') return FORBIDDEN
   try {
     const body = await req.json()
     const { nome, unidade, descricao, departamento, cor, ordem, tem_budget } = body
@@ -36,6 +44,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
+  const user = getUserFromHeaders(req)
+  if (!user) return UNAUTHORIZED
+  if (user.role !== 'master') return FORBIDDEN
   try {
     const body = await req.json()
     const { id, nome, unidade, descricao, departamento, cor, ordem, tem_budget } = body
@@ -57,6 +68,9 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const user = getUserFromHeaders(req)
+  if (!user) return UNAUTHORIZED
+  if (user.role !== 'master') return FORBIDDEN
   try {
     const sp = new URL(req.url).searchParams
     const id = sp.get('id')

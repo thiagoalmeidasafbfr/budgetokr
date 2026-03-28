@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
+import { getUserFromHeaders } from '@/lib/session'
 import { forecast, seasonalForecast, type TimePoint } from '@/lib/forecast'
 
 // GET /api/dre/trend?conta=X&agrupamento=Y&dre=Z&departamentos=A,B&forecastMonths=6
 export async function GET(req: NextRequest) {
+  if (!getUserFromHeaders(req)) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
   try {
     const sp = new URL(req.url).searchParams
     const conta       = sp.get('conta')
