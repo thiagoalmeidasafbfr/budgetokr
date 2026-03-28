@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { getUserFromHeaders } from '@/lib/session'
+import { hashPassword } from '@/lib/users'
 
 export const dynamic = 'force-dynamic'
 
@@ -79,9 +80,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'username, password e role são obrigatórios' }, { status: 400 })
     }
     const depts = role === 'dept' ? (departments ?? []) : []
+    const hashedPwd = await hashPassword(password)
     const { error } = await supabase.from('app_users').insert({
       username: username.trim(),
-      password,
+      password: hashedPwd,
       role,
       department: depts[0] ?? null,
     })
@@ -122,7 +124,7 @@ export async function PUT(req: NextRequest) {
     if (!userData) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
 
     const update: Record<string, unknown> = {}
-    if (password !== undefined && password !== '') update.password = password
+    if (password !== undefined && password !== '') update.password = await hashPassword(password)
     if (role !== undefined) update.role = role
 
     const effectiveRole = role ?? userData.role
