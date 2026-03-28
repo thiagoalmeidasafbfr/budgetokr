@@ -108,17 +108,30 @@ export async function PUT(req: NextRequest) {
     if (!id) return NextResponse.json({ error: 'id obrigatório' }, { status: 400 })
 
     const supabase = getSupabase()
+
     if (action === 'close') {
-      await supabase.from('dre_comments').update({
+      let query = supabase.from('dre_comments').update({
         status: 'closed',
         resolved_at: new Date().toISOString(),
         resolved_by: user?.userId ?? 'master',
         resolved_motivo: motivo ?? '',
       }).eq('id', id)
+      // dept users can only close comments from their own department
+      if (user?.role === 'dept') {
+        query = query.eq('departamento', user.department ?? '')
+      }
+      const { error } = await query
+      if (error) throw new Error(error.message)
     } else {
       if (!texto) return NextResponse.json({ error: 'texto obrigatório' }, { status: 400 })
-      await supabase.from('dre_comments').update({ texto }).eq('id', id)
+      // users can only edit their own comments
+      const { error } = await supabase.from('dre_comments')
+        .update({ texto })
+        .eq('id', id)
+        .eq('usuario', user?.userId ?? '')
+      if (error) throw new Error(error.message)
     }
+
     const { data } = await supabase.from('dre_comments').select('*').eq('id', id).single()
     return NextResponse.json(data)
   } catch (e) {
@@ -147,7 +160,7 @@ export async function DELETE(req: NextRequest) {
       await supabase.from('dre_comments')
         .delete()
         .eq('id', id)
-        .eq('departamento', user.department ?? '')
+        .eq('usuario', user.userId ?? '')
         .is('parent_id', null)
     } else {
       await supabase.from('dre_comments').delete().eq('id', id)
