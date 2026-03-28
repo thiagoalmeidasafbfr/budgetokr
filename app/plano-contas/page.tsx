@@ -315,9 +315,9 @@ export default function PlanoContasPage() {
         </div>
       )}
 
-      <div className="flex gap-4">
+      <div className="flex flex-col md:flex-row gap-4">
         {/* Sidebar filters */}
-        <div className="w-52 flex-shrink-0 space-y-3">
+        <div className="w-full md:w-52 flex-shrink-0 space-y-3">
           {/* Expand level control */}
           <Card>
             <CardContent className="p-3 space-y-3">

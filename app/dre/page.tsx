@@ -55,6 +55,7 @@ export default function DREPage() {
   const [commentText,   setCommentText]   = useState('')
   const [trendTarget,   setTrendTarget]   = useState<{ title: string; conta?: string; agrupamento?: string; dre?: string } | null>(null)
   const [highlightLancId, setHighlightLancId] = useState<number | null>(null)
+  const [filterMobileExpanded, setFilterMobileExpanded] = useState(false)
   const ctxRef = useRef<HTMLDivElement>(null)
   const expandTargetRef   = useRef<string | null>(null)
   const pendingDetalhamentoRef = useRef<{
@@ -657,12 +658,28 @@ export default function DREPage() {
         </div>
       </div>
 
-      <div className="flex gap-4">
+      <div className="flex flex-col md:flex-row gap-4">
         {/* Sidebar filters */}
-        <div className="w-52 flex-shrink-0 space-y-3">
+        <div className="w-full md:w-52 flex-shrink-0 space-y-3">
           <Card>
+            {/* Mobile toggle */}
+            <button
+              onClick={() => setFilterMobileExpanded(v => !v)}
+              className="md:hidden w-full flex items-center justify-between px-3 py-2.5 text-left"
+            >
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                <Filter size={11} /> Filtros
+                {(selDepts.length + selCentros.length + selPeriods.length) > 0 && (
+                  <span className="ml-1 bg-gray-800 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                    {selDepts.length + selCentros.length + selPeriods.length}
+                  </span>
+                )}
+              </span>
+              <ChevronDown size={14} className={cn('text-gray-400 transition-transform', filterMobileExpanded && 'rotate-180')} />
+            </button>
+            <div className={cn(filterMobileExpanded ? 'block' : 'hidden', 'md:block')}>
             <CardContent className="p-3 space-y-3">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+              <p className="hidden md:flex text-xs font-semibold text-gray-500 uppercase tracking-wide items-center gap-1">
                 <Filter size={11} /> Filtros
               </p>
               {deptUser ? (
@@ -780,6 +797,7 @@ export default function DREPage() {
                 </button>
               )}
             </CardContent>
+            </div>
           </Card>
 
           <Card>

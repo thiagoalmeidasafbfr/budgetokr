@@ -291,9 +291,9 @@ export default function PorUnidadePage() {
         </div>
       </div>
 
-      <div className="flex gap-4">
+      <div className="flex flex-col md:flex-row gap-4">
         {/* ── Sidebar ─────────────────────────────────────────────────────── */}
-        <div className="w-52 flex-shrink-0">
+        <div className="w-full md:w-52 flex-shrink-0">
           <Card>
             <CardContent className="p-3 space-y-4">
 

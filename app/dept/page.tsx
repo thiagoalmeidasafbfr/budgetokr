@@ -1217,6 +1217,7 @@ export default function DeptDashboardPage() {
   const [dreFullLoading,   setDreFullLoading]   = useState(false)
   const [sectionOrder,     setSectionOrder]     = useState<DeptSection[]>(DEFAULT_SECTION_ORDER)
   const [editLayout,       setEditLayout]       = useState(false)
+  const [sidebarMobileExpanded, setSidebarMobileExpanded] = useState(false)
 
   const isFirstDept = useRef(true)
 
@@ -1809,9 +1810,20 @@ export default function DeptDashboardPage() {
   }
 
   return (
-    <div className="flex gap-0 min-h-screen">
+    <div className="flex flex-col md:flex-row gap-0 min-h-screen">
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
-      <div className="w-52 flex-shrink-0 border-r border-gray-100 flex flex-col bg-white">
+      <div className="w-full md:w-52 flex-shrink-0 border-b md:border-b-0 md:border-r border-gray-100 flex flex-col bg-white">
+        {/* Mobile toggle */}
+        <button
+          onClick={() => setSidebarMobileExpanded(v => !v)}
+          className="md:hidden flex items-center justify-between px-3 py-2.5 border-b border-gray-100"
+        >
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+            {selDept || 'Selecionar Departamento'}
+          </span>
+          <ChevronDown size={14} className={cn('text-gray-400 transition-transform', sidebarMobileExpanded && 'rotate-180')} />
+        </button>
+        <div className={cn(sidebarMobileExpanded ? 'flex flex-col' : 'hidden', 'md:flex md:flex-col flex-1')}>
         {/* Seletor de departamento: visível apenas para master */}
         {isMaster && (
           <>
@@ -1944,10 +1956,11 @@ export default function DeptDashboardPage() {
         )}
 
         <div className="flex-1" />
+        </div>{/* end mobile collapse wrapper */}
       </div>
 
       {/* ── Main content ─────────────────────────────────────────────────── */}
-      <div className="flex-1 p-6 space-y-6 min-w-0 bg-gray-50/50">
+      <div className="flex-1 p-3 md:p-6 space-y-6 min-w-0 bg-gray-50/50">
         {!selDept ? (
           <div className="flex flex-col items-center justify-center h-64 text-center">
             <BarChart3 size={40} className="text-gray-300 mb-3" />
