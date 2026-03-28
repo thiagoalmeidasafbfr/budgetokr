@@ -17,11 +17,12 @@ function getValue(b: number, r: number, field: Field) {
 function buildTopN(
   rows: { name: string; budget: number; razao: number }[],
   topN: number,
-  field: Field
+  field: Field,
+  sortOrder: 'desc' | 'asc' = 'desc'
 ) {
   const sorted = rows
     .map(r => ({ ...r, variacao: r.razao - r.budget, value: getValue(r.budget, r.razao, field) }))
-    .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
+    .sort((a, b) => sortOrder === 'asc' ? a.value - b.value : b.value - a.value)
 
   const top  = sorted.slice(0, topN)
   const rest = sorted.slice(topN)
@@ -112,6 +113,7 @@ export async function GET(req: NextRequest) {
     const sp          = new URL(req.url).searchParams
     const topN        = Math.min(Math.max(parseInt(sp.get('topN') ?? '5'), 1), 30)
     const field       = (sp.get('field') ?? 'razao') as Field
+    const sortOrder   = (sp.get('sortOrder') === 'asc' ? 'asc' : 'desc') as 'desc' | 'asc'
     const dreGroup    = sp.get('dreGroup') ?? ''
     const periodosRaw = sp.get('periodos') ?? ''
     const deptsRaw    = sp.get('departamentos') ?? ''
@@ -155,7 +157,7 @@ export async function GET(req: NextRequest) {
       }
 
       const aggregated = Object.entries(acc).map(([name, { budget, razao }]) => ({ name, budget, razao }))
-      return NextResponse.json({ items: buildTopN(aggregated, topN, field), dreGroups })
+      return NextResponse.json({ items: buildTopN(aggregated, topN, field, sortOrder), dreGroups })
     }
 
     // ── Account-level grouping ───────────────────────────────────────────────
@@ -174,7 +176,7 @@ export async function GET(req: NextRequest) {
       }
 
       const aggregated = Object.entries(acc).map(([name, { budget, razao }]) => ({ name, budget, razao }))
-      return NextResponse.json({ items: buildTopN(aggregated, topN, field), dreGroups })
+      return NextResponse.json({ items: buildTopN(aggregated, topN, field, sortOrder), dreGroups })
     }
 
     // ── lancamentos-based groupings (centro_custo, contrapartida) ────────────
@@ -203,7 +205,7 @@ export async function GET(req: NextRequest) {
     const dreRows = await getDRE(periodos.length ? periodos : [], activeDepts ?? [], authCentros)
     const dreGroups = [...new Set(dreRows.map(r => r.dre))].filter(Boolean).sort()
 
-    return NextResponse.json({ items: buildTopN(rows, topN, field), dreGroups })
+    return NextResponse.json({ items: buildTopN(rows, topN, field, sortOrder), dreGroups })
 
   } catch (e) {
     console.error('[exec-chart]', e)
