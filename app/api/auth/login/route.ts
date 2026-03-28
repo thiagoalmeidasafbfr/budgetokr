@@ -31,11 +31,20 @@ setInterval(() => {
 }, 5 * 60 * 1000)
 
 function getClientIp(req: NextRequest): string {
-  return (
-    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    req.headers.get('x-real-ip') ||
-    'unknown'
-  )
+  // x-real-ip is set directly by Vercel/nginx and cannot be forged by the client
+  const realIp = req.headers.get('x-real-ip')?.trim()
+  if (realIp) return realIp
+
+  // x-forwarded-for is a comma-separated chain: "client, proxy1, proxy2, vercel"
+  // The LAST entry is appended by the trusted proxy (Vercel) — use that, not [0]
+  const forwarded = req.headers.get('x-forwarded-for')
+  if (forwarded) {
+    const parts = forwarded.split(',')
+    const last  = parts[parts.length - 1]?.trim()
+    if (last) return last
+  }
+
+  return 'unknown'
 }
 
 export async function POST(req: NextRequest) {
