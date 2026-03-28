@@ -93,14 +93,6 @@ const nav: NavItem[] = [
     label: 'Unidades de Negócio',
     sublabel: 'Visão Real vs Orçado por unidade de negócio',
   },
-  {
-    type: 'link', href: '/plano-contas',
-    icon: ListTree,
-    label: 'Plano de Contas',
-    sublabel: 'Hierarquia por nível',
-    masterOnly: true,
-  },
-
   { type: 'section', label: 'Meus Tickets', deptOnly: true },
   {
     type: 'link', href: '/dept/comments',

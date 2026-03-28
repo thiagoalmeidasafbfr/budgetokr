@@ -1822,7 +1822,15 @@ export default function DeptDashboardPage() {
               {departamentos.map(d => (
                 <button
                   key={d}
-                  onClick={() => { setSelDept(d); setSelPeriods([]) }}
+                  onClick={() => {
+                    setSelDept(d)
+                    const now = new Date()
+                    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+                    const curMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
+                    const y = selYear ?? String(now.getFullYear())
+                    const ytd = allPeriodos.filter(p => p.startsWith(y) && p <= curMonth)
+                    setSelPeriods(ytd.length > 0 ? ytd : allPeriodos.filter(p => p.startsWith(y)))
+                  }}
                   className={cn(
                     'w-full text-left px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
                     selDept === d
