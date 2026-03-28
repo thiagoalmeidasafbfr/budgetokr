@@ -1,9 +1,10 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { Star, Plus, X, Trash2, Bookmark } from 'lucide-react'
+import { Star, Plus, X, Trash2, Bookmark, Menu } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useMobileMenu } from '@/components/MobileMenuProvider'
 
 interface Favorite { id: number; nome: string; url: string; icone: string; created_at: string }
 
@@ -14,6 +15,7 @@ export function TopBar() {
   const [nome, setNome]     = useState('')
   const pathname = usePathname()
   const ref = useRef<HTMLDivElement>(null)
+  const { toggle: toggleMobileMenu } = useMobileMenu()
 
   useEffect(() => {
     // Try cache first (1 minute TTL) to avoid redundant fetch on every page navigation
@@ -76,8 +78,16 @@ export function TopBar() {
   }
 
   return (
-    <div className="flex items-center justify-end px-6 py-2 border-b border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
-      <div className="relative" ref={ref}>
+    <div className="flex items-center justify-between px-3 md:px-6 py-2 border-b border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
+      {/* Hamburger — mobile only */}
+      <button
+        onClick={toggleMobileMenu}
+        className="md:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:text-slate-400 dark:hover:bg-slate-700 transition-colors"
+        aria-label="Abrir menu"
+      >
+        <Menu size={20} />
+      </button>
+      <div className="relative ml-auto" ref={ref}>
         {/* Trigger button */}
         <button
           onClick={() => { setOpen(v => !v); setAdding(false) }}

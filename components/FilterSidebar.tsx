@@ -1,8 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { ChevronRight, ChevronDown, Filter, X } from 'lucide-react'
+import { ChevronRight, ChevronDown, ChevronUp, Filter, X } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
-import { formatPeriodo } from '@/lib/utils'
+import { formatPeriodo, cn } from '@/lib/utils'
 
 interface FilterSidebarProps {
   /** If set, shows locked dept badge(s) instead of checkboxes */
@@ -36,6 +36,7 @@ export function FilterSidebar({
 }: FilterSidebarProps) {
   const currentYear = new Date().getFullYear().toString()
   const [expandedYears, setExpandedYears] = useState<Set<string>>(new Set([currentYear]))
+  const [mobileExpanded, setMobileExpanded] = useState(false)
 
   // When periods load, make sure the most recent year with data is expanded
   useEffect(() => {
@@ -60,11 +61,29 @@ export function FilterSidebar({
 
   const hasActiveFilters = selDepts.length > 0 || selCentros.length > 0 || selPeriods.length > 0
   const hasDeptSection = departamentos.length > 0 || !!deptUser
+  const activeCount = selDepts.length + selCentros.length + selPeriods.length
 
   return (
     <Card>
+      {/* Mobile toggle header */}
+      <button
+        onClick={() => setMobileExpanded(v => !v)}
+        className="md:hidden w-full flex items-center justify-between px-3 py-2.5 text-left"
+      >
+        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+          <Filter size={11} /> Filtros
+          {activeCount > 0 && (
+            <span className="ml-1 bg-gray-800 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+              {activeCount}
+            </span>
+          )}
+        </span>
+        {mobileExpanded ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
+      </button>
+
+      <div className={cn(mobileExpanded ? 'block' : 'hidden', 'md:block')}>
       <CardContent className="p-3 space-y-3">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+        <p className="hidden md:flex text-xs font-semibold text-gray-500 uppercase tracking-wide items-center gap-1">
           <Filter size={11} /> Filtros
         </p>
 
@@ -201,6 +220,7 @@ export function FilterSidebar({
           </button>
         )}
       </CardContent>
+      </div>
     </Card>
   )
 }

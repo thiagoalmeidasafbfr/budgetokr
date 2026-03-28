@@ -371,6 +371,7 @@ export default function DreGerencialPage() {
   const [periodos,      setPeriodos]      = useState<string[]>([])
   const [loading,       setLoading]       = useState(false)
   // ── Filtros ──────────────────────────────────────────────────────────────────
+  const [filterMobileExpanded, setFilterMobileExpanded] = useState(false)
   const [selYear,       setSelYear]       = useState<string | null>('2026')
   const [selDepts,      setSelDepts]      = useState<string[]>([])
   const [selPeriods,    setSelPeriods]    = useState<string[]>([])
@@ -610,7 +611,7 @@ export default function DreGerencialPage() {
     <div className="flex flex-col h-full min-h-screen bg-gray-50">
 
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-4 flex-wrap">
+      <div className="bg-white border-b border-gray-200 px-3 md:px-6 py-3 md:py-4 flex items-center gap-4 flex-wrap">
         <div className="flex-1 min-w-0">
           <h1 className="text-lg font-semibold text-gray-900">DRE Gerencial</h1>
           <p className="text-xs text-gray-400 mt-0.5">
@@ -688,13 +689,29 @@ export default function DreGerencialPage() {
         </div>
       </div>
 
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className="flex flex-col md:flex-row flex-1 md:min-h-0 md:overflow-hidden">
 
         {/* Filter Sidebar */}
-        <aside className="w-52 flex-shrink-0 bg-white border-r border-gray-200 overflow-y-auto p-3 space-y-3">
+        <aside className="w-full md:w-52 flex-shrink-0 bg-white border-b md:border-b-0 md:border-r border-gray-200 md:overflow-y-auto space-y-3">
+          {/* Mobile toggle */}
+          <button
+            onClick={() => setFilterMobileExpanded(v => !v)}
+            className="md:hidden w-full flex items-center justify-between px-3 py-2.5 text-left"
+          >
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+              <Filter size={11} /> Filtros
+              {(selDepts.length + selCentros.length + selPeriods.length) > 0 && (
+                <span className="ml-1 bg-gray-800 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                  {selDepts.length + selCentros.length + selPeriods.length}
+                </span>
+              )}
+            </span>
+            <ChevronDown size={14} className={cn('text-gray-400 transition-transform', filterMobileExpanded && 'rotate-180')} />
+          </button>
+          <div className={cn(filterMobileExpanded ? 'block' : 'hidden', 'md:block p-3 space-y-3')}>
           <Card>
             <CardContent className="p-3 space-y-3">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+              <p className="hidden md:flex text-xs font-semibold text-gray-500 uppercase tracking-wide items-center gap-1">
                 <Filter size={11} /> Filtros
               </p>
               {deptUser ? (
@@ -814,6 +831,7 @@ export default function DreGerencialPage() {
               </div>
             </CardContent>
           </Card>
+          </div>{/* end mobile collapse */}
         </aside>
 
         {/* Exclusion Panel */}

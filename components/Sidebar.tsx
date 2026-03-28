@@ -6,10 +6,11 @@ import {
   LayoutDashboard, LineChart, GitCompare,
   Target, Layers, FileText, Database, Upload,
   ChevronRight, ChevronDown, Building2, BookOpen, LayoutList, Gauge,
-  LogOut, User, ListTree, Shield, Landmark, Moon, Sun, History, MessageSquare, Briefcase, Users, PieChart,
+  LogOut, User, ListTree, Shield, Landmark, Moon, Sun, History, MessageSquare, Briefcase, Users, PieChart, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/components/ThemeProvider'
+import { useMobileMenu } from '@/components/MobileMenuProvider'
 
 // ─── Per-icon accent colors ───────────────────────────────────────────────────
 const iconColors = new Map<React.ElementType, string>([
@@ -177,6 +178,7 @@ export function Sidebar() {
   const pathname = usePathname()
   const router   = useRouter()
   const { theme, toggleTheme } = useTheme()
+  const { isOpen: mobileOpen, close: closeMobile } = useMobileMenu()
   const [user, setUser] = useState<SessionUser | null>(null)
   const [loaded, setLoaded] = useState(false)
 
@@ -256,15 +258,40 @@ export function Sidebar() {
   let currentSection = ''
 
   return (
-    <aside className="w-60 flex-shrink-0 bg-[#3a3a3a] border-r border-white/[0.06] flex flex-col h-screen sticky top-0">
+    <>
+      {/* Mobile backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={closeMobile}
+        />
+      )}
 
-      {/* Logo — apenas a imagem, sem textos */}
-      <div className="px-5 py-5 border-b border-white/[0.07] flex-shrink-0 flex items-center justify-center">
+    <aside className={cn(
+      "w-60 flex-shrink-0 bg-[#3a3a3a] border-r border-white/[0.06] flex flex-col h-screen",
+      // Desktop: sticky, participates in flex layout
+      "md:sticky md:top-0",
+      // Mobile: fixed drawer, slides in/out
+      "fixed top-0 left-0 z-50 transition-transform duration-300 ease-in-out",
+      "md:translate-x-0",
+      mobileOpen ? "translate-x-0" : "-translate-x-full"
+    )}>
+
+      {/* Logo */}
+      <div className="px-5 py-5 border-b border-white/[0.07] flex-shrink-0 flex items-center justify-between">
         <img
           src="/botafogo.png"
           alt="Logo"
-          className="h-16 w-auto object-contain"
+          className="h-16 w-auto object-contain mx-auto"
         />
+        {/* Close button — mobile only */}
+        <button
+          onClick={closeMobile}
+          className="md:hidden flex-shrink-0 p-1 rounded-md text-white/40 hover:text-white/70 hover:bg-white/[0.08] transition-colors"
+          aria-label="Fechar menu"
+        >
+          <X size={18} />
+        </button>
       </div>
 
       {/* Nav */}
@@ -322,7 +349,7 @@ export function Sidebar() {
                     const active = isActive(child.href)
                     const CIcon = child.icon
                     return (
-                      <Link key={child.href} href={child.href}
+                      <Link key={child.href} href={child.href} onClick={closeMobile}
                         className={cn(
                           'flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-lg text-sm transition-colors',
                           active
@@ -344,7 +371,7 @@ export function Sidebar() {
           const active = isActive(item.href)
           const Icon = item.icon
           return (
-            <Link key={item.href} href={item.href}
+            <Link key={item.href} href={item.href} onClick={closeMobile}
               className={cn(
                 'flex items-center gap-3 px-3 py-2 rounded-lg transition-colors group',
                 active
@@ -404,5 +431,6 @@ export function Sidebar() {
         </div>
       )}
     </aside>
+    </>
   )
 }
