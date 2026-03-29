@@ -228,66 +228,96 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-500 text-sm mt-0.5">Visão consolidada Budget vs Razão</p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
-          <YearFilter periodos={allPeriodos} selYear={selYear} onChange={setSelYear} />
-          {medidas.length > 0 && (
-            <Link href="/medidas"><Button variant="outline" size="sm"><Target size={13} /> {medidas.length} Medida{medidas.length !== 1 ? 's' : ''}</Button></Link>
-          )}
-          <Link href="/analise"><Button size="sm"><BarChart3 size={13} /> Análise</Button></Link>
-          <div className="relative">
-            <Button variant="outline" size="sm" onClick={() => setShowWidgetCfg(v => !v)}>
-              <Settings2 size={13} /> Widgets
-            </Button>
-            {showWidgetCfg && (
-              <div className="absolute right-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded-xl shadow-xl p-3 w-64 space-y-1">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1 mb-2">Personalizar Dashboard</p>
-                {sortedWidgets.map((w, i) => (
-                  <div key={w.id} className="flex items-center gap-2 hover:bg-gray-50 rounded-lg px-2 py-1.5">
-                    <button onClick={() => toggleWidget(w.id)} className="flex-shrink-0">
-                      {w.visible
-                        ? <Eye size={13} className="text-gray-600" />
-                        : <EyeOff size={13} className="text-gray-300" />}
-                    </button>
-                    <span className={cn('text-xs flex-1', w.visible ? 'text-gray-700' : 'text-gray-400')}>{w.label}</span>
-                    <div className="flex flex-col gap-0.5 flex-shrink-0">
-                      <button onClick={() => moveWidget(w.id, -1)} disabled={i === 0}
-                        className="text-gray-400 hover:text-gray-600 disabled:opacity-20"><ChevronUp size={10} /></button>
-                      <button onClick={() => moveWidget(w.id, 1)} disabled={i === sortedWidgets.length - 1}
-                        className="text-gray-400 hover:text-gray-600 disabled:opacity-20"><ChevronDown size={10} /></button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+      {/* Minimal header — only shown when summary widget is hidden */}
+      {!sortedWidgets.find(w => w.id === 'summary' && w.visible) && (
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
+          <div className="flex items-center gap-2">
+            <YearFilter periodos={allPeriodos} selYear={selYear} onChange={setSelYear} />
+            {medidas.length > 0 && (
+              <Link href="/medidas"><Button variant="outline" size="sm"><Target size={13} /> {medidas.length} Medida{medidas.length !== 1 ? 's' : ''}</Button></Link>
             )}
+            <Link href="/analise"><Button size="sm"><BarChart3 size={13} /> Análise</Button></Link>
+            <div className="relative">
+              <Button variant="outline" size="sm" onClick={() => setShowWidgetCfg(v => !v)}>
+                <Settings2 size={13} /> Widgets
+              </Button>
+              {showWidgetCfg && (
+                <div className="absolute right-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded-xl shadow-xl p-3 w-56 space-y-1">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1 mb-2">Personalizar</p>
+                  {sortedWidgets.map((w, i) => (
+                    <div key={w.id} className="flex items-center gap-2 hover:bg-gray-50 rounded-lg px-2 py-1.5">
+                      <button onClick={() => toggleWidget(w.id)} className="flex-shrink-0">
+                        {w.visible ? <Eye size={13} className="text-gray-600" /> : <EyeOff size={13} className="text-gray-300" />}
+                      </button>
+                      <span className={cn('text-xs flex-1', w.visible ? 'text-gray-700' : 'text-gray-400')}>{w.label}</span>
+                      <div className="flex flex-col gap-0.5 flex-shrink-0">
+                        <button onClick={() => moveWidget(w.id, -1)} disabled={i === 0} className="text-gray-400 hover:text-gray-600 disabled:opacity-20"><ChevronUp size={10} /></button>
+                        <button onClick={() => moveWidget(w.id, 1)} disabled={i === sortedWidgets.length - 1} className="text-gray-400 hover:text-gray-600 disabled:opacity-20"><ChevronDown size={10} /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Render widgets in custom order */}
       {sortedWidgets.filter(w => w.visible).map(w => {
         if (w.id === 'summary') return (
-      <div key="summary" className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-10 py-4 border-b border-gray-100">
-        <BigNum
-          title={selYear && hasYtdData ? 'Budget YTD' : 'Budget Total'}
-          value={abbrev(displayBudget)}
-          sub={selYear && hasYtdData ? ytdLabelSub : undefined}
-        />
-        <BigNum
-          title={selYear && hasYtdData ? 'Realizado YTD' : 'Realizado Total'}
-          value={abbrev(displayRazao)}
-          sub={selYear && hasYtdData ? ytdLabelSub : undefined}
-        />
-        <BigNum
-          title="Variação"
-          value={abbrev(variacao)}
-          sub={formatPct(variacaoPct)}
-          color={variacao >= 0 ? 'text-emerald-600' : 'text-red-500'}
-        />
+      <div key="summary" className="flex items-start gap-8 pb-6 border-b border-gray-100">
+        {/* Left: vertical minimalist controls */}
+        <div className="flex-shrink-0 flex flex-col gap-4 pt-1">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Dashboard</p>
+          <YearFilter periodos={allPeriodos} selYear={selYear} onChange={setSelYear} className="flex-col items-start gap-1" />
+          <div className="flex flex-col gap-2">
+            <Link href="/analise" className="text-[11px] text-gray-400 hover:text-gray-700 flex items-center gap-1.5 transition-colors"><BarChart3 size={11} /> Análise</Link>
+            {medidas.length > 0 && (
+              <Link href="/medidas" className="text-[11px] text-gray-400 hover:text-gray-700 flex items-center gap-1.5 transition-colors"><Target size={11} /> {medidas.length} Medida{medidas.length !== 1 ? 's' : ''}</Link>
+            )}
+            <div className="relative">
+              <button onClick={() => setShowWidgetCfg(v => !v)} className="text-[11px] text-gray-400 hover:text-gray-700 flex items-center gap-1.5 transition-colors"><Settings2 size={11} /> Widgets</button>
+              {showWidgetCfg && (
+                <div className="absolute left-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded-xl shadow-xl p-3 w-56 space-y-1">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1 mb-2">Personalizar</p>
+                  {sortedWidgets.map((ww, i) => (
+                    <div key={ww.id} className="flex items-center gap-2 hover:bg-gray-50 rounded-lg px-2 py-1.5">
+                      <button onClick={() => toggleWidget(ww.id)} className="flex-shrink-0">
+                        {ww.visible ? <Eye size={13} className="text-gray-600" /> : <EyeOff size={13} className="text-gray-300" />}
+                      </button>
+                      <span className={cn('text-xs flex-1', ww.visible ? 'text-gray-700' : 'text-gray-400')}>{ww.label}</span>
+                      <div className="flex flex-col gap-0.5 flex-shrink-0">
+                        <button onClick={() => moveWidget(ww.id, -1)} disabled={i === 0} className="text-gray-400 hover:text-gray-600 disabled:opacity-20"><ChevronUp size={10} /></button>
+                        <button onClick={() => moveWidget(ww.id, 1)} disabled={i === sortedWidgets.length - 1} className="text-gray-400 hover:text-gray-600 disabled:opacity-20"><ChevronDown size={10} /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        {/* Right: big numbers distributed */}
+        <div className="flex-1 flex flex-wrap items-start justify-around gap-8 pt-1">
+          <BigNum
+            title={selYear && hasYtdData ? 'Budget YTD' : 'Budget Total'}
+            value={abbrev(displayBudget)}
+            sub={selYear && hasYtdData ? ytdLabelSub : undefined}
+          />
+          <BigNum
+            title={selYear && hasYtdData ? 'Realizado YTD' : 'Realizado Total'}
+            value={abbrev(displayRazao)}
+            sub={selYear && hasYtdData ? ytdLabelSub : undefined}
+          />
+          <BigNum
+            title="Variação"
+            value={abbrev(variacao)}
+            sub={formatPct(variacaoPct)}
+            color={variacao >= 0 ? 'text-emerald-600' : 'text-red-500'}
+          />
+        </div>
       </div>
 
         )

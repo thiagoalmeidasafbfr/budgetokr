@@ -445,19 +445,15 @@ function ExecChartCard({
                     return (
                       <g>
                         <rect x={px} y={py} width={pw} height={ph} fill={cellFill} rx={3} ry={3} />
-                        {(showName || showLabel) && (
-                          <rect x={px + 4} y={textY - 3} width={pw - 8} height={textH + 6}
-                            fill="rgba(0,0,0,0.25)" rx={2} ry={2} />
-                        )}
                         {showName && (
                           <text x={px + pw / 2} y={textY + 10} textAnchor="middle"
-                            fill="#fff" fontSize={9} fontWeight={400} style={{ pointerEvents: 'none' }}>
+                            fill="rgba(255,255,255,0.85)" fontSize={9} fontWeight={300} style={{ pointerEvents: 'none' }}>
                             {truncated}
                           </text>
                         )}
                         {showLabel && (
                           <text x={px + pw / 2} y={showName ? textY + 24 : textY + 10} textAnchor="middle"
-                            fill="rgba(255,255,255,0.9)" fontSize={9} fontWeight={600} style={{ pointerEvents: 'none' }}>
+                            fill="#fff" fontSize={9} fontWeight={400} style={{ pointerEvents: 'none' }}>
                             {label}
                           </text>
                         )}
