@@ -1,20 +1,22 @@
 'use client'
 import React, { useState, useEffect, useCallback } from 'react'
 import {
-  PieChart, Pie, Cell, Sector, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  PieChart, Pie, Cell, Sector, BarChart, Bar,
+  AreaChart, Area,
+  XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, TooltipProps,
 } from 'recharts'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, cn } from '@/lib/utils'
-import { Plus, X, Settings2, RefreshCw, PieChart as PieIcon, BarChart2, BarChart3, Donut } from 'lucide-react'
+import { Plus, X, Settings2, RefreshCw, PieChart as PieIcon, BarChart2, BarChart3, Donut, TrendingUp } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface ExecChartConfig {
   id: string
   title: string
-  chartType: 'pie' | 'donut' | 'bar_h' | 'bar_v'
+  chartType: 'pie' | 'donut' | 'bar_h' | 'bar_v' | 'area'
   field: 'razao' | 'budget' | 'variacao'
   topN: number
   sortOrder: 'desc' | 'asc'
@@ -76,10 +78,11 @@ const FIELD_LABELS: Record<ExecChartConfig['field'], string> = {
 }
 
 const CHART_TYPES: { id: ExecChartConfig['chartType']; label: string; icon: React.ElementType }[] = [
-  { id: 'pie',   label: 'Pizza',      icon: PieIcon   },
-  { id: 'donut', label: 'Rosca',      icon: Donut     },
-  { id: 'bar_h', label: 'Barras (H)', icon: BarChart2 },
-  { id: 'bar_v', label: 'Barras (V)', icon: BarChart3 },
+  { id: 'pie',   label: 'Pizza',      icon: PieIcon    },
+  { id: 'donut', label: 'Rosca',      icon: Donut      },
+  { id: 'bar_h', label: 'Barras (H)', icon: BarChart2  },
+  { id: 'bar_v', label: 'Barras (V)', icon: BarChart3  },
+  { id: 'area',  label: 'Área',       icon: TrendingUp },
 ]
 
 // ─── Custom tooltip ───────────────────────────────────────────────────────────
@@ -243,6 +246,18 @@ function ExecChartCard({
     </defs>
   )
 
+  // Area chart uses the first palette color with vertical gradient
+  const areaColor = palette[0]
+  const gArea = `ga-${config.id}`
+  const areaDefs = (
+    <defs>
+      <linearGradient id={gArea} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="5%"  stopColor={areaColor} stopOpacity={0.35} />
+        <stop offset="95%" stopColor={areaColor} stopOpacity={0.03} />
+      </linearGradient>
+    </defs>
+  )
+
   // ── Active shape (hover effect on pie/donut) ───────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const renderActiveShape = (props: any) => {
@@ -356,6 +371,26 @@ function ExecChartCard({
                     ))}
                   </Bar>
                 </BarChart>
+              ) : config.chartType === 'area' ? (
+                <AreaChart data={absItems} margin={{ top: 14, right: 8, left: -10, bottom: 24 }}>
+                  {areaDefs}
+                  <CartesianGrid vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0}
+                    tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 11) + '…' : v} />
+                  <YAxis tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <Tooltip content={tooltip} cursor={{ stroke: areaColor, strokeWidth: 1 }} />
+                  <Area
+                    type="monotone"
+                    dataKey="absValue"
+                    name={fieldLabel}
+                    stroke={areaColor}
+                    strokeWidth={2.5}
+                    fill={`url(#${gArea})`}
+                    dot={{ fill: areaColor, r: 3, strokeWidth: 0 }}
+                    activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff', fill: areaColor }}
+                    label={barLabel ? { ...barLabel, position: 'top' } : false}
+                  />
+                </AreaChart>
               ) : (
                 <BarChart data={absItems} margin={{ top: 14, right: 8, left: -10, bottom: 24 }}>
                   {barVDefs}
@@ -464,7 +499,7 @@ function ConfigModal({
           {/* Chart type */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-2">Tipo de gráfico</label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-5 gap-2">
               {CHART_TYPES.map(ct => {
                 const Icon = ct.icon
                 return (
