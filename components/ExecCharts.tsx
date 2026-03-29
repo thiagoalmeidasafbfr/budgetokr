@@ -27,7 +27,7 @@ export interface ExecChartConfig {
   palette: string
   valueFormat: 'currency' | 'percent'
   labelPosition: 'inside' | 'outside' | 'none'
-  groupBy: 'agrupamento_arvore' | 'dre' | 'conta_contabil' | 'centro_custo' | 'contrapartida'
+  groupBy: 'agrupamento_arvore' | 'dre' | 'conta_contabil' | 'centro_custo' | 'contrapartida' | 'departamento'
   referenceLine?: { value: number; label: string }
 }
 
@@ -313,10 +313,11 @@ function ExecChartCard({
             {fieldLabel} · Top {config.topN}
             {config.groupBy && config.groupBy !== 'agrupamento_arvore' && (
               <span className="ml-1 text-amber-600">· {{
-                dre: 'Categoria DRE',
+                dre:          'Categoria DRE',
                 conta_contabil: 'Conta',
                 centro_custo: 'Centro de Custo',
                 contrapartida: 'Contrapartida',
+                departamento: 'Departamento',
               }[config.groupBy]}</span>
             )}
             {config.dreGroup && <span className="ml-1">· {config.dreGroup}</span>}
@@ -510,12 +511,13 @@ function ExecChartCard({
 // ─── Config modal ─────────────────────────────────────────────────────────────
 
 function ConfigModal({
-  config, allDepts, onSave, onClose,
+  config, allDepts, onSave, onClose, isMasterContext,
 }: {
   config: ExecChartConfig | null
   allDepts: string[]
   onSave: (c: ExecChartConfig) => void
   onClose: () => void
+  isMasterContext: boolean
 }) {
   const [title,         setTitle]         = useState(config?.title         ?? '')
   const [chartType,     setChartType]     = useState<ExecChartConfig['chartType']>(config?.chartType     ?? 'bar_h')
@@ -607,6 +609,9 @@ function ConfigModal({
               <option value="conta_contabil">Conta Contábil</option>
               <option value="centro_custo">Centro de Custo</option>
               <option value="contrapartida">Contrapartida</option>
+              {isMasterContext && (
+                <option value="departamento">Departamento</option>
+              )}
             </select>
           </div>
 
@@ -886,6 +891,7 @@ export default function ExecCharts({
           allDepts={allDepts}
           onSave={handleSave}
           onClose={() => { setShowModal(false); setEditing(null) }}
+          isMasterContext={deptName === '__dashboard__'}
         />
       )}
     </div>
