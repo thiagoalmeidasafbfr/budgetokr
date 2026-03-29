@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Field   = 'budget' | 'razao' | 'variacao'
-type GroupBy = 'agrupamento_arvore' | 'dre' | 'conta_contabil' | 'centro_custo' | 'contrapartida'
+type GroupBy = 'agrupamento_arvore' | 'dre' | 'conta_contabil' | 'centro_custo' | 'contrapartida' | 'departamento'
 
 function getValue(b: number, r: number, field: Field) {
   return field === 'budget' ? b : field === 'razao' ? r : r - b
@@ -140,6 +140,25 @@ export async function GET(req: NextRequest) {
       ? await getUserCentros(user.userId)
       : null
     const authCentros = userCentros !== null ? userCentros : undefined
+
+    // ── Department-level grouping ────────────────────────────────────────────
+    if (groupBy === 'departamento') {
+      const rows = await getDRE(periodos, activeDepts ?? [], authCentros)
+      const dreGroups = [...new Set(rows.map(r => r.dre))].filter(Boolean).sort()
+
+      const acc: Record<string, { budget: number; razao: number }> = {}
+      for (const r of rows) {
+        if (dreGroup && r.dre !== dreGroup) continue
+        const key = r.nome_departamento || r.departamento
+        if (!key) continue
+        if (!acc[key]) acc[key] = { budget: 0, razao: 0 }
+        acc[key].budget += r.budget
+        acc[key].razao  += r.razao
+      }
+
+      const aggregated = Object.entries(acc).map(([name, { budget, razao }]) => ({ name, budget, razao }))
+      return NextResponse.json({ items: buildTopN(aggregated, topN, field, sortOrder), dreGroups })
+    }
 
     // ── DRE-based groupings (agrupamento_arvore, dre) ────────────────────────
     if (groupBy === 'agrupamento_arvore' || groupBy === 'dre') {

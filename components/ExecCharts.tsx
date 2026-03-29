@@ -27,7 +27,7 @@ export interface ExecChartConfig {
   palette: string
   valueFormat: 'currency' | 'percent'
   labelPosition: 'inside' | 'outside' | 'none'
-  groupBy: 'agrupamento_arvore' | 'dre' | 'conta_contabil' | 'centro_custo' | 'contrapartida'
+  groupBy: 'agrupamento_arvore' | 'dre' | 'conta_contabil' | 'centro_custo' | 'contrapartida' | 'departamento'
   referenceLine?: { value: number; label: string }
 }
 
@@ -272,53 +272,9 @@ function ExecChartCard({
     ? { formatter: (v: number) => tickFmt(v), fontSize: 9, fill: '#64748b' }
     : false
 
-  // ── Gradient helpers ───────────────────────────────────────────────────────
-  const gPie  = (i: number) => `gp-${config.id}-${i}`
-  const gBarV = (i: number) => `gbv-${config.id}-${i}`
-  const gBarH = (i: number) => `gbh-${config.id}-${i}`
 
-  const pieDefs = (
-    <defs>
-      {palette.map((color, i) => (
-        <radialGradient key={i} id={gPie(i)} cx="50%" cy="40%" r="60%">
-          <stop offset="0%"   stopColor={color} stopOpacity={0.75} />
-          <stop offset="100%" stopColor={color} stopOpacity={1}    />
-        </radialGradient>
-      ))}
-    </defs>
-  )
-  const barVDefs = (
-    <defs>
-      {palette.map((color, i) => (
-        <linearGradient key={i} id={gBarV(i)} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%"   stopColor={color} stopOpacity={0.95} />
-          <stop offset="100%" stopColor={color} stopOpacity={0.55} />
-        </linearGradient>
-      ))}
-    </defs>
-  )
-  const barHDefs = (
-    <defs>
-      {palette.map((color, i) => (
-        <linearGradient key={i} id={gBarH(i)} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%"   stopColor={color} stopOpacity={0.55} />
-          <stop offset="100%" stopColor={color} stopOpacity={0.95} />
-        </linearGradient>
-      ))}
-    </defs>
-  )
-
-  // Area chart uses the first palette color with vertical gradient
+  // Area chart uses the first palette color
   const areaColor = palette[0]
-  const gArea = `ga-${config.id}`
-  const areaDefs = (
-    <defs>
-      <linearGradient id={gArea} x1="0" y1="0" x2="0" y2="1">
-        <stop offset="5%"  stopColor={areaColor} stopOpacity={0.35} />
-        <stop offset="95%" stopColor={areaColor} stopOpacity={0.03} />
-      </linearGradient>
-    </defs>
-  )
 
   // ── Active shape (hover effect on pie/donut) ───────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -357,10 +313,11 @@ function ExecChartCard({
             {fieldLabel} · Top {config.topN}
             {config.groupBy && config.groupBy !== 'agrupamento_arvore' && (
               <span className="ml-1 text-amber-600">· {{
-                dre: 'Categoria DRE',
+                dre:          'Categoria DRE',
                 conta_contabil: 'Conta',
                 centro_custo: 'Centro de Custo',
                 contrapartida: 'Contrapartida',
+                departamento: 'Departamento',
               }[config.groupBy]}</span>
             )}
             {config.dreGroup && <span className="ml-1">· {config.dreGroup}</span>}
@@ -401,7 +358,6 @@ function ExecChartCard({
             <ResponsiveContainer width="100%" height={200}>
               {(config.chartType === 'pie' || config.chartType === 'donut') ? (
                 <PieChart>
-                  {pieDefs}
                   <Pie
                     data={absItems}
                     dataKey="absValue"
@@ -419,14 +375,13 @@ function ExecChartCard({
                     onMouseLeave={() => setActiveIndex(undefined)}
                   >
                     {absItems.map((_, i) => (
-                      <Cell key={i} fill={`url(#${gPie(i % palette.length)})`} />
+                      <Cell key={i} fill={palette[i % palette.length]} />
                     ))}
                   </Pie>
                   <Tooltip content={tooltip} />
                 </PieChart>
               ) : config.chartType === 'bar_h' ? (
                 <BarChart data={absItems} layout="vertical" margin={{ top: 0, right: 55, left: 0, bottom: 0 }}>
-                  {barHDefs}
                   <CartesianGrid horizontal={false} stroke="#f1f5f9" />
                   <XAxis type="number" tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                   <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 9, fill: '#475569' }} axisLine={false} tickLine={false}
@@ -435,14 +390,13 @@ function ExecChartCard({
                   <Bar dataKey="absValue" name={fieldLabel} radius={[0,3,3,0]} maxBarSize={14}
                     label={barLabel ? { ...barLabel, position: 'right' } : false}>
                     {absItems.map((_, i) => (
-                      <Cell key={i} fill={`url(#${gBarH(i % palette.length)})`} />
+                      <Cell key={i} fill={palette[i % palette.length]} />
                     ))}
                   </Bar>
                   {refLineH}
                 </BarChart>
               ) : config.chartType === 'area' ? (
                 <AreaChart data={absItems} margin={{ top: 14, right: 8, left: -10, bottom: 24 }}>
-                  {areaDefs}
                   <CartesianGrid vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0}
                     tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 11) + '…' : v} />
@@ -454,7 +408,8 @@ function ExecChartCard({
                     name={fieldLabel}
                     stroke={areaColor}
                     strokeWidth={2.5}
-                    fill={`url(#${gArea})`}
+                    fill={areaColor}
+                    fillOpacity={0.15}
                     dot={{ fill: areaColor, r: 3, strokeWidth: 0 }}
                     activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff', fill: areaColor }}
                     label={barLabel ? { ...barLabel, position: 'top' } : false}
@@ -481,19 +436,28 @@ function ExecChartCard({
                       : tickFmt(absValue ?? 0)
                     const showLabel = pw > 36 && ph > 20
                     const showName  = pw > 52 && ph > 36
-                    const truncated = (name ?? '').length > Math.floor(pw / 6) ? (name ?? '').slice(0, Math.floor(pw / 6) - 1) + '…' : (name ?? '')
+                    const charsPerPx = 5.5
+                    const maxChars = Math.floor(pw / charsPerPx)
+                    const truncated = (name ?? '').length > maxChars ? (name ?? '').slice(0, maxChars - 1) + '…' : (name ?? '')
+                    // Semi-transparent bg for text contrast
+                    const textH = (showName && showLabel) ? 28 : 16
+                    const textY = py + ph / 2 - textH / 2
                     return (
                       <g>
                         <rect x={px} y={py} width={pw} height={ph} fill={cellFill} rx={3} ry={3} />
+                        {(showName || showLabel) && (
+                          <rect x={px + 4} y={textY - 3} width={pw - 8} height={textH + 6}
+                            fill="rgba(0,0,0,0.25)" rx={2} ry={2} />
+                        )}
                         {showName && (
-                          <text x={px + pw / 2} y={py + ph / 2 - 7} textAnchor="middle" fill="#fff"
-                            fontSize={10} fontWeight={600} style={{ pointerEvents: 'none' }}>
+                          <text x={px + pw / 2} y={textY + 10} textAnchor="middle"
+                            fill="#fff" fontSize={9} fontWeight={400} style={{ pointerEvents: 'none' }}>
                             {truncated}
                           </text>
                         )}
                         {showLabel && (
-                          <text x={px + pw / 2} y={showName ? py + ph / 2 + 8 : py + ph / 2} textAnchor="middle" fill="rgba(255,255,255,0.85)"
-                            fontSize={9} style={{ pointerEvents: 'none' }}>
+                          <text x={px + pw / 2} y={showName ? textY + 24 : textY + 10} textAnchor="middle"
+                            fill="rgba(255,255,255,0.9)" fontSize={9} fontWeight={600} style={{ pointerEvents: 'none' }}>
                             {label}
                           </text>
                         )}
@@ -505,7 +469,6 @@ function ExecChartCard({
                 </Treemap>
               ) : (
                 <BarChart data={absItems} margin={{ top: 14, right: 8, left: -10, bottom: 24 }}>
-                  {barVDefs}
                   <CartesianGrid vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0}
                     tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 11) + '…' : v} />
@@ -514,7 +477,7 @@ function ExecChartCard({
                   <Bar dataKey="absValue" name={fieldLabel} radius={[3,3,0,0]} maxBarSize={30}
                     label={barLabel ? { ...barLabel, position: 'top' } : false}>
                     {absItems.map((_, i) => (
-                      <Cell key={i} fill={`url(#${gBarV(i % palette.length)})`} />
+                      <Cell key={i} fill={palette[i % palette.length]} />
                     ))}
                   </Bar>
                   {refLine}
@@ -548,12 +511,13 @@ function ExecChartCard({
 // ─── Config modal ─────────────────────────────────────────────────────────────
 
 function ConfigModal({
-  config, allDepts, onSave, onClose,
+  config, allDepts, onSave, onClose, isMasterContext,
 }: {
   config: ExecChartConfig | null
   allDepts: string[]
   onSave: (c: ExecChartConfig) => void
   onClose: () => void
+  isMasterContext: boolean
 }) {
   const [title,         setTitle]         = useState(config?.title         ?? '')
   const [chartType,     setChartType]     = useState<ExecChartConfig['chartType']>(config?.chartType     ?? 'bar_h')
@@ -645,6 +609,9 @@ function ConfigModal({
               <option value="conta_contabil">Conta Contábil</option>
               <option value="centro_custo">Centro de Custo</option>
               <option value="contrapartida">Contrapartida</option>
+              {isMasterContext && (
+                <option value="departamento">Departamento</option>
+              )}
             </select>
           </div>
 
@@ -924,6 +891,7 @@ export default function ExecCharts({
           allDepts={allDepts}
           onSave={handleSave}
           onClose={() => { setShowModal(false); setEditing(null) }}
+          isMasterContext={deptName === '__dashboard__'}
         />
       )}
     </div>
