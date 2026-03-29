@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getDRE, getDREByAccount, getUserCentros } from '@/lib/query'
+import { getDRE, getDREByAccount, getUserCentros, getAnalise } from '@/lib/query'
 import { getSupabase } from '@/lib/supabase'
 import { getSession } from '@/lib/session'
 
@@ -143,17 +143,18 @@ export async function GET(req: NextRequest) {
 
     // ── Department-level grouping ────────────────────────────────────────────
     if (groupBy === 'departamento') {
-      const rows = await getDRE(periodos, activeDepts ?? [], authCentros)
-      const dreGroups = [...new Set(rows.map(r => r.dre))].filter(Boolean).sort()
+      // getAnalise returns rows with nome_departamento, budget, razao per period
+      const rows = await getAnalise([], activeDepts ? [...activeDepts] : [], periodos, false, authCentros ?? [])
+      const dreGroups: string[] = [] // no dre grouping available at dept level
 
       const acc: Record<string, { budget: number; razao: number }> = {}
       for (const r of rows) {
-        if (dreGroup && r.dre !== dreGroup) continue
-        const key = r.nome_departamento || r.departamento
+        const key = ((r as Record<string, unknown>)['nome_departamento'] as string)?.trim()
+               || ((r as Record<string, unknown>)['departamento'] as string)
         if (!key) continue
         if (!acc[key]) acc[key] = { budget: 0, razao: 0 }
-        acc[key].budget += r.budget
-        acc[key].razao  += r.razao
+        acc[key].budget += (r as { budget: number }).budget
+        acc[key].razao  += (r as { razao: number }).razao
       }
 
       const aggregated = Object.entries(acc).map(([name, { budget, razao }]) => ({ name, budget, razao }))
