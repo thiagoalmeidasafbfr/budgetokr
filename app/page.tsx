@@ -392,10 +392,10 @@ function BigNum({ title, value, sub, color }: {
   title: string; value: string; sub?: string; color?: string
 }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <p className={cn('text-7xl font-black tracking-tight leading-none', color ?? 'text-gray-900')}>{value}</p>
-      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mt-1.5">{title}</p>
-      {sub && <p className="text-xs text-gray-400">{sub}</p>}
+    <div className="flex flex-col items-center gap-0.5">
+      <p className={cn('text-[4rem] font-black tracking-tight leading-none', color ?? 'text-gray-900')}>{value}</p>
+      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mt-1.5 text-center">{title}</p>
+      {sub && <p className="text-xs text-gray-400 text-center">{sub}</p>}
     </div>
   )
 }
