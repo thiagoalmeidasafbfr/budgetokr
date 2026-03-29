@@ -127,36 +127,38 @@ export default function DashboardCharts({ periodChartData, deptVariance }: {
     .slice(0, TOP_N)
 
   return (
-    <div className="space-y-4">
-      {/* Budget vs Realizado — full width */}
-      <Card className="overflow-hidden">
-        <CardHeader className="pb-1 border-b border-gray-100">
-          <CardTitle className="text-sm font-semibold text-gray-700">Budget vs Realizado por Período</CardTitle>
-          <p className="text-xs text-gray-400 mt-0.5">Linha: variação acumulada YTD</p>
-        </CardHeader>
-        <CardContent className="pt-4 pb-2">
-          <ResponsiveContainer width="100%" height={260}>
-            <ComposedChart data={periodChartData} margin={{ top: 8, right: 12, left: -4, bottom: 0 }} barGap={2}>
-              <CartesianGrid vertical={false} stroke={C.grid} />
-              <XAxis dataKey="periodo" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-              <YAxis yAxisId="bars" tickFormatter={tickFmt} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={44} />
-              <YAxis yAxisId="line" orientation="right" tickFormatter={tickFmt} tick={{ fontSize: 10, fill: '#d97706' }} axisLine={false} tickLine={false} width={44} />
-              <Tooltip content={<PeriodTooltip />} cursor={{ fill: '#f8fafc' }} />
-              <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 11, paddingTop: 10, color: '#64748b' }} />
-              <Bar yAxisId="bars" dataKey="budget" name="Budget"    fill={C.budget} radius={[3,3,0,0]} maxBarSize={26} />
-              <Bar yAxisId="bars" dataKey="razao"  name="Realizado" fill={C.razao}  radius={[3,3,0,0]} maxBarSize={26} />
-              <Line yAxisId="line" type="monotone" dataKey="variacaoYtd" name="Variação YTD"
-                stroke={C.line} strokeWidth={2}
-                dot={{ r: 3, fill: C.line, stroke: '#fff', strokeWidth: 1.5 }}
-                activeDot={{ r: 5, stroke: '#fff', strokeWidth: 2 }} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+    <div className="flex gap-4 items-stretch">
+      {/* Budget vs Realizado — 60% width */}
+      <div className="w-[60%] flex-shrink-0">
+        <Card className="overflow-hidden h-full">
+          <CardHeader className="pb-1 border-b border-gray-100">
+            <CardTitle className="text-sm font-semibold text-gray-700">Budget vs Realizado por Período</CardTitle>
+            <p className="text-xs text-gray-400 mt-0.5">Linha: variação acumulada YTD</p>
+          </CardHeader>
+          <CardContent className="pt-4 pb-2">
+            <ResponsiveContainer width="100%" height={260}>
+              <ComposedChart data={periodChartData} margin={{ top: 8, right: 12, left: -4, bottom: 0 }} barGap={2}>
+                <CartesianGrid vertical={false} stroke={C.grid} />
+                <XAxis dataKey="periodo" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                <YAxis yAxisId="bars" tickFormatter={tickFmt} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={44} />
+                <YAxis yAxisId="line" orientation="right" tickFormatter={tickFmt} tick={{ fontSize: 10, fill: '#d97706' }} axisLine={false} tickLine={false} width={44} />
+                <Tooltip content={<PeriodTooltip />} cursor={{ fill: '#f8fafc' }} />
+                <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 11, paddingTop: 10, color: '#64748b' }} />
+                <Bar yAxisId="bars" dataKey="budget" name="Budget"    fill={C.budget} radius={[3,3,0,0]} maxBarSize={26} />
+                <Bar yAxisId="bars" dataKey="razao"  name="Realizado" fill={C.razao}  radius={[3,3,0,0]} maxBarSize={26} />
+                <Line yAxisId="line" type="monotone" dataKey="variacaoYtd" name="Variação YTD"
+                  stroke={C.line} strokeWidth={2}
+                  dot={{ r: 3, fill: C.line, stroke: '#fff', strokeWidth: 1.5 }}
+                  activeDot={{ r: 5, stroke: '#fff', strokeWidth: 2 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* Dept variance — two charts side by side */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="overflow-hidden">
+      {/* Dept variance — two charts stacked in remaining 40% */}
+      <div className="flex-1 flex flex-col gap-4">
+        <Card className="overflow-hidden flex-1">
           <CardHeader className="pb-1 border-b border-gray-100">
             <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block flex-shrink-0" />
@@ -172,7 +174,7 @@ export default function DashboardCharts({ periodChartData, deptVariance }: {
           </CardContent>
         </Card>
 
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden flex-1">
           <CardHeader className="pb-1 border-b border-gray-100">
             <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-red-500 inline-block flex-shrink-0" />
