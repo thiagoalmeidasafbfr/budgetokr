@@ -4,6 +4,7 @@ import {
   PieChart, Pie, Cell, Sector, BarChart, Bar,
   AreaChart, Area,
   Treemap,
+  ReferenceLine,
   XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, TooltipProps,
 } from 'recharts'
@@ -27,6 +28,7 @@ export interface ExecChartConfig {
   valueFormat: 'currency' | 'percent'
   labelPosition: 'inside' | 'outside' | 'none'
   groupBy: 'agrupamento_arvore' | 'dre' | 'conta_contabil' | 'centro_custo' | 'contrapartida'
+  referenceLine?: { value: number; label: string }
 }
 
 interface ChartItem {
@@ -170,6 +172,27 @@ function ExecChartCard({
   }
 
   const tooltip = <ExecTooltip valueFormat={vf} total={total} />
+
+  const refLine = config.referenceLine?.value != null ? (
+    <ReferenceLine
+      y={config.referenceLine.value}
+      stroke="#f59e0b"
+      strokeWidth={1.5}
+      strokeDasharray="5 3"
+      label={{ value: config.referenceLine.label || '', position: 'insideTopRight', fontSize: 9, fill: '#f59e0b', fontWeight: 600 }}
+    />
+  ) : null
+
+  // Horizontal bar uses x= for the reference axis
+  const refLineH = config.referenceLine?.value != null ? (
+    <ReferenceLine
+      x={config.referenceLine.value}
+      stroke="#f59e0b"
+      strokeWidth={1.5}
+      strokeDasharray="5 3"
+      label={{ value: config.referenceLine.label || '', position: 'insideTopRight', fontSize: 9, fill: '#f59e0b', fontWeight: 600 }}
+    />
+  ) : null
 
   // Inside labels only — clean, no connector lines
   // Threshold: 8% for inside (enough room to read), 5% for outside (text only, no lines)
@@ -372,6 +395,7 @@ function ExecChartCard({
                       <Cell key={i} fill={`url(#${gBarH(i % palette.length)})`} />
                     ))}
                   </Bar>
+                  {refLineH}
                 </BarChart>
               ) : config.chartType === 'area' ? (
                 <AreaChart data={absItems} margin={{ top: 14, right: 8, left: -10, bottom: 24 }}>
@@ -392,6 +416,7 @@ function ExecChartCard({
                     activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff', fill: areaColor }}
                     label={barLabel ? { ...barLabel, position: 'top' } : false}
                   />
+                  {refLine}
                 </AreaChart>
               ) : config.chartType === 'treemap' ? (
                 <Treemap
@@ -449,6 +474,7 @@ function ExecChartCard({
                       <Cell key={i} fill={`url(#${gBarV(i % palette.length)})`} />
                     ))}
                   </Bar>
+                  {refLine}
                 </BarChart>
               )}
             </ResponsiveContainer>
@@ -497,6 +523,8 @@ function ConfigModal({
   const [labelPosition, setLabelPosition] = useState<ExecChartConfig['labelPosition']>(config?.labelPosition ?? 'inside')
   const [groupBy,       setGroupBy]       = useState<ExecChartConfig['groupBy']>(config?.groupBy    ?? 'agrupamento_arvore')
   const [dreGroups,     setDreGroups]     = useState<string[]>([])
+  const [refLineValue,  setRefLineValue]  = useState<string>(config?.referenceLine?.value != null ? String(config.referenceLine.value) : '')
+  const [refLineLabel,  setRefLineLabel]  = useState(config?.referenceLine?.label ?? '')
 
   useEffect(() => {
     fetch('/api/exec-chart?topN=1&field=razao')
@@ -512,6 +540,9 @@ function ConfigModal({
       chartType, field, topN, sortOrder,
       departamentos, dreGroup,
       palette, valueFormat, labelPosition, groupBy,
+      referenceLine: refLineValue.trim() !== '' && !isNaN(Number(refLineValue))
+        ? { value: Number(refLineValue), label: refLineLabel.trim() }
+        : undefined,
     })
   }
 
@@ -664,6 +695,35 @@ function ConfigModal({
               ))}
             </div>
           </div>
+
+          {/* Reference Line — only for bar/area charts */}
+          {(chartType === 'bar_h' || chartType === 'bar_v' || chartType === 'area') && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Linha de referência <span className="text-gray-400 font-normal">(opcional)</span>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="number"
+                  value={refLineValue}
+                  onChange={e => setRefLineValue(e.target.value)}
+                  placeholder="Valor (ex: 500000)"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+                <input
+                  value={refLineLabel}
+                  onChange={e => setRefLineLabel(e.target.value)}
+                  placeholder="Rótulo (ex: Meta)"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+              </div>
+              {refLineValue.trim() !== '' && (
+                <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
+                  <span>━━</span> Linha âmbar tracejada será exibida no gráfico
+                </p>
+              )}
+            </div>
+          )}
 
           {/* DRE Group filter */}
           {dreGroups.length > 0 && (
