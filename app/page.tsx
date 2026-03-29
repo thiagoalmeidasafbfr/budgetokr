@@ -269,9 +269,8 @@ export default function Dashboard() {
         if (w.id === 'summary') return (
       <div key="summary" className="flex items-start gap-8 pb-6 border-b border-gray-100">
         {/* Left: vertical minimalist controls */}
-        <div className="flex-shrink-0 flex flex-col gap-4 pt-1">
+        <div className="flex-shrink-0 flex flex-col gap-3 pt-1">
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Dashboard</p>
-          <YearFilter periodos={allPeriodos} selYear={selYear} onChange={setSelYear} className="flex-col items-start gap-1" />
           <div className="flex flex-col gap-2">
             <Link href="/analise" className="text-[11px] text-gray-400 hover:text-gray-700 flex items-center gap-1.5 transition-colors"><BarChart3 size={11} /> Análise</Link>
             {medidas.length > 0 && (
@@ -299,24 +298,29 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-        {/* Right: big numbers distributed */}
-        <div className="flex-1 flex flex-wrap items-start justify-around gap-8 pt-1">
-          <BigNum
-            title={selYear && hasYtdData ? 'Budget YTD' : 'Budget Total'}
-            value={abbrev(displayBudget)}
-            sub={selYear && hasYtdData ? ytdLabelSub : undefined}
-          />
-          <BigNum
-            title={selYear && hasYtdData ? 'Realizado YTD' : 'Realizado Total'}
-            value={abbrev(displayRazao)}
-            sub={selYear && hasYtdData ? ytdLabelSub : undefined}
-          />
-          <BigNum
-            title="Variação"
-            value={abbrev(variacao)}
-            sub={formatPct(variacaoPct)}
-            color={variacao >= 0 ? 'text-emerald-600' : 'text-red-500'}
-          />
+        {/* Right: year filter top-right + big numbers */}
+        <div className="flex-1 flex flex-col gap-5">
+          <div className="flex justify-end">
+            <YearFilter periodos={allPeriodos} selYear={selYear} onChange={setSelYear} />
+          </div>
+          <div className="flex flex-wrap items-start justify-around gap-10">
+            <BigNum
+              title={selYear && hasYtdData ? 'Budget YTD' : 'Budget Total'}
+              value={abbrev(displayBudget)}
+              sub={selYear && hasYtdData ? ytdLabelSub : undefined}
+            />
+            <BigNum
+              title={selYear && hasYtdData ? 'Realizado YTD' : 'Realizado Total'}
+              value={abbrev(displayRazao)}
+              sub={selYear && hasYtdData ? ytdLabelSub : undefined}
+            />
+            <BigNum
+              title="Variação"
+              value={abbrev(variacao)}
+              sub={formatPct(variacaoPct)}
+              color={variacao >= 0 ? 'text-emerald-600' : 'text-red-500'}
+            />
+          </div>
         </div>
       </div>
 
@@ -389,7 +393,7 @@ function BigNum({ title, value, sub, color }: {
 }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <p className={cn('text-4xl font-black tracking-tight leading-none', color ?? 'text-gray-900')}>{value}</p>
+      <p className={cn('text-7xl font-black tracking-tight leading-none', color ?? 'text-gray-900')}>{value}</p>
       <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mt-1.5">{title}</p>
       {sub && <p className="text-xs text-gray-400">{sub}</p>}
     </div>

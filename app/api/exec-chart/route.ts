@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getDRE, getDREByAccount, getUserCentros, getAnalise } from '@/lib/query'
+import { getDRE, getDREByAccount, getUserCentros } from '@/lib/query'
 import { getSupabase } from '@/lib/supabase'
 import { getSession } from '@/lib/session'
 
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Field   = 'budget' | 'razao' | 'variacao'
-type GroupBy = 'agrupamento_arvore' | 'dre' | 'conta_contabil' | 'centro_custo' | 'contrapartida' | 'departamento'
+type GroupBy = 'agrupamento_arvore' | 'dre' | 'conta_contabil' | 'centro_custo' | 'contrapartida' | 'departamento' | 'unidade_negocio'
 
 function getValue(b: number, r: number, field: Field) {
   return field === 'budget' ? b : field === 'razao' ? r : r - b
@@ -106,6 +106,68 @@ async function resolveCCNames(
   return rows.map(r => ({ ...r, name: map[r.name] ?? r.name }))
 }
 
+// ─── unidades_negocio aggregation (via id_cc_cc join) ────────────────────────
+
+async function getLancamentosRowsByUnidade(
+  periodos: string[],
+  ccFilter: string[] | undefined,
+  accountFilter: string[] | undefined
+): Promise<{ name: string; budget: number; razao: number }[]> {
+  let q = getSupabase()
+    .from('lancamentos')
+    .select('id_cc_cc, tipo, debito_credito')
+    .not('id_cc_cc', 'is', null)
+    .neq('id_cc_cc', '')
+
+  if (ccFilter?.length)      q = q.in('centro_custo', ccFilter)
+  if (accountFilter?.length) q = q.in('numero_conta_contabil', accountFilter)
+
+  if (periodos.length) {
+    const sorted    = [...periodos].sort()
+    const dateStart = sorted[0] + '-01'
+    const [y, m]    = sorted[sorted.length - 1].split('-').map(Number)
+    const dateEnd   = new Date(y, m, 0).toISOString().split('T')[0]
+    q = q.gte('data_lancamento', dateStart).lte('data_lancamento', dateEnd)
+  }
+
+  const { data, error } = await q.limit(100_000)
+  if (error || !data) return []
+
+  // Accumulate by id_cc_cc first
+  const idccAcc: Record<string, { budget: number; razao: number }> = {}
+  for (const r of data) {
+    const idcc = r.id_cc_cc as string
+    if (!idcc) continue
+    if (!idccAcc[idcc]) idccAcc[idcc] = { budget: 0, razao: 0 }
+    if (r.tipo === 'budget') idccAcc[idcc].budget += (r.debito_credito as number)
+    else                     idccAcc[idcc].razao  += (r.debito_credito as number)
+  }
+
+  const idccs = Object.keys(idccAcc)
+  if (!idccs.length) return []
+
+  // Resolve id_cc_cc → unidade
+  const { data: unData } = await getSupabase()
+    .from('unidades_negocio')
+    .select('id_cc_cc, unidade')
+    .in('id_cc_cc', idccs)
+
+  const idToUnidade: Record<string, string> = {}
+  for (const r of (unData ?? []) as { id_cc_cc: string; unidade: string }[]) {
+    if (r.id_cc_cc) idToUnidade[r.id_cc_cc] = r.unidade || 'Sem Unidade'
+  }
+
+  // Aggregate by unidade
+  const acc: Record<string, { budget: number; razao: number }> = {}
+  for (const [idcc, vals] of Object.entries(idccAcc)) {
+    const unidade = idToUnidade[idcc] || 'Sem Unidade'
+    if (!acc[unidade]) acc[unidade] = { budget: 0, razao: 0 }
+    acc[unidade].budget += vals.budget
+    acc[unidade].razao  += vals.razao
+  }
+  return Object.entries(acc).map(([name, v]) => ({ name, ...v }))
+}
+
 // ─── Route ────────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
@@ -141,24 +203,73 @@ export async function GET(req: NextRequest) {
       : null
     const authCentros = userCentros !== null ? userCentros : undefined
 
-    // ── Department-level grouping ────────────────────────────────────────────
+    // ── Department-level grouping (via lancamentos → CC → nome_departamento) ──
     if (groupBy === 'departamento') {
-      // getAnalise returns rows with nome_departamento, budget, razao per period
-      const rows = await getAnalise([], activeDepts ? [...activeDepts] : [], periodos, false, authCentros ?? [])
-      const dreGroups: string[] = [] // no dre grouping available at dept level
+      const ccFilter = await resolveCentros(activeDepts, authCentros)
 
-      const acc: Record<string, { budget: number; razao: number }> = {}
-      for (const r of rows) {
-        const key = ((r as Record<string, unknown>)['nome_departamento'] as string)?.trim()
-               || ((r as Record<string, unknown>)['departamento'] as string)
-        if (!key) continue
-        if (!acc[key]) acc[key] = { budget: 0, razao: 0 }
-        acc[key].budget += (r as { budget: number }).budget
-        acc[key].razao  += (r as { razao: number }).razao
+      let accountFilter: string[] | undefined
+      if (dreGroup) {
+        const { data: accs } = await getSupabase()
+          .from('contas_contabeis')
+          .select('numero_conta_contabil')
+          .eq('dre', dreGroup)
+        accountFilter = (accs ?? []).map((r: { numero_conta_contabil: string }) => r.numero_conta_contabil)
+        if (accountFilter.length === 0) {
+          const dreRowsEmpty = await getDRE(periodos, activeDepts ?? [], authCentros)
+          const dreGroupsEmpty = [...new Set(dreRowsEmpty.map(r => r.dre))].filter(Boolean).sort()
+          return NextResponse.json({ items: [], dreGroups: dreGroupsEmpty })
+        }
       }
 
-      const aggregated = Object.entries(acc).map(([name, { budget, razao }]) => ({ name, budget, razao }))
-      return NextResponse.json({ items: buildTopN(aggregated, topN, field, sortOrder), dreGroups })
+      const ccRows = await getLancamentosRows(periodos, ccFilter, accountFilter, 'centro_custo')
+      const codes  = ccRows.map(r => r.name).filter(Boolean)
+      const deptAcc: Record<string, { budget: number; razao: number }> = {}
+
+      if (codes.length) {
+        const { data: ccData } = await getSupabase()
+          .from('centros_custo')
+          .select('centro_custo, nome_departamento')
+          .in('centro_custo', codes)
+        const ccToDept: Record<string, string> = {}
+        for (const r of (ccData ?? []) as { centro_custo: string; nome_departamento: string }[]) {
+          if (r.centro_custo && r.nome_departamento) ccToDept[r.centro_custo] = r.nome_departamento
+        }
+        for (const r of ccRows) {
+          const deptName = ccToDept[r.name] || r.name
+          if (!deptAcc[deptName]) deptAcc[deptName] = { budget: 0, razao: 0 }
+          deptAcc[deptName].budget += r.budget
+          deptAcc[deptName].razao  += r.razao
+        }
+      }
+
+      const aggregated = Object.entries(deptAcc).map(([name, { budget, razao }]) => ({ name, budget, razao }))
+      const dreRowsDept = await getDRE(periodos, activeDepts ?? [], authCentros)
+      const dreGroupsDept = [...new Set(dreRowsDept.map(r => r.dre))].filter(Boolean).sort()
+      return NextResponse.json({ items: buildTopN(aggregated, topN, field, sortOrder), dreGroups: dreGroupsDept })
+    }
+
+    // ── Unidade de Negócio grouping (via lancamentos → unidades_negocio) ──────
+    if (groupBy === 'unidade_negocio') {
+      const ccFilter = await resolveCentros(activeDepts, authCentros)
+
+      let accountFilter: string[] | undefined
+      if (dreGroup) {
+        const { data: accs } = await getSupabase()
+          .from('contas_contabeis')
+          .select('numero_conta_contabil')
+          .eq('dre', dreGroup)
+        accountFilter = (accs ?? []).map((r: { numero_conta_contabil: string }) => r.numero_conta_contabil)
+        if (accountFilter.length === 0) {
+          const dreRowsEmpty = await getDRE(periodos, activeDepts ?? [], authCentros)
+          const dreGroupsEmpty = [...new Set(dreRowsEmpty.map(r => r.dre))].filter(Boolean).sort()
+          return NextResponse.json({ items: [], dreGroups: dreGroupsEmpty })
+        }
+      }
+
+      const rows = await getLancamentosRowsByUnidade(periodos, ccFilter, accountFilter)
+      const dreRowsUn = await getDRE(periodos, activeDepts ?? [], authCentros)
+      const dreGroupsUn = [...new Set(dreRowsUn.map(r => r.dre))].filter(Boolean).sort()
+      return NextResponse.json({ items: buildTopN(rows, topN, field, sortOrder), dreGroups: dreGroupsUn })
     }
 
     // ── DRE-based groupings (agrupamento_arvore, dre) ────────────────────────
@@ -169,7 +280,8 @@ export async function GET(req: NextRequest) {
       const acc: Record<string, { budget: number; razao: number }> = {}
       for (const r of rows) {
         if (dreGroup && r.dre !== dreGroup) continue
-        const key = groupBy === 'dre' ? r.dre : r.agrupamento_arvore
+        // agrupamento_arvore comes as '' (empty string) when NULL in DB — use fallback
+        const key = groupBy === 'dre' ? r.dre : (r.agrupamento_arvore || '(Sem agrupamento)')
         if (!key) continue
         if (!acc[key]) acc[key] = { budget: 0, razao: 0 }
         acc[key].budget += r.budget
