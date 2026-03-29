@@ -1,7 +1,7 @@
 'use client'
 import React, { useState, useEffect, useCallback } from 'react'
 import {
-  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  PieChart, Pie, Cell, Sector, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, TooltipProps,
 } from 'recharts'
 import { Card, CardContent } from '@/components/ui/card'
@@ -116,8 +116,9 @@ function ExecChartCard({
   onEdit: () => void
   onDelete: () => void
 }) {
-  const [items,   setItems]   = useState<ChartItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const [items,       setItems]       = useState<ChartItem[]>([])
+  const [loading,     setLoading]     = useState(true)
+  const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -206,6 +207,70 @@ function ExecChartCard({
     ? { formatter: (v: number) => tickFmt(v), fontSize: 9, fill: '#64748b' }
     : false
 
+  // ── Gradient helpers ───────────────────────────────────────────────────────
+  const gPie  = (i: number) => `gp-${config.id}-${i}`
+  const gBarV = (i: number) => `gbv-${config.id}-${i}`
+  const gBarH = (i: number) => `gbh-${config.id}-${i}`
+
+  const pieDefs = (
+    <defs>
+      {palette.map((color, i) => (
+        <radialGradient key={i} id={gPie(i)} cx="50%" cy="40%" r="60%">
+          <stop offset="0%"   stopColor={color} stopOpacity={0.75} />
+          <stop offset="100%" stopColor={color} stopOpacity={1}    />
+        </radialGradient>
+      ))}
+    </defs>
+  )
+  const barVDefs = (
+    <defs>
+      {palette.map((color, i) => (
+        <linearGradient key={i} id={gBarV(i)} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"   stopColor={color} stopOpacity={0.95} />
+          <stop offset="100%" stopColor={color} stopOpacity={0.55} />
+        </linearGradient>
+      ))}
+    </defs>
+  )
+  const barHDefs = (
+    <defs>
+      {palette.map((color, i) => (
+        <linearGradient key={i} id={gBarH(i)} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%"   stopColor={color} stopOpacity={0.55} />
+          <stop offset="100%" stopColor={color} stopOpacity={0.95} />
+        </linearGradient>
+      ))}
+    </defs>
+  )
+
+  // ── Active shape (hover effect on pie/donut) ───────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const renderActiveShape = (props: any) => {
+    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, percent } = props
+    return (
+      <g>
+        <Sector
+          cx={cx} cy={cy}
+          innerRadius={innerRadius - (innerRadius > 0 ? 3 : 0)}
+          outerRadius={outerRadius + 7}
+          startAngle={startAngle}
+          endAngle={endAngle}
+          fill={fill}
+          opacity={1}
+          stroke={fill}
+          strokeWidth={1}
+        />
+        {/* Center text for donut */}
+        {innerRadius > 0 && (
+          <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central"
+            fontSize={12} fontWeight={700} fill="#1e293b" style={{ pointerEvents: 'none' }}>
+            {`${(percent * 100).toFixed(1)}%`}
+          </text>
+        )}
+      </g>
+    )
+  }
+
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
@@ -253,6 +318,7 @@ function ExecChartCard({
             <ResponsiveContainer width="100%" height={200}>
               {(config.chartType === 'pie' || config.chartType === 'donut') ? (
                 <PieChart>
+                  {pieDefs}
                   <Pie
                     data={absItems}
                     dataKey="absValue"
@@ -264,13 +330,20 @@ function ExecChartCard({
                     label={lp !== 'none' ? renderPieLabel : false}
                     strokeWidth={2}
                     stroke="#fff"
+                    activeIndex={activeIndex}
+                    activeShape={renderActiveShape}
+                    onMouseEnter={(_, index) => setActiveIndex(index)}
+                    onMouseLeave={() => setActiveIndex(undefined)}
                   >
-                    {absItems.map((_, i) => <Cell key={i} fill={palette[i % palette.length]} />)}
+                    {absItems.map((_, i) => (
+                      <Cell key={i} fill={`url(#${gPie(i % palette.length)})`} />
+                    ))}
                   </Pie>
                   <Tooltip content={tooltip} />
                 </PieChart>
               ) : config.chartType === 'bar_h' ? (
                 <BarChart data={absItems} layout="vertical" margin={{ top: 0, right: 55, left: 0, bottom: 0 }}>
+                  {barHDefs}
                   <CartesianGrid horizontal={false} stroke="#f1f5f9" />
                   <XAxis type="number" tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                   <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 9, fill: '#475569' }} axisLine={false} tickLine={false}
@@ -278,11 +351,14 @@ function ExecChartCard({
                   <Tooltip content={tooltip} cursor={{ fill: '#f8fafc' }} />
                   <Bar dataKey="absValue" name={fieldLabel} radius={[0,3,3,0]} maxBarSize={14}
                     label={barLabel ? { ...barLabel, position: 'right' } : false}>
-                    {absItems.map((_, i) => <Cell key={i} fill={palette[i % palette.length]} />)}
+                    {absItems.map((_, i) => (
+                      <Cell key={i} fill={`url(#${gBarH(i % palette.length)})`} />
+                    ))}
                   </Bar>
                 </BarChart>
               ) : (
                 <BarChart data={absItems} margin={{ top: 14, right: 8, left: -10, bottom: 24 }}>
+                  {barVDefs}
                   <CartesianGrid vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0}
                     tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 11) + '…' : v} />
@@ -290,7 +366,9 @@ function ExecChartCard({
                   <Tooltip content={tooltip} cursor={{ fill: '#f8fafc' }} />
                   <Bar dataKey="absValue" name={fieldLabel} radius={[3,3,0,0]} maxBarSize={30}
                     label={barLabel ? { ...barLabel, position: 'top' } : false}>
-                    {absItems.map((_, i) => <Cell key={i} fill={palette[i % palette.length]} />)}
+                    {absItems.map((_, i) => (
+                      <Cell key={i} fill={`url(#${gBarV(i % palette.length)})`} />
+                    ))}
                   </Bar>
                 </BarChart>
               )}
