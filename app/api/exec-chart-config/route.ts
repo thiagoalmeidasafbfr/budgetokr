@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 // Ensures the table exists. Called lazily on first error.
 async function ensureTable() {
   const supabase = getSupabase()
-  // Use rpc if available, otherwise the upsert below will fail gracefully
+  // Try via exec_sql RPC (may not exist in all projects)
   try {
     await supabase.rpc('exec_sql', {
       sql: `
@@ -17,12 +17,17 @@ async function ensureTable() {
           configs     JSONB NOT NULL DEFAULT '[]',
           updated_at  TIMESTAMPTZ DEFAULT NOW()
         );
-        ALTER TABLE exec_chart_configs DISABLE ROW LEVEL SECURITY;
       `,
     })
+    return // success
   } catch {
-    // exec_sql function may not exist — user must create table manually
+    // exec_sql RPC does not exist — fall through
   }
+  // Table likely missing: log a clear warning so it's visible in server logs.
+  console.error(
+    '[exec-chart-config] Table exec_chart_configs not found and could not be auto-created.' +
+    ' Run supabase/migrations/001_exec_chart_configs.sql in the Supabase SQL Editor.'
+  )
 }
 
 // GET /api/exec-chart-config?dept_name=X
