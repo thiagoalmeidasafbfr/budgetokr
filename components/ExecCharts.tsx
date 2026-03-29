@@ -1,20 +1,24 @@
 'use client'
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import {
-  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  PieChart, Pie, Cell, Sector, BarChart, Bar,
+  AreaChart, Area,
+  Treemap,
+  ReferenceLine,
+  XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, TooltipProps,
 } from 'recharts'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, cn } from '@/lib/utils'
-import { Plus, X, Settings2, RefreshCw, PieChart as PieIcon, BarChart2, BarChart3, Donut } from 'lucide-react'
+import { Plus, X, Settings2, RefreshCw, PieChart as PieIcon, BarChart2, BarChart3, Donut, TrendingUp, LayoutGrid, Download } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface ExecChartConfig {
   id: string
   title: string
-  chartType: 'pie' | 'donut' | 'bar_h' | 'bar_v'
+  chartType: 'pie' | 'donut' | 'bar_h' | 'bar_v' | 'area' | 'treemap'
   field: 'razao' | 'budget' | 'variacao'
   topN: number
   sortOrder: 'desc' | 'asc'
@@ -24,6 +28,7 @@ export interface ExecChartConfig {
   valueFormat: 'currency' | 'percent'
   labelPosition: 'inside' | 'outside' | 'none'
   groupBy: 'agrupamento_arvore' | 'dre' | 'conta_contabil' | 'centro_custo' | 'contrapartida'
+  referenceLine?: { value: number; label: string }
 }
 
 interface ChartItem {
@@ -76,10 +81,12 @@ const FIELD_LABELS: Record<ExecChartConfig['field'], string> = {
 }
 
 const CHART_TYPES: { id: ExecChartConfig['chartType']; label: string; icon: React.ElementType }[] = [
-  { id: 'pie',   label: 'Pizza',      icon: PieIcon   },
-  { id: 'donut', label: 'Rosca',      icon: Donut     },
-  { id: 'bar_h', label: 'Barras (H)', icon: BarChart2 },
-  { id: 'bar_v', label: 'Barras (V)', icon: BarChart3 },
+  { id: 'pie',     label: 'Pizza',      icon: PieIcon    },
+  { id: 'donut',   label: 'Rosca',      icon: Donut      },
+  { id: 'bar_h',   label: 'Barras (H)', icon: BarChart2  },
+  { id: 'bar_v',   label: 'Barras (V)', icon: BarChart3  },
+  { id: 'area',    label: 'Área',       icon: TrendingUp },
+  { id: 'treemap', label: 'Mapa',       icon: LayoutGrid },
 ]
 
 // ─── Custom tooltip ───────────────────────────────────────────────────────────
@@ -116,8 +123,46 @@ function ExecChartCard({
   onEdit: () => void
   onDelete: () => void
 }) {
-  const [items,   setItems]   = useState<ChartItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const [items,       setItems]       = useState<ChartItem[]>([])
+  const [loading,     setLoading]     = useState(true)
+  const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined)
+  const chartRef = useRef<HTMLDivElement>(null)
+
+  const exportPng = useCallback(() => {
+    const container = chartRef.current
+    if (!container) return
+    const svg = container.querySelector('svg')
+    if (!svg) return
+
+    const { width, height } = svg.getBoundingClientRect()
+    const clone = svg.cloneNode(true) as SVGElement
+    // Inline background so PNG isn't transparent
+    clone.setAttribute('style', 'background:#fff')
+    clone.setAttribute('width', String(Math.ceil(width)))
+    clone.setAttribute('height', String(Math.ceil(height)))
+
+    const xml = new XMLSerializer().serializeToString(clone)
+    const blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' })
+    const url  = URL.createObjectURL(blob)
+    const img  = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      const scale  = 2 // retina
+      canvas.width  = Math.ceil(width)  * scale
+      canvas.height = Math.ceil(height) * scale
+      const ctx = canvas.getContext('2d')!
+      ctx.scale(scale, scale)
+      ctx.fillStyle = '#fff'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(img, 0, 0)
+      URL.revokeObjectURL(url)
+      const link = document.createElement('a')
+      link.download = `${config.title.replace(/\s+/g, '_')}.png`
+      link.href = canvas.toDataURL('image/png')
+      link.click()
+    }
+    img.src = url
+  }, [config.title])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -165,6 +210,27 @@ function ExecChartCard({
 
   const tooltip = <ExecTooltip valueFormat={vf} total={total} />
 
+  const refLine = config.referenceLine?.value != null ? (
+    <ReferenceLine
+      y={config.referenceLine.value}
+      stroke="#f59e0b"
+      strokeWidth={1.5}
+      strokeDasharray="5 3"
+      label={{ value: config.referenceLine.label || '', position: 'insideTopRight', fontSize: 9, fill: '#f59e0b', fontWeight: 600 }}
+    />
+  ) : null
+
+  // Horizontal bar uses x= for the reference axis
+  const refLineH = config.referenceLine?.value != null ? (
+    <ReferenceLine
+      x={config.referenceLine.value}
+      stroke="#f59e0b"
+      strokeWidth={1.5}
+      strokeDasharray="5 3"
+      label={{ value: config.referenceLine.label || '', position: 'insideTopRight', fontSize: 9, fill: '#f59e0b', fontWeight: 600 }}
+    />
+  ) : null
+
   // Inside labels only — clean, no connector lines
   // Threshold: 8% for inside (enough room to read), 5% for outside (text only, no lines)
   const renderPieLabel = ({
@@ -206,6 +272,82 @@ function ExecChartCard({
     ? { formatter: (v: number) => tickFmt(v), fontSize: 9, fill: '#64748b' }
     : false
 
+  // ── Gradient helpers ───────────────────────────────────────────────────────
+  const gPie  = (i: number) => `gp-${config.id}-${i}`
+  const gBarV = (i: number) => `gbv-${config.id}-${i}`
+  const gBarH = (i: number) => `gbh-${config.id}-${i}`
+
+  const pieDefs = (
+    <defs>
+      {palette.map((color, i) => (
+        <radialGradient key={i} id={gPie(i)} cx="50%" cy="40%" r="60%">
+          <stop offset="0%"   stopColor={color} stopOpacity={0.75} />
+          <stop offset="100%" stopColor={color} stopOpacity={1}    />
+        </radialGradient>
+      ))}
+    </defs>
+  )
+  const barVDefs = (
+    <defs>
+      {palette.map((color, i) => (
+        <linearGradient key={i} id={gBarV(i)} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"   stopColor={color} stopOpacity={0.95} />
+          <stop offset="100%" stopColor={color} stopOpacity={0.55} />
+        </linearGradient>
+      ))}
+    </defs>
+  )
+  const barHDefs = (
+    <defs>
+      {palette.map((color, i) => (
+        <linearGradient key={i} id={gBarH(i)} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%"   stopColor={color} stopOpacity={0.55} />
+          <stop offset="100%" stopColor={color} stopOpacity={0.95} />
+        </linearGradient>
+      ))}
+    </defs>
+  )
+
+  // Area chart uses the first palette color with vertical gradient
+  const areaColor = palette[0]
+  const gArea = `ga-${config.id}`
+  const areaDefs = (
+    <defs>
+      <linearGradient id={gArea} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="5%"  stopColor={areaColor} stopOpacity={0.35} />
+        <stop offset="95%" stopColor={areaColor} stopOpacity={0.03} />
+      </linearGradient>
+    </defs>
+  )
+
+  // ── Active shape (hover effect on pie/donut) ───────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const renderActiveShape = (props: any) => {
+    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, percent } = props
+    return (
+      <g>
+        <Sector
+          cx={cx} cy={cy}
+          innerRadius={innerRadius - (innerRadius > 0 ? 3 : 0)}
+          outerRadius={outerRadius + 7}
+          startAngle={startAngle}
+          endAngle={endAngle}
+          fill={fill}
+          opacity={1}
+          stroke={fill}
+          strokeWidth={1}
+        />
+        {/* Center text for donut */}
+        {innerRadius > 0 && (
+          <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central"
+            fontSize={12} fontWeight={700} fill="#1e293b" style={{ pointerEvents: 'none' }}>
+            {`${(percent * 100).toFixed(1)}%`}
+          </text>
+        )}
+      </g>
+    )
+  }
+
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
@@ -225,9 +367,14 @@ function ExecChartCard({
           </p>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0 ml-2">
-          <button onClick={load} className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+          <button onClick={load} className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors" title="Atualizar">
             <RefreshCw size={12} />
           </button>
+          {!loading && items.length > 0 && (
+            <button onClick={exportPng} className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors" title="Exportar PNG">
+              <Download size={12} />
+            </button>
+          )}
           {canEdit && (
             <>
               <button onClick={onEdit} className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
@@ -250,9 +397,11 @@ function ExecChartCard({
           <div className="h-[220px] flex items-center justify-center text-sm text-gray-400">Sem dados</div>
         ) : (
           <div className="space-y-3">
+            <div ref={chartRef}>
             <ResponsiveContainer width="100%" height={200}>
               {(config.chartType === 'pie' || config.chartType === 'donut') ? (
                 <PieChart>
+                  {pieDefs}
                   <Pie
                     data={absItems}
                     dataKey="absValue"
@@ -264,13 +413,20 @@ function ExecChartCard({
                     label={lp !== 'none' ? renderPieLabel : false}
                     strokeWidth={2}
                     stroke="#fff"
+                    activeIndex={activeIndex}
+                    activeShape={renderActiveShape}
+                    onMouseEnter={(_, index) => setActiveIndex(index)}
+                    onMouseLeave={() => setActiveIndex(undefined)}
                   >
-                    {absItems.map((_, i) => <Cell key={i} fill={palette[i % palette.length]} />)}
+                    {absItems.map((_, i) => (
+                      <Cell key={i} fill={`url(#${gPie(i % palette.length)})`} />
+                    ))}
                   </Pie>
                   <Tooltip content={tooltip} />
                 </PieChart>
               ) : config.chartType === 'bar_h' ? (
                 <BarChart data={absItems} layout="vertical" margin={{ top: 0, right: 55, left: 0, bottom: 0 }}>
+                  {barHDefs}
                   <CartesianGrid horizontal={false} stroke="#f1f5f9" />
                   <XAxis type="number" tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                   <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 9, fill: '#475569' }} axisLine={false} tickLine={false}
@@ -278,11 +434,78 @@ function ExecChartCard({
                   <Tooltip content={tooltip} cursor={{ fill: '#f8fafc' }} />
                   <Bar dataKey="absValue" name={fieldLabel} radius={[0,3,3,0]} maxBarSize={14}
                     label={barLabel ? { ...barLabel, position: 'right' } : false}>
-                    {absItems.map((_, i) => <Cell key={i} fill={palette[i % palette.length]} />)}
+                    {absItems.map((_, i) => (
+                      <Cell key={i} fill={`url(#${gBarH(i % palette.length)})`} />
+                    ))}
                   </Bar>
+                  {refLineH}
                 </BarChart>
+              ) : config.chartType === 'area' ? (
+                <AreaChart data={absItems} margin={{ top: 14, right: 8, left: -10, bottom: 24 }}>
+                  {areaDefs}
+                  <CartesianGrid vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0}
+                    tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 11) + '…' : v} />
+                  <YAxis tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <Tooltip content={tooltip} cursor={{ stroke: areaColor, strokeWidth: 1 }} />
+                  <Area
+                    type="monotone"
+                    dataKey="absValue"
+                    name={fieldLabel}
+                    stroke={areaColor}
+                    strokeWidth={2.5}
+                    fill={`url(#${gArea})`}
+                    dot={{ fill: areaColor, r: 3, strokeWidth: 0 }}
+                    activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff', fill: areaColor }}
+                    label={barLabel ? { ...barLabel, position: 'top' } : false}
+                  />
+                  {refLine}
+                </AreaChart>
+              ) : config.chartType === 'treemap' ? (
+                <Treemap
+                  data={absItems.map((it, i) => ({ ...it, fill: palette[i % palette.length] }))}
+                  dataKey="absValue"
+                  nameKey="name"
+                  aspectRatio={4 / 3}
+                  stroke="#fff"
+                  strokeWidth={2}
+                  content={({ x, y, width, height, name, fill: cellFill, absValue }: {
+                    x?: number; y?: number; width?: number; height?: number
+                    name?: string; fill?: string; absValue?: number
+                  }) => {
+                    const px = x ?? 0; const py = y ?? 0
+                    const pw = width ?? 0; const ph = height ?? 0
+                    if (pw < 4 || ph < 4) return <g />
+                    const label = vf === 'percent'
+                      ? `${total > 0 ? (((absValue ?? 0) / total) * 100).toFixed(1) : 0}%`
+                      : tickFmt(absValue ?? 0)
+                    const showLabel = pw > 36 && ph > 20
+                    const showName  = pw > 52 && ph > 36
+                    const truncated = (name ?? '').length > Math.floor(pw / 6) ? (name ?? '').slice(0, Math.floor(pw / 6) - 1) + '…' : (name ?? '')
+                    return (
+                      <g>
+                        <rect x={px} y={py} width={pw} height={ph} fill={cellFill} rx={3} ry={3} />
+                        {showName && (
+                          <text x={px + pw / 2} y={py + ph / 2 - 7} textAnchor="middle" fill="#fff"
+                            fontSize={10} fontWeight={600} style={{ pointerEvents: 'none' }}>
+                            {truncated}
+                          </text>
+                        )}
+                        {showLabel && (
+                          <text x={px + pw / 2} y={showName ? py + ph / 2 + 8 : py + ph / 2} textAnchor="middle" fill="rgba(255,255,255,0.85)"
+                            fontSize={9} style={{ pointerEvents: 'none' }}>
+                            {label}
+                          </text>
+                        )}
+                      </g>
+                    )
+                  }}
+                >
+                  <Tooltip content={tooltip} />
+                </Treemap>
               ) : (
                 <BarChart data={absItems} margin={{ top: 14, right: 8, left: -10, bottom: 24 }}>
+                  {barVDefs}
                   <CartesianGrid vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0}
                     tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 11) + '…' : v} />
@@ -290,11 +513,15 @@ function ExecChartCard({
                   <Tooltip content={tooltip} cursor={{ fill: '#f8fafc' }} />
                   <Bar dataKey="absValue" name={fieldLabel} radius={[3,3,0,0]} maxBarSize={30}
                     label={barLabel ? { ...barLabel, position: 'top' } : false}>
-                    {absItems.map((_, i) => <Cell key={i} fill={palette[i % palette.length]} />)}
+                    {absItems.map((_, i) => (
+                      <Cell key={i} fill={`url(#${gBarV(i % palette.length)})`} />
+                    ))}
                   </Bar>
+                  {refLine}
                 </BarChart>
               )}
             </ResponsiveContainer>
+            </div>
 
             {/* Legend */}
             <div className="flex flex-wrap gap-x-3 gap-y-1">
@@ -340,6 +567,8 @@ function ConfigModal({
   const [labelPosition, setLabelPosition] = useState<ExecChartConfig['labelPosition']>(config?.labelPosition ?? 'inside')
   const [groupBy,       setGroupBy]       = useState<ExecChartConfig['groupBy']>(config?.groupBy    ?? 'agrupamento_arvore')
   const [dreGroups,     setDreGroups]     = useState<string[]>([])
+  const [refLineValue,  setRefLineValue]  = useState<string>(config?.referenceLine?.value != null ? String(config.referenceLine.value) : '')
+  const [refLineLabel,  setRefLineLabel]  = useState(config?.referenceLine?.label ?? '')
 
   useEffect(() => {
     fetch('/api/exec-chart?topN=1&field=razao')
@@ -355,6 +584,9 @@ function ConfigModal({
       chartType, field, topN, sortOrder,
       departamentos, dreGroup,
       palette, valueFormat, labelPosition, groupBy,
+      referenceLine: refLineValue.trim() !== '' && !isNaN(Number(refLineValue))
+        ? { value: Number(refLineValue), label: refLineLabel.trim() }
+        : undefined,
     })
   }
 
@@ -386,7 +618,7 @@ function ConfigModal({
           {/* Chart type */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-2">Tipo de gráfico</label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {CHART_TYPES.map(ct => {
                 const Icon = ct.icon
                 return (
@@ -507,6 +739,35 @@ function ConfigModal({
               ))}
             </div>
           </div>
+
+          {/* Reference Line — only for bar/area charts */}
+          {(chartType === 'bar_h' || chartType === 'bar_v' || chartType === 'area') && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Linha de referência <span className="text-gray-400 font-normal">(opcional)</span>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="number"
+                  value={refLineValue}
+                  onChange={e => setRefLineValue(e.target.value)}
+                  placeholder="Valor (ex: 500000)"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+                <input
+                  value={refLineLabel}
+                  onChange={e => setRefLineLabel(e.target.value)}
+                  placeholder="Rótulo (ex: Meta)"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+              </div>
+              {refLineValue.trim() !== '' && (
+                <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
+                  <span>━━</span> Linha âmbar tracejada será exibida no gráfico
+                </p>
+              )}
+            </div>
+          )}
 
           {/* DRE Group filter */}
           {dreGroups.length > 0 && (
