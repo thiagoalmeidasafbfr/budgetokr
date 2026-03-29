@@ -3,20 +3,21 @@ import React, { useState, useEffect, useCallback } from 'react'
 import {
   PieChart, Pie, Cell, Sector, BarChart, Bar,
   AreaChart, Area,
+  Treemap,
   XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, TooltipProps,
 } from 'recharts'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, cn } from '@/lib/utils'
-import { Plus, X, Settings2, RefreshCw, PieChart as PieIcon, BarChart2, BarChart3, Donut, TrendingUp } from 'lucide-react'
+import { Plus, X, Settings2, RefreshCw, PieChart as PieIcon, BarChart2, BarChart3, Donut, TrendingUp, LayoutGrid } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface ExecChartConfig {
   id: string
   title: string
-  chartType: 'pie' | 'donut' | 'bar_h' | 'bar_v' | 'area'
+  chartType: 'pie' | 'donut' | 'bar_h' | 'bar_v' | 'area' | 'treemap'
   field: 'razao' | 'budget' | 'variacao'
   topN: number
   sortOrder: 'desc' | 'asc'
@@ -78,11 +79,12 @@ const FIELD_LABELS: Record<ExecChartConfig['field'], string> = {
 }
 
 const CHART_TYPES: { id: ExecChartConfig['chartType']; label: string; icon: React.ElementType }[] = [
-  { id: 'pie',   label: 'Pizza',      icon: PieIcon    },
-  { id: 'donut', label: 'Rosca',      icon: Donut      },
-  { id: 'bar_h', label: 'Barras (H)', icon: BarChart2  },
-  { id: 'bar_v', label: 'Barras (V)', icon: BarChart3  },
-  { id: 'area',  label: 'Área',       icon: TrendingUp },
+  { id: 'pie',     label: 'Pizza',      icon: PieIcon    },
+  { id: 'donut',   label: 'Rosca',      icon: Donut      },
+  { id: 'bar_h',   label: 'Barras (H)', icon: BarChart2  },
+  { id: 'bar_v',   label: 'Barras (V)', icon: BarChart3  },
+  { id: 'area',    label: 'Área',       icon: TrendingUp },
+  { id: 'treemap', label: 'Mapa',       icon: LayoutGrid },
 ]
 
 // ─── Custom tooltip ───────────────────────────────────────────────────────────
@@ -391,6 +393,48 @@ function ExecChartCard({
                     label={barLabel ? { ...barLabel, position: 'top' } : false}
                   />
                 </AreaChart>
+              ) : config.chartType === 'treemap' ? (
+                <Treemap
+                  data={absItems.map((it, i) => ({ ...it, fill: palette[i % palette.length] }))}
+                  dataKey="absValue"
+                  nameKey="name"
+                  aspectRatio={4 / 3}
+                  stroke="#fff"
+                  strokeWidth={2}
+                  content={({ x, y, width, height, name, fill: cellFill, absValue }: {
+                    x?: number; y?: number; width?: number; height?: number
+                    name?: string; fill?: string; absValue?: number
+                  }) => {
+                    const px = x ?? 0; const py = y ?? 0
+                    const pw = width ?? 0; const ph = height ?? 0
+                    if (pw < 4 || ph < 4) return <g />
+                    const label = vf === 'percent'
+                      ? `${total > 0 ? (((absValue ?? 0) / total) * 100).toFixed(1) : 0}%`
+                      : tickFmt(absValue ?? 0)
+                    const showLabel = pw > 36 && ph > 20
+                    const showName  = pw > 52 && ph > 36
+                    const truncated = (name ?? '').length > Math.floor(pw / 6) ? (name ?? '').slice(0, Math.floor(pw / 6) - 1) + '…' : (name ?? '')
+                    return (
+                      <g>
+                        <rect x={px} y={py} width={pw} height={ph} fill={cellFill} rx={3} ry={3} />
+                        {showName && (
+                          <text x={px + pw / 2} y={py + ph / 2 - 7} textAnchor="middle" fill="#fff"
+                            fontSize={10} fontWeight={600} style={{ pointerEvents: 'none' }}>
+                            {truncated}
+                          </text>
+                        )}
+                        {showLabel && (
+                          <text x={px + pw / 2} y={showName ? py + ph / 2 + 8 : py + ph / 2} textAnchor="middle" fill="rgba(255,255,255,0.85)"
+                            fontSize={9} style={{ pointerEvents: 'none' }}>
+                            {label}
+                          </text>
+                        )}
+                      </g>
+                    )
+                  }}
+                >
+                  <Tooltip content={tooltip} />
+                </Treemap>
               ) : (
                 <BarChart data={absItems} margin={{ top: 14, right: 8, left: -10, bottom: 24 }}>
                   {barVDefs}
@@ -499,7 +543,7 @@ function ConfigModal({
           {/* Chart type */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-2">Tipo de gráfico</label>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {CHART_TYPES.map(ct => {
                 const Icon = ct.icon
                 return (
