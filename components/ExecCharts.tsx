@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import {
   PieChart, Pie, Cell, Sector, BarChart, Bar,
   AreaChart, Area,
@@ -11,7 +11,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, cn } from '@/lib/utils'
-import { Plus, X, Settings2, RefreshCw, PieChart as PieIcon, BarChart2, BarChart3, Donut, TrendingUp, LayoutGrid } from 'lucide-react'
+import { Plus, X, Settings2, RefreshCw, PieChart as PieIcon, BarChart2, BarChart3, Donut, TrendingUp, LayoutGrid, Download } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -126,6 +126,43 @@ function ExecChartCard({
   const [items,       setItems]       = useState<ChartItem[]>([])
   const [loading,     setLoading]     = useState(true)
   const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined)
+  const chartRef = useRef<HTMLDivElement>(null)
+
+  const exportPng = useCallback(() => {
+    const container = chartRef.current
+    if (!container) return
+    const svg = container.querySelector('svg')
+    if (!svg) return
+
+    const { width, height } = svg.getBoundingClientRect()
+    const clone = svg.cloneNode(true) as SVGElement
+    // Inline background so PNG isn't transparent
+    clone.setAttribute('style', 'background:#fff')
+    clone.setAttribute('width', String(Math.ceil(width)))
+    clone.setAttribute('height', String(Math.ceil(height)))
+
+    const xml = new XMLSerializer().serializeToString(clone)
+    const blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' })
+    const url  = URL.createObjectURL(blob)
+    const img  = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      const scale  = 2 // retina
+      canvas.width  = Math.ceil(width)  * scale
+      canvas.height = Math.ceil(height) * scale
+      const ctx = canvas.getContext('2d')!
+      ctx.scale(scale, scale)
+      ctx.fillStyle = '#fff'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(img, 0, 0)
+      URL.revokeObjectURL(url)
+      const link = document.createElement('a')
+      link.download = `${config.title.replace(/\s+/g, '_')}.png`
+      link.href = canvas.toDataURL('image/png')
+      link.click()
+    }
+    img.src = url
+  }, [config.title])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -330,9 +367,14 @@ function ExecChartCard({
           </p>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0 ml-2">
-          <button onClick={load} className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+          <button onClick={load} className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors" title="Atualizar">
             <RefreshCw size={12} />
           </button>
+          {!loading && items.length > 0 && (
+            <button onClick={exportPng} className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors" title="Exportar PNG">
+              <Download size={12} />
+            </button>
+          )}
           {canEdit && (
             <>
               <button onClick={onEdit} className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
@@ -355,6 +397,7 @@ function ExecChartCard({
           <div className="h-[220px] flex items-center justify-center text-sm text-gray-400">Sem dados</div>
         ) : (
           <div className="space-y-3">
+            <div ref={chartRef}>
             <ResponsiveContainer width="100%" height={200}>
               {(config.chartType === 'pie' || config.chartType === 'donut') ? (
                 <PieChart>
@@ -478,6 +521,7 @@ function ExecChartCard({
                 </BarChart>
               )}
             </ResponsiveContainer>
+            </div>
 
             {/* Legend */}
             <div className="flex flex-wrap gap-x-3 gap-y-1">
