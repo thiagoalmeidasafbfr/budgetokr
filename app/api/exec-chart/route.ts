@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getDRE, getDREByAccount, getUserCentros } from '@/lib/query'
+import { getDRE, getDREByAccount, getUserCentros, getAnalise } from '@/lib/query'
+import type { FilterCondition } from '@/lib/types'
 import { getSupabase } from '@/lib/supabase'
 import { getSession } from '@/lib/session'
 
@@ -311,7 +312,30 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ items: buildTopN(aggregated, topN, field, sortOrder), dreGroups })
     }
 
-    // ── lancamentos-based groupings (centro_custo, contrapartida) ────────────
+    // ── centro_custo grouping — uses getAnalise for correct dept+DRE scoping ──
+    if (groupBy === 'centro_custo') {
+      const dreFilters: FilterCondition[] = dreGroup
+        ? [{ column: 'dre', operator: '=', value: dreGroup, logic: 'AND' }]
+        : []
+      const analyseRows = await getAnalise(dreFilters, activeDepts ? [...activeDepts] : [], periodos, true, authCentros ?? [])
+
+      const acc: Record<string, { budget: number; razao: number }> = {}
+      for (const r of analyseRows) {
+        const key = (r as Record<string, unknown>)['nome_centro_custo'] as string
+                 || (r as Record<string, unknown>)['centro_custo'] as string
+        if (!key) continue
+        if (!acc[key]) acc[key] = { budget: 0, razao: 0 }
+        acc[key].budget += r.budget
+        acc[key].razao  += r.razao
+      }
+
+      const aggregated = Object.entries(acc).map(([name, v]) => ({ name, ...v }))
+      const dreRowsCC = await getDRE(periodos, activeDepts ?? [], authCentros)
+      const dreGroupsCC = [...new Set(dreRowsCC.map(r => r.dre))].filter(Boolean).sort()
+      return NextResponse.json({ items: buildTopN(aggregated, topN, field, sortOrder), dreGroups: dreGroupsCC })
+    }
+
+    // ── contrapartida grouping (lancamentos-based) ────────────────────────────
     const ccFilter = await resolveCentros(activeDepts, authCentros)
 
     let accountFilter: string[] | undefined
@@ -322,18 +346,14 @@ export async function GET(req: NextRequest) {
         .eq('dre', dreGroup)
       accountFilter = (accs ?? []).map((r: { numero_conta_contabil: string }) => r.numero_conta_contabil)
       if (accountFilter.length === 0) {
-        // Get dreGroups for the empty result still
         const dreRows = await getDRE(periodos, activeDepts ?? [], authCentros)
         const dreGroups = [...new Set(dreRows.map(r => r.dre))].filter(Boolean).sort()
         return NextResponse.json({ items: [], dreGroups })
       }
     }
 
-    const groupCol = groupBy === 'contrapartida' ? 'nome_conta_contrapartida' : 'centro_custo'
-    let rows = await getLancamentosRows(periodos, ccFilter, accountFilter, groupCol)
-    if (groupBy === 'centro_custo') rows = await resolveCCNames(rows)
+    const rows = await getLancamentosRows(periodos, ccFilter, accountFilter, 'nome_conta_contrapartida')
 
-    // dreGroups for filter selector
     const dreRows = await getDRE(periodos.length ? periodos : [], activeDepts ?? [], authCentros)
     const dreGroups = [...new Set(dreRows.map(r => r.dre))].filter(Boolean).sort()
 
