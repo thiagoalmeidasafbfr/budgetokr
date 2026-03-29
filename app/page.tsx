@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { BarChart3, TrendingDown, TrendingUp, Upload, Target, AlertCircle, Database, FileText, Settings2, Eye, EyeOff, ChevronUp, ChevronDown } from 'lucide-react'
+import { BarChart3, Upload, Target, AlertCircle, FileText, Settings2, Eye, EyeOff, ChevronUp, ChevronDown } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatPct, formatPeriodo, cn, safePct } from '@/lib/utils'
@@ -271,24 +271,23 @@ export default function Dashboard() {
       {/* Render widgets in custom order */}
       {sortedWidgets.filter(w => w.visible).map(w => {
         if (w.id === 'summary') return (
-      <div key="summary" className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <SCard
+      <div key="summary" className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-10 py-4 border-b border-gray-100">
+        <BigNum
           title={selYear && hasYtdData ? 'Budget YTD' : 'Budget Total'}
-          value={formatCurrency(displayBudget)}
-          sub={selYear && hasYtdData ? ytdLabelSub : `${summary?.linhas_budget.toLocaleString()} linhas`}
-          icon={<BarChart3 size={16} className="text-gray-600" />} bg="bg-gray-50" />
-        <SCard
-          title={selYear && hasYtdData ? 'Razão YTD' : 'Razão Total'}
-          value={formatCurrency(displayRazao)}
-          sub={selYear && hasYtdData ? ytdLabelSub : `${summary?.linhas_razao.toLocaleString()} linhas`}
-          icon={<TrendingUp size={16} className="text-emerald-500" />} bg="bg-emerald-50" />
-        <SCard title="Variação YTD"  value={formatCurrency(variacao)} sub={formatPct(variacaoPct)}
-          icon={variacao >= 0 ? <TrendingUp size={16} className="text-emerald-500" /> : <TrendingDown size={16} className="text-red-400" />}
-          bg={variacao >= 0 ? 'bg-emerald-50' : 'bg-red-50'} highlight />
-        <SCard title="Dimensões"
-          value={`${summary?.qtd_centros ?? 0} CC`}
-          sub={`${summary?.qtd_contas ?? 0} contas · ${summary?.departamentos ?? 0} deptos`}
-          icon={<Database size={16} className="text-purple-400" />} bg="bg-purple-50" />
+          value={abbrev(displayBudget)}
+          sub={selYear && hasYtdData ? ytdLabelSub : undefined}
+        />
+        <BigNum
+          title={selYear && hasYtdData ? 'Realizado YTD' : 'Realizado Total'}
+          value={abbrev(displayRazao)}
+          sub={selYear && hasYtdData ? ytdLabelSub : undefined}
+        />
+        <BigNum
+          title="Variação"
+          value={abbrev(variacao)}
+          sub={formatPct(variacaoPct)}
+          color={variacao >= 0 ? 'text-emerald-600' : 'text-red-500'}
+        />
       </div>
 
         )
@@ -346,21 +345,23 @@ export default function Dashboard() {
   )
 }
 
-function SCard({ title, value, sub, icon, bg, highlight }: {
-  title: string; value: string; sub: string; icon: React.ReactNode; bg: string; highlight?: boolean
+function abbrev(v: number): string {
+  const abs = Math.abs(v)
+  const sign = v < 0 ? '-' : ''
+  if (abs >= 1_000_000_000) return `${sign}R$\u00a0${(abs / 1_000_000_000).toFixed(2)}Bi`
+  if (abs >= 1_000_000)     return `${sign}R$\u00a0${(abs / 1_000_000).toFixed(2)}M`
+  if (abs >= 1_000)         return `${sign}R$\u00a0${(abs / 1_000).toFixed(1)}K`
+  return `${sign}R$\u00a0${abs.toFixed(0)}`
+}
+
+function BigNum({ title, value, sub, color }: {
+  title: string; value: string; sub?: string; color?: string
 }) {
   return (
-    <Card className={cn(highlight && 'ring-1 ring-gray-100')}>
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{title}</p>
-            <p className="text-xl font-bold text-gray-900 mt-1 leading-tight">{value}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
-          </div>
-          <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0', bg)}>{icon}</div>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-0.5">
+      <p className={cn('text-4xl font-black tracking-tight leading-none', color ?? 'text-gray-900')}>{value}</p>
+      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mt-1.5">{title}</p>
+      {sub && <p className="text-xs text-gray-400">{sub}</p>}
+    </div>
   )
 }
