@@ -44,15 +44,24 @@ export async function GET(req: NextRequest) {
 
 // POST /api/exec-chart-config
 // Body: { dept_name: string, configs: ExecChartConfig[] }
-// Only master users can write
+// Master users can write for any dept_name.
+// Dept users can only write for their own department(s).
 export async function POST(req: NextRequest) {
   try {
     const user = await getSession()
-    if (!user || user.role !== 'master') {
+    if (!user) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     const { dept_name, configs } = await req.json() as { dept_name: string; configs: unknown[] }
     if (!dept_name) return NextResponse.json({ error: 'dept_name required' }, { status: 400 })
+
+    // Dept users may only save their own dept configs
+    if (user.role === 'dept') {
+      const allowed = user.departments ?? (user.department ? [user.department] : [])
+      if (!allowed.includes(dept_name) && dept_name !== '__dashboard__') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
 
     const supabase = getSupabase()
     const { error } = await supabase
