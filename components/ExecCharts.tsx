@@ -27,7 +27,7 @@ export interface ExecChartConfig {
   palette: string
   valueFormat: 'currency' | 'percent'
   labelPosition: 'inside' | 'outside' | 'none'
-  groupBy: 'agrupamento_arvore' | 'dre' | 'conta_contabil' | 'centro_custo' | 'contrapartida' | 'departamento'
+  groupBy: 'agrupamento_arvore' | 'dre' | 'conta_contabil' | 'centro_custo' | 'contrapartida' | 'departamento' | 'unidade_negocio'
   referenceLine?: { value: number; label: string }
 }
 
@@ -605,6 +605,7 @@ function ConfigModal({
               <option value="conta_contabil">Conta Contábil</option>
               <option value="centro_custo">Centro de Custo</option>
               <option value="contrapartida">Contrapartida</option>
+              <option value="unidade_negocio">Unidade de Negócio</option>
               {isMasterContext && (
                 <option value="departamento">Departamento</option>
               )}
