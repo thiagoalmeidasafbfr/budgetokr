@@ -42,7 +42,7 @@ function PeriodTooltip({ active, payload, label }: TooltipProps<number, string>)
 
 function DeptTooltip({ active, payload, label }: TooltipProps<number, string>) {
   if (!active || !payload?.length) return null
-  const val = Number(payload[0]?.value ?? 0)
+  const val = Number(payload[0]?.payload?.variacao ?? payload[0]?.value ?? 0)
   return (
     <div style={{ background:'#0f172a', borderRadius:12, padding:'10px 14px', border:'1px solid rgba(255,255,255,0.1)', fontSize:12 }}>
       <p style={{ color:'#94a3b8', fontWeight:600, marginBottom:6, maxWidth:220 }}>{label}</p>
@@ -63,12 +63,72 @@ const tickFmt = (v: number) => {
   return String(v)
 }
 
+const TOP_N = 5
+
+function DeptMiniChart({
+  data, color, xDomain,
+}: {
+  data: DeptData[]
+  color: string
+  xDomain?: [number | string, number | string]
+}) {
+  if (data.length === 0) {
+    return (
+      <div className="h-20 flex items-center justify-center text-xs text-gray-400">
+        Nenhum departamento nesta categoria
+      </div>
+    )
+  }
+  const h = Math.max(data.length * 40 + 16, 100)
+  return (
+    <ResponsiveContainer width="100%" height={h}>
+      <BarChart data={data} layout="vertical" margin={{ top: 0, right: 64, left: 0, bottom: 0 }}>
+        <CartesianGrid horizontal={false} stroke={C.grid} />
+        <XAxis
+          type="number"
+          domain={xDomain ?? ['auto', 'auto']}
+          tickFormatter={tickFmt}
+          tick={{ fontSize: 9, fill: '#94a3b8' }}
+          axisLine={false} tickLine={false}
+        />
+        <YAxis
+          type="category" dataKey="dept" width={124}
+          tick={{ fontSize: 10, fill: '#475569' }} axisLine={false} tickLine={false}
+          tickFormatter={(v: string) => v.length > 18 ? v.slice(0, 17) + '…' : v}
+        />
+        <Tooltip content={<DeptTooltip />} cursor={{ fill: '#f8fafc' }} />
+        <Bar
+          dataKey="variacao" name="Variação"
+          radius={color === C.pos ? [0, 3, 3, 0] : [3, 0, 0, 3]}
+          maxBarSize={18}
+          label={{ formatter: (v: number) => tickFmt(v), fontSize: 9, fill: '#64748b', position: 'right' }}
+        >
+          {data.map((_, i) => (
+            <Cell key={i} fill={color} opacity={Math.max(0.55, 0.92 - i * 0.08)} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
 export default function DashboardCharts({ periodChartData, deptVariance }: {
   periodChartData: PeriodData[]
   deptVariance: DeptData[]
 }) {
+  const positives = deptVariance
+    .filter(d => d.variacao > 0)
+    .sort((a, b) => b.variacao - a.variacao)
+    .slice(0, TOP_N)
+
+  const negatives = deptVariance
+    .filter(d => d.variacao < 0)
+    .sort((a, b) => a.variacao - b.variacao)
+    .slice(0, TOP_N)
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div className="space-y-4">
+      {/* Budget vs Realizado — full width */}
       <Card className="overflow-hidden">
         <CardHeader className="pb-1 border-b border-gray-100">
           <CardTitle className="text-sm font-semibold text-gray-700">Budget vs Realizado por Período</CardTitle>
@@ -94,27 +154,40 @@ export default function DashboardCharts({ periodChartData, deptVariance }: {
         </CardContent>
       </Card>
 
-      <Card className="overflow-hidden">
-        <CardHeader className="pb-1 border-b border-gray-100">
-          <CardTitle className="text-sm font-semibold text-gray-700">Variação por Departamento</CardTitle>
-          <p className="text-xs text-gray-400 mt-0.5">Realizado − Budget · Top 10</p>
-        </CardHeader>
-        <CardContent className="pt-4 pb-2">
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={deptVariance} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
-              <CartesianGrid horizontal={false} stroke={C.grid} />
-              <XAxis type="number" tickFormatter={tickFmt} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-              <YAxis type="category" dataKey="dept" width={128}
-                tick={{ fontSize: 10, fill: '#475569' }} axisLine={false} tickLine={false}
-                tickFormatter={(v: string) => v.length > 19 ? v.slice(0, 18) + '…' : v} />
-              <Tooltip content={<DeptTooltip />} cursor={{ fill: '#f8fafc' }} />
-              <Bar dataKey="variacao" name="Variação" radius={[0,3,3,0]} maxBarSize={15}>
-                {deptVariance.map((e, i) => <Cell key={i} fill={e.variacao >= 0 ? C.pos : C.neg} opacity={0.88} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+      {/* Dept variance — two charts side by side */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="overflow-hidden">
+          <CardHeader className="pb-1 border-b border-gray-100">
+            <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block flex-shrink-0" />
+              Top Variação Positiva
+            </CardTitle>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Acima do budget · Top {TOP_N}
+              {positives.length === 0 && ' · nenhum'}
+            </p>
+          </CardHeader>
+          <CardContent className="pt-3 pb-2">
+            <DeptMiniChart data={positives} color={C.pos} xDomain={[0, 'auto']} />
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-hidden">
+          <CardHeader className="pb-1 border-b border-gray-100">
+            <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-red-500 inline-block flex-shrink-0" />
+              Top Variação Negativa
+            </CardTitle>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Abaixo do budget · Top {TOP_N}
+              {negatives.length === 0 && ' · nenhum'}
+            </p>
+          </CardHeader>
+          <CardContent className="pt-3 pb-2">
+            <DeptMiniChart data={negatives} color={C.neg} xDomain={['auto', 0]} />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }
