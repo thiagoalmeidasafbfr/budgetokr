@@ -313,11 +313,12 @@ function ExecChartCard({
             {fieldLabel} · Top {config.topN}
             {config.groupBy && config.groupBy !== 'agrupamento_arvore' && (
               <span className="ml-1 text-amber-600">· {{
-                dre:          'Categoria DRE',
-                conta_contabil: 'Conta',
-                centro_custo: 'Centro de Custo',
-                contrapartida: 'Contrapartida',
-                departamento: 'Departamento',
+                dre:             'Categoria DRE',
+                conta_contabil:  'Conta',
+                centro_custo:    'Centro de Custo',
+                contrapartida:   'Contrapartida',
+                departamento:    'Departamento',
+                unidade_negocio: 'Unidade de Negócio',
               }[config.groupBy]}</span>
             )}
             {config.dreGroup && <span className="ml-1">· {config.dreGroup}</span>}
@@ -798,6 +799,7 @@ export default function ExecCharts({
   const [cfgLoading,  setCfgLoading]  = useState(true)
   const [showModal,   setShowModal]   = useState(false)
   const [editing,     setEditing]     = useState<ExecChartConfig | null>(null)
+  const [saveError,   setSaveError]   = useState<string | null>(null)
 
   // Load configs from server
   useEffect(() => {
@@ -810,15 +812,26 @@ export default function ExecCharts({
   }, [deptName])
 
   const persist = async (next: ExecChartConfig[]) => {
+    const prev = charts
     setCharts(next)
+    setSaveError(null)
     try {
-      await fetch('/api/exec-chart-config', {
+      const res = await fetch('/api/exec-chart-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dept_name: deptName, configs: next }),
       })
-    } catch {
-      // silently ignore save errors — UI already updated
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        const msg = (body as { error?: string }).error ?? `HTTP ${res.status}`
+        console.error('[ExecCharts] persist failed:', msg)
+        setSaveError(`Erro ao salvar: ${msg}`)
+        setCharts(prev) // revert optimistic update
+      }
+    } catch (e) {
+      console.error('[ExecCharts] persist network error:', e)
+      setSaveError('Erro de conexão ao salvar configuração.')
+      setCharts(prev)
     }
   }
 
@@ -854,6 +867,13 @@ export default function ExecCharts({
           </Button>
         )}
       </div>
+
+      {saveError && (
+        <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 flex items-center justify-between gap-2">
+          <span>{saveError}</span>
+          <button onClick={() => setSaveError(null)} className="text-red-400 hover:text-red-600 font-bold">×</button>
+        </div>
+      )}
 
       {charts.length === 0 ? (
         <div className="border-2 border-dashed border-gray-200 rounded-xl py-10 flex flex-col items-center gap-3">
