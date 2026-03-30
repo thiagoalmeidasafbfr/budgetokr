@@ -421,7 +421,7 @@ export default function DreGerencialPage() {
         const meDepts: string[] = me?.departments ?? (me?.department ? [me.department] : [])
         const isDept = me?.role === 'dept' && meDepts.length > 0
         if (isDept) setDeptUser({ department: meDepts[0], departments: meDepts })
-        setIsMaster(me?.role === 'master')
+        setIsMaster(!!me && me.role !== 'dept')
 
         const raw = localStorage.getItem(storageKey(userId))
         if (raw) setSavedViews(JSON.parse(raw))
