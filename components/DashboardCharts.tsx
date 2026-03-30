@@ -128,8 +128,8 @@ export default function DashboardCharts({ periodChartData, deptVariance }: {
 
   return (
     <div className="flex gap-3 items-stretch">
-      {/* Budget vs Realizado — 50% */}
-      <div className="w-1/2 flex-shrink-0">
+      {/* Budget vs Realizado — 40% */}
+      <div className="w-[40%] flex-shrink-0">
         <Card className="overflow-hidden h-full">
           <CardHeader className="pb-1 border-b border-gray-100">
             <CardTitle className="text-sm font-semibold text-gray-700">Budget vs Realizado por Período</CardTitle>
