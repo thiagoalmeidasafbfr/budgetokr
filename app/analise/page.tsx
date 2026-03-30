@@ -60,8 +60,9 @@ export default function AnalisePage() {
   const [medidaSelPeriods, setMedidaSelPeriods] = useState<string[]>([])
   const [medidaLoading,    setMedidaLoading]    = useState(false)
   const [medidaPeriodView, setMedidaPeriodView] = useState<'mes' | 'acumulado'>('mes')
-  const [viewMode,      setViewMode]      = useState<ViewMode>('table')
-  const [groupBy,       setGroupBy]       = useState<GroupBy>('departamento')
+  const [viewMode,         setViewMode]         = useState<ViewMode>('table')
+  const [groupBy,          setGroupBy]          = useState<GroupBy>('departamento')
+  const [ccPeriodoGroupBy, setCcPeriodoGroupBy] = useState<'centro_custo' | 'departamento'>('centro_custo')
   const [loading,       setLoading]       = useState(false)
   const [deptUser,      setDeptUser]      = useState<{ department?: string; departments?: string[] } | null>(null)
   const isFirstRef = useRef(true)
@@ -180,8 +181,8 @@ export default function AnalisePage() {
     setSelMedida(id)
     setMedidaSelPeriods([])
     if (viewMode === 'cc_periodo') {
-      // Stay in CC×Período view — load medida with CC+period granularity
-      loadMedidaResults(id, 'centro_custo', selPeriods, selDepts, true)
+      // Stay in CC×Período view — load medida with the current grouping + period granularity
+      loadMedidaResults(id, ccPeriodoGroupBy, selPeriods, selDepts, true)
     } else {
       setViewMode('medida')
       setMedidaGroupBy('departamento')
@@ -196,14 +197,14 @@ export default function AnalisePage() {
     if (selMedida !== null) {
       const periods = medidaSelPeriods.length > 0 ? medidaSelPeriods : selPeriods
       if (viewMode === 'cc_periodo') {
-        // CC×Período: group by CC and keep period granularity simultaneously
-        loadMedidaResults(selMedida, 'centro_custo', periods, selDepts, true)
+        // CC×Período: group by current ccPeriodoGroupBy and keep period granularity simultaneously
+        loadMedidaResults(selMedida, ccPeriodoGroupBy, periods, selDepts, true)
       } else {
         loadMedidaResults(selMedida, medidaGroupBy, periods, selDepts)
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [medidaGroupBy, medidaSelPeriods, selDepts, selPeriods, viewMode])
+  }, [medidaGroupBy, medidaSelPeriods, selDepts, selPeriods, viewMode, ccPeriodoGroupBy])
 
   // Apply CC client-side filter
   const filteredData = selCentros.length > 0
@@ -291,20 +292,81 @@ export default function AnalisePage() {
   const medidaTotals = resolveAgg(medidaTotalsRaw)
 
   const exportXLSX = async () => {
-    const colLabel = groupBy === 'departamento' ? 'Departamento' : groupBy === 'centro_custo' ? 'Centro de Custo' : 'Período'
-    const rows = [
-      groupBy === 'centro_custo'
-        ? [colLabel, 'Departamento', 'Budget', 'Razão', 'Variação', '%']
-        : [colLabel, 'Budget', 'Razão', 'Variação', '%'],
-      ...tableRows.map(r => groupBy === 'centro_custo'
-        ? [r.key, r.dept ?? '', r.budget, r.razao, r.variacao, r.variacao_pct.toFixed(2)]
-        : [r.key, r.budget, r.razao, r.variacao, r.variacao_pct.toFixed(2)])
-    ]
+    let rows: unknown[][]
+    let sheetName = 'Análise'
+    let fileName = 'analise.xlsx'
+
+    if (viewMode === 'cc_periodo') {
+      // Build the same source rows as the CC×Período render
+      const sourceRows = selMedida && medidaResults.length > 0
+        ? medidaResults.map(r => ({
+            grupo:   ccPeriodoGroupBy === 'centro_custo' ? (r.centro_custo ?? '') : (r.nome_departamento || r.departamento || ''),
+            nome:    ccPeriodoGroupBy === 'centro_custo' ? (r.nome_centro_custo || r.centro_custo || '') : (r.nome_departamento || r.departamento || ''),
+            dept:    r.nome_departamento || r.departamento || '',
+            periodo: r.periodo, budget: r.budget, razao: r.razao,
+          }))
+        : filteredData.map(r => ({
+            grupo:   ccPeriodoGroupBy === 'centro_custo' ? (r.centro_custo ?? '') : (r.nome_departamento || r.departamento || ''),
+            nome:    ccPeriodoGroupBy === 'centro_custo' ? (r.nome_centro_custo ?? r.centro_custo ?? '') : (r.nome_departamento || r.departamento || ''),
+            dept:    r.nome_departamento || r.departamento || '',
+            periodo: r.periodo, budget: r.budget, razao: r.razao,
+          }))
+      const groupMap = new Map<string, { nome: string; dept: string; rowsByPeriod: { periodo: string; budget: number; razao: number }[] }>()
+      for (const row of sourceRows) {
+        const key = row.grupo || row.nome
+        if (!key) continue
+        if (!groupMap.has(key)) groupMap.set(key, { nome: row.nome, dept: row.dept, rowsByPeriod: [] })
+        groupMap.get(key)!.rowsByPeriod.push({ periodo: row.periodo, budget: row.budget, razao: row.razao })
+      }
+      const groupLabel = ccPeriodoGroupBy === 'centro_custo' ? 'Centro de Custo' : 'Departamento'
+      const header: unknown[] = ccPeriodoGroupBy === 'centro_custo'
+        ? [groupLabel, 'Departamento', 'Período', 'Budget (mês)', 'Realizado (mês)', 'Budget YTD', 'Realizado YTD', 'Variação YTD']
+        : [groupLabel, 'Período', 'Budget (mês)', 'Realizado (mês)', 'Budget YTD', 'Realizado YTD', 'Variação YTD']
+      rows = [header]
+      for (const [key, grp] of [...groupMap.entries()].sort((a, b) => a[1].nome.localeCompare(b[1].nome))) {
+        grp.rowsByPeriod.sort((a, b) => a.periodo.localeCompare(b.periodo))
+        let ytdBudget = 0, ytdRazao = 0
+        for (const r of grp.rowsByPeriod) {
+          ytdBudget += r.budget; ytdRazao += r.razao
+          if (ccPeriodoGroupBy === 'centro_custo') {
+            rows.push([grp.nome || key, grp.dept, r.periodo, r.budget, r.razao, ytdBudget, ytdRazao, ytdRazao - ytdBudget])
+          } else {
+            rows.push([grp.nome || key, r.periodo, r.budget, r.razao, ytdBudget, ytdRazao, ytdRazao - ytdBudget])
+          }
+        }
+      }
+      sheetName = groupLabel + ' x Período'
+      fileName = `analise_${ccPeriodoGroupBy}_periodo.xlsx`
+
+    } else if (viewMode === 'medida' && selMedida && medidaResults.length > 0) {
+      // Export medida view (what's currently shown — grouped by medidaGroupBy)
+      const colLabel = medidaGroupBy === 'departamento' ? 'Departamento' : medidaGroupBy === 'centro_custo' ? 'Centro de Custo' : 'Período'
+      rows = [[colLabel, 'Budget', 'Realizado', 'Variação']]
+      for (const [key, bucket] of Object.entries(medidaAgg).sort(([a], [b]) => a.localeCompare(b))) {
+        const { budget, razao } = resolveAgg(bucket)
+        rows.push([key, budget, razao, razao - budget])
+      }
+      sheetName = activeMedida?.nome ?? 'Medida'
+      fileName = `analise_medida_${selMedida}.xlsx`
+
+    } else {
+      // Table / chart view — export tableRows exactly as shown
+      const colLabel = groupBy === 'departamento' ? 'Departamento' : groupBy === 'centro_custo' ? 'Centro de Custo' : 'Período'
+      rows = [
+        groupBy === 'centro_custo'
+          ? [colLabel, 'Departamento', 'Budget', 'Realizado', 'Variação', '%']
+          : [colLabel, 'Budget', 'Realizado', 'Variação', '%'],
+        ...tableRows.map(r => groupBy === 'centro_custo'
+          ? [r.label, r.dept ?? '', r.budget, r.razao, r.variacao, r.variacao_pct.toFixed(2)]
+          : [r.label, r.budget, r.razao, r.variacao, r.variacao_pct.toFixed(2)])
+      ]
+    }
+
     const XLSX = await import('xlsx')
     const ws = XLSX.utils.aoa_to_sheet(rows)
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Análise')
-    XLSX.writeFile(wb, 'analise.xlsx')
+    XLSX.utils.book_append_sheet(wb, ws, sheetName)
+    XLSX.writeFile(wb, fileName)
   }
 
   return (
@@ -380,10 +442,14 @@ export default function AnalisePage() {
                   <Target size={13} />{activeMedida?.nome}
                 </button>
               )}
-              <button onClick={() => { setViewMode('cc_periodo'); if (groupBy !== 'centro_custo') { setGroupBy('centro_custo'); loadData(selDepts, selPeriods, 'centro_custo') } }}
+              <button onClick={() => {
+                  setViewMode('cc_periodo')
+                  const gb: GroupBy = ccPeriodoGroupBy === 'centro_custo' ? 'centro_custo' : 'departamento'
+                  if (groupBy !== gb) { setGroupBy(gb); loadData(selDepts, selPeriods, gb) }
+                }}
                 className={cn('flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
                   viewMode === 'cc_periodo' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50')}>
-                <Table2 size={13} />CC × Período
+                <Table2 size={13} />× Período
               </button>
             </div>
             {viewMode !== 'medida' && (
@@ -642,45 +708,38 @@ export default function AnalisePage() {
             </div>
           )}
 
-          {/* CC × PERÍODO VIEW */}
+          {/* × PERÍODO VIEW (CC ou Departamento) */}
           {!loading && viewMode === 'cc_periodo' && (() => {
-            // Use medida results if a medida is active, otherwise use filteredData
+            // Build source rows using the current ccPeriodoGroupBy setting
+            const byCC = ccPeriodoGroupBy === 'centro_custo'
             const sourceRows = selMedida && medidaResults.length > 0
               ? medidaResults.map(r => ({
-                  centro_custo:      r.centro_custo,
-                  nome_centro_custo: r.nome_centro_custo || r.centro_custo,
-                  nome_departamento: r.nome_departamento,
-                  periodo:           r.periodo,
-                  budget:            r.budget,
-                  razao:             r.razao,
+                  groupKey: byCC ? (r.centro_custo ?? '') : (r.nome_departamento || r.departamento || ''),
+                  nome:     byCC ? (r.nome_centro_custo || r.centro_custo || '') : (r.nome_departamento || r.departamento || ''),
+                  dept:     r.nome_departamento || r.departamento || '',
+                  periodo: r.periodo, budget: r.budget, razao: r.razao,
                 }))
               : filteredData.map(r => ({
-                  centro_custo:      r.centro_custo ?? '',
-                  nome_centro_custo: r.nome_centro_custo ?? r.centro_custo ?? '',
-                  nome_departamento: r.nome_departamento || r.departamento || '',
-                  periodo:           r.periodo,
-                  budget:            r.budget,
-                  razao:             r.razao,
+                  groupKey: byCC ? (r.centro_custo ?? '') : (r.nome_departamento || r.departamento || ''),
+                  nome:     byCC ? (r.nome_centro_custo ?? r.centro_custo ?? '') : (r.nome_departamento || r.departamento || ''),
+                  dept:     r.nome_departamento || r.departamento || '',
+                  periodo: r.periodo, budget: r.budget, razao: r.razao,
                 }))
 
-            // Group by CC
-            const ccMap = new Map<string, { nome: string; dept: string; rows: { periodo: string; budget: number; razao: number }[] }>()
+            const groupMap = new Map<string, { nome: string; dept: string; rows: { periodo: string; budget: number; razao: number }[] }>()
             for (const row of sourceRows) {
-              const key = row.centro_custo || row.nome_centro_custo
+              const key = row.groupKey || row.nome
               if (!key) continue
-              if (!ccMap.has(key)) ccMap.set(key, { nome: row.nome_centro_custo, dept: row.nome_departamento, rows: [] })
-              ccMap.get(key)!.rows.push({ periodo: row.periodo, budget: row.budget, razao: row.razao })
+              if (!groupMap.has(key)) groupMap.set(key, { nome: row.nome, dept: row.dept, rows: [] })
+              groupMap.get(key)!.rows.push({ periodo: row.periodo, budget: row.budget, razao: row.razao })
             }
 
-            // Sort CCs and periods
-            const ccEntries = [...ccMap.entries()].sort((a, b) => a[1].nome.localeCompare(b[1].nome))
-            for (const [, cc] of ccEntries) {
-              cc.rows.sort((a, b) => a.periodo.localeCompare(b.periodo))
-              // Add YTD columns
+            const entries = [...groupMap.entries()].sort((a, b) => a[1].nome.localeCompare(b[1].nome))
+            for (const [, grp] of entries) {
+              grp.rows.sort((a, b) => a.periodo.localeCompare(b.periodo))
               let ytdBudget = 0, ytdRazao = 0
-              for (const row of cc.rows) {
-                ytdBudget += row.budget
-                ytdRazao  += row.razao
+              for (const row of grp.rows) {
+                ytdBudget += row.budget; ytdRazao += row.razao
                 ;(row as Record<string, unknown>).ytdBudget   = ytdBudget
                 ;(row as Record<string, unknown>).ytdRazao    = ytdRazao
                 ;(row as Record<string, unknown>).ytdVariacao = ytdRazao - ytdBudget
@@ -690,57 +749,77 @@ export default function AnalisePage() {
             type PeriodRow = { periodo: string; budget: number; razao: number; ytdBudget: number; ytdRazao: number; ytdVariacao: number }
 
             return (
-              <Card>
-                {ccEntries.length === 0 && (
-                  <div className="p-6 text-center text-sm text-gray-400">Nenhum dado disponível para esta seleção.</div>
-                )}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-gray-50 sticky top-0 z-10">
-                        <th className="text-left px-4 py-2.5 font-medium text-gray-500 w-32">Centro de Custo</th>
-                        <th className="text-left px-3 py-2.5 font-medium text-gray-400 text-xs w-24">Departamento</th>
-                        <th className="text-left px-3 py-2.5 font-medium text-gray-500 w-20">Período</th>
-                        <th className="text-right px-3 py-2.5 font-medium text-gray-500">Budget (mês)</th>
-                        <th className="text-right px-3 py-2.5 font-medium text-gray-500">Realizado (mês)</th>
-                        <th className="text-right px-3 py-2.5 font-medium text-blue-600">Budget YTD</th>
-                        <th className="text-right px-3 py-2.5 font-medium text-blue-600">Realizado YTD</th>
-                        <th className="text-right px-3 py-2.5 font-medium text-gray-500">Variação YTD</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {ccEntries.map(([ccKey, cc]) => (
-                        cc.rows.map((row, rowIdx) => {
-                          const r = row as PeriodRow
-                          return (
-                            <tr key={`${ccKey}-${r.periodo}`}
-                              className={cn('border-b border-gray-50 hover:bg-gray-50 transition-colors',
-                                rowIdx === 0 ? 'border-t border-gray-200' : '')}>
-                              {rowIdx === 0 ? (
-                                <td className="px-4 py-2 font-semibold text-gray-900 align-top" rowSpan={cc.rows.length}>
-                                  <div className="text-xs font-semibold text-gray-800">{cc.nome || ccKey}</div>
-                                  <div className="text-[10px] text-gray-400 font-normal">{ccKey}</div>
-                                </td>
-                              ) : null}
-                              {rowIdx === 0 ? (
-                                <td className="px-3 py-2 text-xs text-gray-400 align-top" rowSpan={cc.rows.length}>{cc.dept}</td>
-                              ) : null}
-                              <td className="px-3 py-2 text-gray-600 font-mono text-xs">{formatPeriodo(r.periodo)}</td>
-                              <td className="px-3 py-2 text-right text-gray-600">{formatCurrency(r.budget)}</td>
-                              <td className="px-3 py-2 text-right text-gray-600">{formatCurrency(r.razao)}</td>
-                              <td className="px-3 py-2 text-right text-blue-700 font-medium">{formatCurrency(r.ytdBudget)}</td>
-                              <td className="px-3 py-2 text-right text-blue-700 font-medium">{formatCurrency(r.ytdRazao)}</td>
-                              <td className={cn('px-3 py-2 text-right font-semibold', r.ytdVariacao >= 0 ? 'text-emerald-600' : 'text-red-500')}>
-                                {formatCurrency(r.ytdVariacao)}
-                              </td>
-                            </tr>
-                          )
-                        })
-                      ))}
-                    </tbody>
-                  </table>
+              <div className="space-y-2">
+                {/* Sub-toggle: CC vs Departamento */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">Agrupar por:</span>
+                  <div className="flex bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5">
+                    {([['centro_custo', 'Centro de Custo'], ['departamento', 'Departamento']] as const).map(([val, label]) => (
+                      <button key={val}
+                        onClick={() => {
+                          setCcPeriodoGroupBy(val)
+                          const gb: GroupBy = val === 'centro_custo' ? 'centro_custo' : 'departamento'
+                          if (groupBy !== gb) { setGroupBy(gb); loadData(selDepts, selPeriods, gb) }
+                        }}
+                        className={cn('px-3 py-1 rounded-md text-xs font-medium transition-colors',
+                          ccPeriodoGroupBy === val ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </Card>
+                <Card>
+                  {entries.length === 0 && (
+                    <div className="p-6 text-center text-sm text-gray-400">Nenhum dado disponível para esta seleção.</div>
+                  )}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-gray-50 sticky top-0 z-10">
+                          <th className="text-left px-4 py-2.5 font-medium text-gray-500 w-32">{byCC ? 'Centro de Custo' : 'Departamento'}</th>
+                          {byCC && <th className="text-left px-3 py-2.5 font-medium text-gray-400 text-xs w-24">Departamento</th>}
+                          <th className="text-left px-3 py-2.5 font-medium text-gray-500 w-20">Período</th>
+                          <th className="text-right px-3 py-2.5 font-medium text-gray-500">Budget (mês)</th>
+                          <th className="text-right px-3 py-2.5 font-medium text-gray-500">Realizado (mês)</th>
+                          <th className="text-right px-3 py-2.5 font-medium text-blue-600">Budget YTD</th>
+                          <th className="text-right px-3 py-2.5 font-medium text-blue-600">Realizado YTD</th>
+                          <th className="text-right px-3 py-2.5 font-medium text-gray-500">Variação YTD</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {entries.map(([grpKey, grp]) => (
+                          grp.rows.map((row, rowIdx) => {
+                            const r = row as PeriodRow
+                            return (
+                              <tr key={`${grpKey}-${r.periodo}`}
+                                className={cn('border-b border-gray-50 hover:bg-gray-50 transition-colors',
+                                  rowIdx === 0 ? 'border-t border-gray-200' : '')}>
+                                {rowIdx === 0 ? (
+                                  <td className="px-4 py-2 font-semibold text-gray-900 align-top" rowSpan={grp.rows.length}>
+                                    <div className="text-xs font-semibold text-gray-800">{grp.nome || grpKey}</div>
+                                    {byCC && <div className="text-[10px] text-gray-400 font-normal">{grpKey}</div>}
+                                  </td>
+                                ) : null}
+                                {byCC && rowIdx === 0 ? (
+                                  <td className="px-3 py-2 text-xs text-gray-400 align-top" rowSpan={grp.rows.length}>{grp.dept}</td>
+                                ) : null}
+                                <td className="px-3 py-2 text-gray-600 font-mono text-xs">{formatPeriodo(r.periodo)}</td>
+                                <td className="px-3 py-2 text-right text-gray-600">{formatCurrency(r.budget)}</td>
+                                <td className="px-3 py-2 text-right text-gray-600">{formatCurrency(r.razao)}</td>
+                                <td className="px-3 py-2 text-right text-blue-700 font-medium">{formatCurrency(r.ytdBudget)}</td>
+                                <td className="px-3 py-2 text-right text-blue-700 font-medium">{formatCurrency(r.ytdRazao)}</td>
+                                <td className={cn('px-3 py-2 text-right font-semibold', r.ytdVariacao >= 0 ? 'text-emerald-600' : 'text-red-500')}>
+                                  {formatCurrency(r.ytdVariacao)}
+                                </td>
+                              </tr>
+                            )
+                          })
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              </div>
             )
           })()}
         </div>
