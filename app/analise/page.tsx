@@ -158,14 +158,15 @@ export default function AnalisePage() {
     id: number,
     gb: 'departamento' | 'periodo' | 'centro_custo',
     prds: string[],
-    depts: string[]
+    depts: string[],
+    withPeriod = false   // true → forces groupByPeriod=true (for CC×Período view)
   ) => {
     setMedidaLoading(true)
     const params = new URLSearchParams({
       type: 'medida',
       medidaId: String(id),
       groupByDept:        String(gb === 'departamento'),
-      groupByPeriod:      String(gb === 'periodo'),
+      groupByPeriod:      String(gb === 'periodo' || withPeriod),
       groupByCentroCusto: String(gb === 'centro_custo'),
     })
     if (prds.length)   params.set('periodos',      prds.join(','))
@@ -177,10 +178,15 @@ export default function AnalisePage() {
 
   const selectMedida = (id: number) => {
     setSelMedida(id)
-    setViewMode('medida')
     setMedidaSelPeriods([])
-    setMedidaGroupBy('departamento')
-    loadMedidaResults(id, 'departamento', selPeriods, selDepts)
+    if (viewMode === 'cc_periodo') {
+      // Stay in CC×Período view — load medida with CC+period granularity
+      loadMedidaResults(id, 'centro_custo', selPeriods, selDepts, true)
+    } else {
+      setViewMode('medida')
+      setMedidaGroupBy('departamento')
+      loadMedidaResults(id, 'departamento', selPeriods, selDepts)
+    }
   }
 
   const applyFilters = () => loadData(selDepts, selPeriods, groupBy)
@@ -189,8 +195,12 @@ export default function AnalisePage() {
   useEffect(() => {
     if (selMedida !== null) {
       const periods = medidaSelPeriods.length > 0 ? medidaSelPeriods : selPeriods
-      const gb = viewMode === 'cc_periodo' ? 'centro_custo' : medidaGroupBy
-      loadMedidaResults(selMedida, gb, periods, selDepts)
+      if (viewMode === 'cc_periodo') {
+        // CC×Período: group by CC and keep period granularity simultaneously
+        loadMedidaResults(selMedida, 'centro_custo', periods, selDepts, true)
+      } else {
+        loadMedidaResults(selMedida, medidaGroupBy, periods, selDepts)
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [medidaGroupBy, medidaSelPeriods, selDepts, selPeriods, viewMode])
