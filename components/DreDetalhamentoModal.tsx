@@ -41,7 +41,7 @@ const DET_COLS: { key: DetColKey; label: string; align?: 'right'; w?: number }[]
   { key: 'dre',              label: 'DRE Gerencial',      w: 120 },
   { key: 'agrupamento',      label: 'Agrupamento',        w: 140 },
   { key: 'conta',            label: 'Conta Contábil',     w: 190 },
-  { key: 'valor',            label: 'Valor',              w: 96,  align: 'right' },
+  { key: 'valor',            label: 'Valor',              w: 130, align: 'right' },
   { key: 'contrapartida',    label: 'Conta Contrapartida',w: 160 },
   { key: 'obs',              label: 'Observação' },
 ]
@@ -51,12 +51,12 @@ function colValue(r: DetalhamentoLinha, key: DetColKey): string | number {
     case 'data':             return r.data_lancamento
     case 'tipo':             return r.tipo
     case 'numero_transacao': return r.numero_transacao || r.num_transacao || ''
-    case 'centro':           return `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}`
+    case 'centro':           return r.centro_custo ? `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}` : '—'
     case 'departamento':     return r.nome_departamento ?? ''
     case 'unidade':          return r.unidade ?? ''
     case 'dre':              return r.dre
     case 'agrupamento':      return r.agrupamento_arvore
-    case 'conta':            return `${r.numero_conta_contabil} — ${r.nome_conta_contabil}`
+    case 'conta':            return r.nome_conta_contabil ? `${r.numero_conta_contabil} — ${r.nome_conta_contabil}` : (r.numero_conta_contabil ?? '—')
     case 'valor':            return r.debito_credito
     case 'contrapartida':    return r.nome_conta_contrapartida
     case 'obs':              return r.observacao ?? ''
@@ -71,12 +71,12 @@ function exportDetalhamento(rows: DetalhamentoLinha[], title: string, showUnidad
     r.data_lancamento,
     r.tipo,
     r.numero_transacao || r.num_transacao || '',
-    `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}`,
+    r.centro_custo ? `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}` : '—',
     r.nome_departamento ?? '',
     r.unidade ?? '',
     r.dre,
     r.agrupamento_arvore,
-    `${r.numero_conta_contabil} — ${r.nome_conta_contabil}`,
+    r.nome_conta_contabil ? `${r.numero_conta_contabil} — ${r.nome_conta_contabil}` : (r.numero_conta_contabil ?? '—'),
     r.debito_credito,
     r.nome_conta_contrapartida,
     r.observacao,
@@ -84,11 +84,11 @@ function exportDetalhamento(rows: DetalhamentoLinha[], title: string, showUnidad
     r.data_lancamento,
     r.tipo,
     r.numero_transacao || r.num_transacao || '',
-    `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}`,
+    r.centro_custo ? `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}` : '—',
     r.nome_departamento ?? '',
     r.dre,
     r.agrupamento_arvore,
-    `${r.numero_conta_contabil} — ${r.nome_conta_contabil}`,
+    r.nome_conta_contabil ? `${r.numero_conta_contabil} — ${r.nome_conta_contabil}` : (r.numero_conta_contabil ?? '—'),
     r.debito_credito,
     r.nome_conta_contrapartida,
     r.observacao,
@@ -578,8 +578,8 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
                 {paddingTop > 0 && <tr style={{ height: paddingTop }}><td colSpan={visibleDefs.length + 1} /></tr>}
 
                 {visibleRows.map((r, li) => {
-                  const ccLabel = `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}`
-                  const contaLabel = `${r.numero_conta_contabil} — ${r.nome_conta_contabil}`
+                  const ccLabel = r.centro_custo ? `${r.centro_custo}${r.nome_centro_custo ? ` — ${r.nome_centro_custo}` : ''}` : '—'
+                  const contaLabel = r.nome_conta_contabil ? `${r.numero_conta_contabil} — ${r.nome_conta_contabil}` : (r.numero_conta_contabil ?? '—')
                   const isHighlighted = highlightLancamentoId === r.id
                   return (
                     <tr key={r.id} style={{ height: ROW_H }}
