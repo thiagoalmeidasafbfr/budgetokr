@@ -182,7 +182,7 @@ export default function PlanoContasPage() {
   const totalVariacao = totals.razao - totals.budget
 
   // CSV export
-  const exportCSV = () => {
+  const exportXLSX = async () => {
     if (!data) return
     const header = ['Nível', 'Número', 'Nome', 'Agrupamento', 'DRE', 'Budget', 'Razão', 'Variação', '%']
     const allRows = flattenTree(data.tree)
@@ -190,11 +190,11 @@ export default function PlanoContasPage() {
       r.nivel, r.numero, r.nome, r.agrupamento, r.dre,
       r.budget, r.razao, r.variacao, r.variacao_pct.toFixed(2)
     ])
-    const csv = [header, ...csvRows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')).join('\n')
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = `plano-contas-${Date.now()}.csv`; a.click()
+    const XLSX = await import('xlsx')
+    const ws = XLSX.utils.aoa_to_sheet([header, ...csvRows])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Plano de Contas')
+    XLSX.writeFile(wb, `plano-contas-${Date.now()}.xlsx`)
   }
 
   // CSV import
@@ -293,8 +293,8 @@ export default function PlanoContasPage() {
           <Button variant="outline" size="sm" onClick={() => loadData(selDepts, selPeriods)}>
             <RefreshCw size={13} /> Atualizar
           </Button>
-          <Button variant="outline" size="sm" onClick={exportCSV}>
-            <Download size={13} /> Exportar CSV
+          <Button variant="outline" size="sm" onClick={exportXLSX}>
+            <Download size={13} /> Exportar Excel
           </Button>
           <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={importing}>
             <Upload size={13} /> {importing ? 'Importando...' : 'Importar CSV'}

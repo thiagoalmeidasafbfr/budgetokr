@@ -40,7 +40,7 @@ interface MedidaResult {
   variacao_pct: number
 }
 
-type ViewMode = 'table' | 'chart' | 'medida'
+type ViewMode = 'table' | 'chart' | 'medida' | 'cc_periodo'
 type GroupBy = 'departamento' | 'centro_custo' | 'periodo'
 
 export default function AnalisePage() {
@@ -180,7 +180,7 @@ export default function AnalisePage() {
     setViewMode('medida')
     setMedidaSelPeriods([])
     setMedidaGroupBy('departamento')
-    loadMedidaResults(id, 'departamento', [], selDepts)
+    loadMedidaResults(id, 'departamento', selPeriods, selDepts)
   }
 
   const applyFilters = () => loadData(selDepts, selPeriods, groupBy)
@@ -188,10 +188,12 @@ export default function AnalisePage() {
   // Re-fetch medida when groupBy or period filter changes
   useEffect(() => {
     if (selMedida !== null) {
-      loadMedidaResults(selMedida, medidaGroupBy, medidaSelPeriods, selDepts)
+      const periods = medidaSelPeriods.length > 0 ? medidaSelPeriods : selPeriods
+      const gb = viewMode === 'cc_periodo' ? 'centro_custo' : medidaGroupBy
+      loadMedidaResults(selMedida, gb, periods, selDepts)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [medidaGroupBy, medidaSelPeriods])
+  }, [medidaGroupBy, medidaSelPeriods, selDepts, selPeriods, viewMode])
 
   // Apply CC client-side filter
   const filteredData = selCentros.length > 0
@@ -278,7 +280,7 @@ export default function AnalisePage() {
   )
   const medidaTotals = resolveAgg(medidaTotalsRaw)
 
-  const exportCSV = () => {
+  const exportXLSX = async () => {
     const colLabel = groupBy === 'departamento' ? 'Departamento' : groupBy === 'centro_custo' ? 'Centro de Custo' : 'Período'
     const rows = [
       groupBy === 'centro_custo'
@@ -288,10 +290,11 @@ export default function AnalisePage() {
         ? [r.key, r.dept ?? '', r.budget, r.razao, r.variacao, r.variacao_pct.toFixed(2)]
         : [r.key, r.budget, r.razao, r.variacao, r.variacao_pct.toFixed(2)])
     ]
-    const csv  = rows.map(r => r.join(';')).join('\n')
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
-    const url  = URL.createObjectURL(blob)
-    const a    = document.createElement('a'); a.href = url; a.download = 'analise.csv'; a.click()
+    const XLSX = await import('xlsx')
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Análise')
+    XLSX.writeFile(wb, 'analise.xlsx')
   }
 
   return (
@@ -303,7 +306,7 @@ export default function AnalisePage() {
         </div>
         <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
           <YearFilter periodos={periodos} selYear={selYear} onChange={y => { setSelYear(y) }} />
-          <Button variant="outline" size="sm" onClick={exportCSV}><Download size={13} /> CSV</Button>
+          <Button variant="outline" size="sm" onClick={exportXLSX}><Download size={13} /> Excel</Button>
           <Button variant="outline" size="sm" onClick={() => window.print()} className="no-print"><Printer size={13} /> PDF</Button>
         </div>
       </div>
@@ -367,6 +370,11 @@ export default function AnalisePage() {
                   <Target size={13} />{activeMedida?.nome}
                 </button>
               )}
+              <button onClick={() => { setViewMode('cc_periodo'); if (groupBy !== 'centro_custo') { setGroupBy('centro_custo'); loadData(selDepts, selPeriods, 'centro_custo') } }}
+                className={cn('flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                  viewMode === 'cc_periodo' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+                <Table2 size={13} />CC × Período
+              </button>
             </div>
             {viewMode !== 'medida' && (
               <div className="flex bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5 ml-auto">
@@ -623,6 +631,108 @@ export default function AnalisePage() {
               )}
             </div>
           )}
+
+          {/* CC × PERÍODO VIEW */}
+          {!loading && viewMode === 'cc_periodo' && (() => {
+            // Use medida results if a medida is active, otherwise use filteredData
+            const sourceRows = selMedida && medidaResults.length > 0
+              ? medidaResults.map(r => ({
+                  centro_custo:      r.centro_custo,
+                  nome_centro_custo: r.nome_centro_custo || r.centro_custo,
+                  nome_departamento: r.nome_departamento,
+                  periodo:           r.periodo,
+                  budget:            r.budget,
+                  razao:             r.razao,
+                }))
+              : filteredData.map(r => ({
+                  centro_custo:      r.centro_custo ?? '',
+                  nome_centro_custo: r.nome_centro_custo ?? r.centro_custo ?? '',
+                  nome_departamento: r.nome_departamento || r.departamento || '',
+                  periodo:           r.periodo,
+                  budget:            r.budget,
+                  razao:             r.razao,
+                }))
+
+            // Group by CC
+            const ccMap = new Map<string, { nome: string; dept: string; rows: { periodo: string; budget: number; razao: number }[] }>()
+            for (const row of sourceRows) {
+              const key = row.centro_custo || row.nome_centro_custo
+              if (!key) continue
+              if (!ccMap.has(key)) ccMap.set(key, { nome: row.nome_centro_custo, dept: row.nome_departamento, rows: [] })
+              ccMap.get(key)!.rows.push({ periodo: row.periodo, budget: row.budget, razao: row.razao })
+            }
+
+            // Sort CCs and periods
+            const ccEntries = [...ccMap.entries()].sort((a, b) => a[1].nome.localeCompare(b[1].nome))
+            for (const [, cc] of ccEntries) {
+              cc.rows.sort((a, b) => a.periodo.localeCompare(b.periodo))
+              // Add YTD columns
+              let ytdBudget = 0, ytdRazao = 0
+              for (const row of cc.rows) {
+                ytdBudget += row.budget
+                ytdRazao  += row.razao
+                ;(row as Record<string, unknown>).ytdBudget   = ytdBudget
+                ;(row as Record<string, unknown>).ytdRazao    = ytdRazao
+                ;(row as Record<string, unknown>).ytdVariacao = ytdRazao - ytdBudget
+              }
+            }
+
+            type PeriodRow = { periodo: string; budget: number; razao: number; ytdBudget: number; ytdRazao: number; ytdVariacao: number }
+
+            return (
+              <Card>
+                {ccEntries.length === 0 && (
+                  <div className="p-6 text-center text-sm text-gray-400">Nenhum dado disponível para esta seleção.</div>
+                )}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-gray-50 sticky top-0 z-10">
+                        <th className="text-left px-4 py-2.5 font-medium text-gray-500 w-32">Centro de Custo</th>
+                        <th className="text-left px-3 py-2.5 font-medium text-gray-400 text-xs w-24">Departamento</th>
+                        <th className="text-left px-3 py-2.5 font-medium text-gray-500 w-20">Período</th>
+                        <th className="text-right px-3 py-2.5 font-medium text-gray-500">Budget (mês)</th>
+                        <th className="text-right px-3 py-2.5 font-medium text-gray-500">Realizado (mês)</th>
+                        <th className="text-right px-3 py-2.5 font-medium text-blue-600">Budget YTD</th>
+                        <th className="text-right px-3 py-2.5 font-medium text-blue-600">Realizado YTD</th>
+                        <th className="text-right px-3 py-2.5 font-medium text-gray-500">Variação YTD</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ccEntries.map(([ccKey, cc]) => (
+                        cc.rows.map((row, rowIdx) => {
+                          const r = row as PeriodRow
+                          return (
+                            <tr key={`${ccKey}-${r.periodo}`}
+                              className={cn('border-b border-gray-50 hover:bg-gray-50 transition-colors',
+                                rowIdx === 0 ? 'border-t border-gray-200' : '')}>
+                              {rowIdx === 0 ? (
+                                <td className="px-4 py-2 font-semibold text-gray-900 align-top" rowSpan={cc.rows.length}>
+                                  <div className="text-xs font-semibold text-gray-800">{cc.nome || ccKey}</div>
+                                  <div className="text-[10px] text-gray-400 font-normal">{ccKey}</div>
+                                </td>
+                              ) : null}
+                              {rowIdx === 0 ? (
+                                <td className="px-3 py-2 text-xs text-gray-400 align-top" rowSpan={cc.rows.length}>{cc.dept}</td>
+                              ) : null}
+                              <td className="px-3 py-2 text-gray-600 font-mono text-xs">{formatPeriodo(r.periodo)}</td>
+                              <td className="px-3 py-2 text-right text-gray-600">{formatCurrency(r.budget)}</td>
+                              <td className="px-3 py-2 text-right text-gray-600">{formatCurrency(r.razao)}</td>
+                              <td className="px-3 py-2 text-right text-blue-700 font-medium">{formatCurrency(r.ytdBudget)}</td>
+                              <td className="px-3 py-2 text-right text-blue-700 font-medium">{formatCurrency(r.ytdRazao)}</td>
+                              <td className={cn('px-3 py-2 text-right font-semibold', r.ytdVariacao >= 0 ? 'text-emerald-600' : 'text-red-500')}>
+                                {formatCurrency(r.ytdVariacao)}
+                              </td>
+                            </tr>
+                          )
+                        })
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )
+          })()}
         </div>
       </div>
     </div>
