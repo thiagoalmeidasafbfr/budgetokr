@@ -269,11 +269,11 @@ export default function DetalhamentoModal({ ctx, onClose, highlightLancamentoId,
       contaMap.set(r.numero_conta_contabil, r.nome_conta_contabil)
     }
     return {
-      centro:         [...ccMap.entries()].map(([v, n]) => ({ value: v, label: n ? `${v} — ${n}` : v })).sort((a, b) => a.label.localeCompare(b.label)),
+      centro:         [...ccMap.entries()].filter(([v]) => v != null).map(([v, n]) => ({ value: v, label: n ? `${v} — ${n}` : v })).sort((a, b) => (a.label ?? '').localeCompare(b.label ?? '')),
       unidade: uniq(rows.map(r => r.unidade).filter(Boolean)).map(v => ({ value: v, label: v })),
       dre:            uniq(rows.map(r => r.dre)).map(v => ({ value: v, label: v })),
       agrupamento:    uniq(rows.map(r => r.agrupamento_arvore)).map(v => ({ value: v, label: v })),
-      conta:          [...contaMap.entries()].map(([v, n]) => ({ value: v, label: n ? `${v} — ${n}` : v })).sort((a, b) => a.label.localeCompare(b.label)),
+      conta:          [...contaMap.entries()].filter(([v]) => v != null).map(([v, n]) => ({ value: v, label: n ? `${v} — ${n}` : v })).sort((a, b) => (a.label ?? '').localeCompare(b.label ?? '')),
       contrapartida:  uniq(rows.map(r => r.nome_conta_contrapartida)).map(v => ({ value: v, label: v })),
     }
   }, [rows])
