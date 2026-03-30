@@ -9,20 +9,30 @@ import dynamic from 'next/dynamic'
 import { YearFilter } from '@/components/YearFilter'
 
 // Widget configuration
-type WidgetId = 'summary' | 'charts' | 'dept-table'
+type WidgetId = 'summary' | 'charts' | 'dept-table' | 'exec'
 interface WidgetConfig { id: WidgetId; label: string; visible: boolean; order: number }
 
 const DEFAULT_WIDGETS: WidgetConfig[] = [
-  { id: 'summary', label: 'Resumo (Cards)', visible: true, order: 0 },
-  { id: 'charts', label: 'Gráficos', visible: true, order: 1 },
+  { id: 'summary',    label: 'Resumo (Cards)',          visible: true, order: 0 },
+  { id: 'charts',     label: 'Gráficos',                visible: true, order: 1 },
   { id: 'dept-table', label: 'Tabela por Departamento', visible: true, order: 2 },
+  { id: 'exec',       label: 'Gráficos Executivos',     visible: true, order: 3 },
 ]
 
 function loadWidgetConfig(): WidgetConfig[] {
   if (typeof window === 'undefined') return DEFAULT_WIDGETS
   try {
     const saved = localStorage.getItem('dashboard-widgets')
-    if (saved) return JSON.parse(saved)
+    if (saved) {
+      const parsed = JSON.parse(saved) as WidgetConfig[]
+      // Merge: add any new DEFAULT widgets not yet in saved config
+      const existing = new Set(parsed.map(w => w.id))
+      const merged = [...parsed]
+      for (const def of DEFAULT_WIDGETS) {
+        if (!existing.has(def.id)) merged.push({ ...def, order: merged.length })
+      }
+      return merged
+    }
   } catch {}
   return DEFAULT_WIDGETS
 }
@@ -226,155 +236,119 @@ export default function Dashboard() {
     : allPeriodos
   const allDepts = [...new Set(analise.map(r => r.nome_departamento?.trim() || r.departamento).filter(Boolean))]
 
+  // Shared widget panel (rendered in left column)
+  const widgetPanel = showWidgetCfg && (
+    <div className="absolute left-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded-xl shadow-xl p-3 w-56 space-y-1">
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1 mb-2">Personalizar</p>
+      {sortedWidgets.map((ww, i) => (
+        <div key={ww.id} className="flex items-center gap-2 hover:bg-gray-50 rounded-lg px-2 py-1.5">
+          <button onClick={() => toggleWidget(ww.id)} className="flex-shrink-0">
+            {ww.visible ? <Eye size={13} className="text-gray-600" /> : <EyeOff size={13} className="text-gray-300" />}
+          </button>
+          <span className={cn('text-xs flex-1', ww.visible ? 'text-gray-700' : 'text-gray-400')}>{ww.label}</span>
+          <div className="flex flex-col gap-0.5 flex-shrink-0">
+            <button onClick={() => moveWidget(ww.id, -1)} disabled={i === 0} className="text-gray-400 hover:text-gray-600 disabled:opacity-20"><ChevronUp size={10} /></button>
+            <button onClick={() => moveWidget(ww.id, 1)} disabled={i === sortedWidgets.length - 1} className="text-gray-400 hover:text-gray-600 disabled:opacity-20"><ChevronDown size={10} /></button>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+
   return (
     <div className="space-y-5">
-      {/* Minimal header — only shown when summary widget is hidden */}
-      {!sortedWidgets.find(w => w.id === 'summary' && w.visible) && (
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
-          <div className="flex items-center gap-2">
-            <YearFilter periodos={allPeriodos} selYear={selYear} onChange={setSelYear} />
-            {medidas.length > 0 && (
-              <Link href="/medidas"><Button variant="outline" size="sm"><Target size={13} /> {medidas.length} Medida{medidas.length !== 1 ? 's' : ''}</Button></Link>
-            )}
-            <Link href="/analise"><Button size="sm"><BarChart3 size={13} /> Análise</Button></Link>
-            <div className="relative">
-              <Button variant="outline" size="sm" onClick={() => setShowWidgetCfg(v => !v)}>
-                <Settings2 size={13} /> Widgets
-              </Button>
-              {showWidgetCfg && (
-                <div className="absolute right-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded-xl shadow-xl p-3 w-56 space-y-1">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1 mb-2">Personalizar</p>
-                  {sortedWidgets.map((w, i) => (
-                    <div key={w.id} className="flex items-center gap-2 hover:bg-gray-50 rounded-lg px-2 py-1.5">
-                      <button onClick={() => toggleWidget(w.id)} className="flex-shrink-0">
-                        {w.visible ? <Eye size={13} className="text-gray-600" /> : <EyeOff size={13} className="text-gray-300" />}
-                      </button>
-                      <span className={cn('text-xs flex-1', w.visible ? 'text-gray-700' : 'text-gray-400')}>{w.label}</span>
-                      <div className="flex flex-col gap-0.5 flex-shrink-0">
-                        <button onClick={() => moveWidget(w.id, -1)} disabled={i === 0} className="text-gray-400 hover:text-gray-600 disabled:opacity-20"><ChevronUp size={10} /></button>
-                        <button onClick={() => moveWidget(w.id, 1)} disabled={i === sortedWidgets.length - 1} className="text-gray-400 hover:text-gray-600 disabled:opacity-20"><ChevronDown size={10} /></button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Render widgets in custom order */}
-      {sortedWidgets.filter(w => w.visible).map(w => {
-        if (w.id === 'summary') return (
-      <div key="summary" className="flex items-start gap-8 pb-6 border-b border-gray-100">
-        {/* Left: vertical minimalist controls */}
+      {/* Always-visible top strip: left controls + right (year filter + optional big numbers) */}
+      <div className={cn('flex items-start gap-8', isWidgetVisible('summary') ? 'pb-6 border-b border-gray-100' : '')}>
+        {/* Left: always-visible controls — only Widgets button */}
         <div className="flex-shrink-0 flex flex-col gap-3 pt-1">
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Dashboard</p>
-          <div className="flex flex-col gap-2">
-            <Link href="/analise" className="text-[11px] text-gray-400 hover:text-gray-700 flex items-center gap-1.5 transition-colors"><BarChart3 size={11} /> Análise</Link>
-            {medidas.length > 0 && (
-              <Link href="/medidas" className="text-[11px] text-gray-400 hover:text-gray-700 flex items-center gap-1.5 transition-colors"><Target size={11} /> {medidas.length} Medida{medidas.length !== 1 ? 's' : ''}</Link>
-            )}
-            <div className="relative">
-              <button onClick={() => setShowWidgetCfg(v => !v)} className="text-[11px] text-gray-400 hover:text-gray-700 flex items-center gap-1.5 transition-colors"><Settings2 size={11} /> Widgets</button>
-              {showWidgetCfg && (
-                <div className="absolute left-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded-xl shadow-xl p-3 w-56 space-y-1">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1 mb-2">Personalizar</p>
-                  {sortedWidgets.map((ww, i) => (
-                    <div key={ww.id} className="flex items-center gap-2 hover:bg-gray-50 rounded-lg px-2 py-1.5">
-                      <button onClick={() => toggleWidget(ww.id)} className="flex-shrink-0">
-                        {ww.visible ? <Eye size={13} className="text-gray-600" /> : <EyeOff size={13} className="text-gray-300" />}
-                      </button>
-                      <span className={cn('text-xs flex-1', ww.visible ? 'text-gray-700' : 'text-gray-400')}>{ww.label}</span>
-                      <div className="flex flex-col gap-0.5 flex-shrink-0">
-                        <button onClick={() => moveWidget(ww.id, -1)} disabled={i === 0} className="text-gray-400 hover:text-gray-600 disabled:opacity-20"><ChevronUp size={10} /></button>
-                        <button onClick={() => moveWidget(ww.id, 1)} disabled={i === sortedWidgets.length - 1} className="text-gray-400 hover:text-gray-600 disabled:opacity-20"><ChevronDown size={10} /></button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+          <div className="relative">
+            <button onClick={() => setShowWidgetCfg(v => !v)} className="text-[11px] text-gray-400 hover:text-gray-700 flex items-center gap-1.5 transition-colors">
+              <Settings2 size={11} /> Widgets
+            </button>
+            {widgetPanel}
           </div>
         </div>
-        {/* Right: year filter top-right + big numbers */}
+        {/* Right: year filter top-right + big numbers (when summary visible) */}
         <div className="flex-1 flex flex-col gap-5">
           <div className="flex justify-end">
             <YearFilter periodos={allPeriodos} selYear={selYear} onChange={setSelYear} />
           </div>
-          <div className="flex flex-wrap items-start justify-around gap-10">
-            <BigNum
-              title={selYear && hasYtdData ? 'Budget YTD' : 'Budget Total'}
-              value={abbrev(displayBudget)}
-              sub={selYear && hasYtdData ? ytdLabelSub : undefined}
-            />
-            <BigNum
-              title={selYear && hasYtdData ? 'Realizado YTD' : 'Realizado Total'}
-              value={abbrev(displayRazao)}
-              sub={selYear && hasYtdData ? ytdLabelSub : undefined}
-            />
-            <BigNum
-              title="Variação"
-              value={abbrev(variacao)}
-              sub={formatPct(variacaoPct)}
-              color={variacao >= 0 ? 'text-emerald-600' : 'text-red-500'}
-            />
-          </div>
+          {isWidgetVisible('summary') && (
+            <div className="flex flex-wrap items-start justify-around gap-10">
+              <BigNum
+                title={selYear && hasYtdData ? 'Budget YTD' : 'Budget Total'}
+                value={abbrev(displayBudget)}
+                sub={selYear && hasYtdData ? ytdLabelSub : undefined}
+              />
+              <BigNum
+                title={selYear && hasYtdData ? 'Realizado YTD' : 'Realizado Total'}
+                value={abbrev(displayRazao)}
+                sub={selYear && hasYtdData ? ytdLabelSub : undefined}
+              />
+              <BigNum
+                title="Variação"
+                value={abbrev(variacao)}
+                sub={formatPct(variacaoPct)}
+                color={variacao >= 0 ? 'text-emerald-600' : 'text-red-500'}
+              />
+            </div>
+          )}
         </div>
       </div>
 
-        )
+      {/* Remaining widgets in custom order (summary handled above) */}
+      {sortedWidgets.filter(w => w.visible && w.id !== 'summary').map(w => {
         if (w.id === 'charts') return (
-      <div key="charts"><DashboardCharts periodChartData={periodChartData} deptVariance={deptVariance} /></div>
-
+          <div key="charts"><DashboardCharts periodChartData={periodChartData} deptVariance={deptVariance} /></div>
+        )
+        if (w.id === 'exec') return (
+          <div key="exec"><ExecCharts selPeriodos={selPeriodos} allDepts={allDepts} /></div>
         )
         if (w.id === 'dept-table') return (
-      <Card key="dept-table">
-        <CardHeader><CardTitle>Resumo por Departamento</CardTitle></CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b bg-gray-50">
-                <th className="text-left px-3 md:px-5 py-2.5 font-medium text-gray-500">Departamento</th>
-                <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500">Budget</th>
-                <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500">Razão</th>
-                <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500">Variação</th>
-                <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500">%</th>
-              </tr></thead>
-              <tbody>
-                {Object.entries(byDept).map(([label, vals], i) => {
-                  const variacao = vals.razao - vals.budget
-                  const pct     = safePct(variacao, vals.budget)
-                  return (
-                    <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                      <td className="px-3 md:px-5 py-2.5 font-medium text-gray-900">
-                        {label}
-                        {vals.codigo && vals.codigo !== label && (
-                          <span className="ml-2 text-xs text-gray-400 font-normal">{vals.codigo}</span>
-                        )}
-                      </td>
-                      <td className="px-3 md:px-5 py-2.5 text-right text-gray-600">{formatCurrency(vals.budget)}</td>
-                      <td className="px-3 md:px-5 py-2.5 text-right text-gray-600">{formatCurrency(vals.razao)}</td>
-                      <td className={cn('px-3 md:px-5 py-2.5 text-right font-semibold', variacao >= 0 ? 'text-emerald-600' : 'text-red-500')}>{formatCurrency(variacao)}</td>
-                      <td className="px-3 md:px-5 py-2.5 text-right">
-                        <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', variacao >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600')}>
-                          {formatPct(pct)}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+          <Card key="dept-table">
+            <CardHeader><CardTitle>Resumo por Departamento</CardTitle></CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b bg-gray-50">
+                    <th className="text-left px-3 md:px-5 py-2.5 font-medium text-gray-500">Departamento</th>
+                    <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500">Budget</th>
+                    <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500">Razão</th>
+                    <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500">Variação</th>
+                    <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500">%</th>
+                  </tr></thead>
+                  <tbody>
+                    {Object.entries(byDept).map(([label, vals], i) => {
+                      const variacao = vals.razao - vals.budget
+                      const pct     = safePct(variacao, vals.budget)
+                      return (
+                        <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                          <td className="px-3 md:px-5 py-2.5 font-medium text-gray-900">
+                            {label}
+                            {vals.codigo && vals.codigo !== label && (
+                              <span className="ml-2 text-xs text-gray-400 font-normal">{vals.codigo}</span>
+                            )}
+                          </td>
+                          <td className="px-3 md:px-5 py-2.5 text-right text-gray-600">{formatCurrency(vals.budget)}</td>
+                          <td className="px-3 md:px-5 py-2.5 text-right text-gray-600">{formatCurrency(vals.razao)}</td>
+                          <td className={cn('px-3 md:px-5 py-2.5 text-right font-semibold', variacao >= 0 ? 'text-emerald-600' : 'text-red-500')}>{formatCurrency(variacao)}</td>
+                          <td className="px-3 md:px-5 py-2.5 text-right">
+                            <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', variacao >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600')}>
+                              {formatPct(pct)}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
         )
         return null
       })}
-
-      <ExecCharts selPeriodos={selPeriodos} allDepts={allDepts} />
     </div>
   )
 }

@@ -79,10 +79,10 @@ function DeptMiniChart({
       </div>
     )
   }
-  const h = Math.max(data.length * 40 + 16, 100)
+  const h = Math.max(data.length * 36 + 16, 100)
   return (
     <ResponsiveContainer width="100%" height={h}>
-      <BarChart data={data} layout="vertical" margin={{ top: 0, right: 64, left: 0, bottom: 0 }}>
+      <BarChart data={data} layout="vertical" margin={{ top: 0, right: 44, left: 0, bottom: 0 }}>
         <CartesianGrid horizontal={false} stroke={C.grid} />
         <XAxis
           type="number"
@@ -92,15 +92,15 @@ function DeptMiniChart({
           axisLine={false} tickLine={false}
         />
         <YAxis
-          type="category" dataKey="dept" width={124}
-          tick={{ fontSize: 10, fill: '#475569' }} axisLine={false} tickLine={false}
-          tickFormatter={(v: string) => v.length > 18 ? v.slice(0, 17) + '…' : v}
+          type="category" dataKey="dept" width={84}
+          tick={{ fontSize: 9, fill: '#475569' }} axisLine={false} tickLine={false}
+          tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 11) + '…' : v}
         />
         <Tooltip content={<DeptTooltip />} cursor={{ fill: '#f8fafc' }} />
         <Bar
           dataKey="variacao" name="Variação"
           radius={color === C.pos ? [0, 3, 3, 0] : [3, 0, 0, 3]}
-          maxBarSize={18}
+          maxBarSize={16}
           label={{ formatter: (v: number) => tickFmt(v), fontSize: 9, fill: '#64748b', position: 'right' }}
         >
           {data.map((_, i) => (
@@ -127,9 +127,9 @@ export default function DashboardCharts({ periodChartData, deptVariance }: {
     .slice(0, TOP_N)
 
   return (
-    <div className="flex gap-4 items-stretch">
-      {/* Budget vs Realizado — 60% width */}
-      <div className="w-[60%] flex-shrink-0">
+    <div className="flex gap-3 items-stretch">
+      {/* Budget vs Realizado — 50% */}
+      <div className="w-1/2 flex-shrink-0">
         <Card className="overflow-hidden h-full">
           <CardHeader className="pb-1 border-b border-gray-100">
             <CardTitle className="text-sm font-semibold text-gray-700">Budget vs Realizado por Período</CardTitle>
@@ -137,28 +137,28 @@ export default function DashboardCharts({ periodChartData, deptVariance }: {
           </CardHeader>
           <CardContent className="pt-4 pb-2">
             <ResponsiveContainer width="100%" height={260}>
-              <ComposedChart data={periodChartData} margin={{ top: 8, right: 12, left: -4, bottom: 0 }} barGap={2}>
+              <ComposedChart data={periodChartData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }} barGap={2}>
                 <CartesianGrid vertical={false} stroke={C.grid} />
-                <XAxis dataKey="periodo" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <YAxis yAxisId="bars" tickFormatter={tickFmt} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={44} />
-                <YAxis yAxisId="line" orientation="right" tickFormatter={tickFmt} tick={{ fontSize: 10, fill: '#d97706' }} axisLine={false} tickLine={false} width={44} />
+                <XAxis dataKey="periodo" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                <YAxis yAxisId="bars" tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={40} />
+                <YAxis yAxisId="line" orientation="right" tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#d97706' }} axisLine={false} tickLine={false} width={40} />
                 <Tooltip content={<PeriodTooltip />} cursor={{ fill: '#f8fafc' }} />
-                <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 11, paddingTop: 10, color: '#64748b' }} />
-                <Bar yAxisId="bars" dataKey="budget" name="Budget"    fill={C.budget} radius={[3,3,0,0]} maxBarSize={26} />
-                <Bar yAxisId="bars" dataKey="razao"  name="Realizado" fill={C.razao}  radius={[3,3,0,0]} maxBarSize={26} />
+                <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 10, paddingTop: 8, color: '#64748b' }} />
+                <Bar yAxisId="bars" dataKey="budget" name="Budget"    fill={C.budget} radius={[3,3,0,0]} maxBarSize={22} />
+                <Bar yAxisId="bars" dataKey="razao"  name="Realizado" fill={C.razao}  radius={[3,3,0,0]} maxBarSize={22} />
                 <Line yAxisId="line" type="monotone" dataKey="variacaoYtd" name="Variação YTD"
                   stroke={C.line} strokeWidth={2}
-                  dot={{ r: 3, fill: C.line, stroke: '#fff', strokeWidth: 1.5 }}
-                  activeDot={{ r: 5, stroke: '#fff', strokeWidth: 2 }} />
+                  dot={{ r: 2.5, fill: C.line, stroke: '#fff', strokeWidth: 1.5 }}
+                  activeDot={{ r: 4, stroke: '#fff', strokeWidth: 2 }} />
               </ComposedChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
 
-      {/* Dept variance — two charts stacked in remaining 40% */}
-      <div className="flex-1 flex flex-col gap-4">
-        <Card className="overflow-hidden flex-1">
+      {/* Top Variação Positiva — 25% */}
+      <div className="flex-1">
+        <Card className="overflow-hidden h-full">
           <CardHeader className="pb-1 border-b border-gray-100">
             <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block flex-shrink-0" />
@@ -173,8 +173,11 @@ export default function DashboardCharts({ periodChartData, deptVariance }: {
             <DeptMiniChart data={positives} color={C.pos} xDomain={[0, 'auto']} />
           </CardContent>
         </Card>
+      </div>
 
-        <Card className="overflow-hidden flex-1">
+      {/* Top Variação Negativa — 25% */}
+      <div className="flex-1">
+        <Card className="overflow-hidden h-full">
           <CardHeader className="pb-1 border-b border-gray-100">
             <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-red-500 inline-block flex-shrink-0" />
