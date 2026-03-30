@@ -141,16 +141,17 @@ export default function CapexPage() {
   const totals = tableRows.reduce((a, r) => ({ budget: a.budget + r.budget, razao: a.razao + r.razao, variacao: a.variacao + r.variacao }), { budget: 0, razao: 0, variacao: 0 })
   const chartData = tableRows.slice(0, 15).map(r => ({ ...r, key: r.label }))
 
-  const exportCSV = () => {
+  const exportXLSX = async () => {
     const colLabel = groupBy === 'projeto' ? 'Projeto' : groupBy === 'departamento' ? 'Departamento' : groupBy === 'centro_custo' ? 'Projeto → Centro de Custo' : 'Período'
     const rows = [
       [colLabel, 'Budget', 'Razão', 'Variação', '%'],
       ...tableRows.map(r => [r.key, r.budget, r.razao, r.variacao, r.variacao_pct.toFixed(2)]),
     ]
-    const csv = rows.map(r => r.join(';')).join('\n')
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = url; a.download = 'capex-analise.csv'; a.click()
+    const XLSX = await import('xlsx')
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'CAPEX')
+    XLSX.writeFile(wb, 'capex-analise.xlsx')
   }
 
   return (
@@ -162,7 +163,7 @@ export default function CapexPage() {
         </div>
         <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
           <YearFilter periodos={periodos} selYear={selYear} onChange={y => setSelYear(y)} />
-          <Button variant="outline" size="sm" onClick={exportCSV}><Download size={13} /> CSV</Button>
+          <Button variant="outline" size="sm" onClick={exportXLSX}><Download size={13} /> Excel</Button>
         </div>
       </div>
 

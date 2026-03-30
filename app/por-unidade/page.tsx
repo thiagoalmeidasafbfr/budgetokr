@@ -256,17 +256,18 @@ export default function PorUnidadePage() {
   const visiblePeriods = selYear ? periodos.filter(p => p.startsWith(selYear)) : periodos
 
   // ── Export CSV ────────────────────────────────────────────────────────────
-  const exportCSV = () => {
+  const exportXLSX = async () => {
     const header = ['Unidade', 'DRE', 'Agrupamento', 'Conta', 'VLR Orçado', 'VLR Realizado', 'Variação', '%']
     const dataRows = allRows.map(r => {
       const variacao = r.razao - r.budget
       const pct      = safePct(variacao, r.budget)
       return [r.unidade, r.dre, r.agrupamento, r.nome_conta || r.conta, r.budget, r.razao, variacao, pct.toFixed(2)]
     })
-    const csv  = [header, ...dataRows].map(row => row.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')).join('\n')
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
-    const url  = URL.createObjectURL(blob)
-    const a    = document.createElement('a'); a.href = url; a.download = 'por-unidade.csv'; a.click()
+    const XLSX = await import('xlsx')
+    const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Por Unidade')
+    XLSX.writeFile(wb, 'por-unidade.xlsx')
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -285,8 +286,8 @@ export default function PorUnidadePage() {
           <Button variant="outline" size="sm" onClick={() => loadData(selUnidades, selPeriods)} disabled={loading}>
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Atualizar
           </Button>
-          <Button variant="outline" size="sm" onClick={exportCSV} disabled={allRows.length === 0}>
-            <Download size={13} /> Exportar CSV
+          <Button variant="outline" size="sm" onClick={exportXLSX} disabled={allRows.length === 0}>
+            <Download size={13} /> Exportar Excel
           </Button>
         </div>
       </div>

@@ -329,23 +329,23 @@ export default function UnidadesNegocioPage() {
     setExpanded(keys)
   }
 
-  const exportCSV = () => {
-    const rows: string[][] = [['Unidade', 'DRE', 'Agrupamento', 'Conta', 'Budget', 'Razão', 'Variação', '%']]
+  const exportXLSX = async () => {
+    const rows: (string | number)[][] = [['Unidade', 'DRE', 'Agrupamento', 'Conta', 'Budget', 'Razão', 'Variação', '%']]
     for (const un of tree) {
       for (const dre of un.dre_groups) {
         for (const ag of dre.agrupamentos) {
           for (const ct of ag.contas) {
             rows.push([un.unidade, dre.dre, ag.agrupamento, `${ct.numero} — ${ct.nome}`,
-              String(ct.budget), String(ct.razao), String(ct.variacao), ct.variacao_pct.toFixed(2)])
+              ct.budget, ct.razao, ct.variacao, ct.variacao_pct.toFixed(2)])
           }
         }
       }
     }
-    const csv  = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')).join('\n')
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
-    const url  = URL.createObjectURL(blob)
-    const a    = document.createElement('a')
-    a.href = url; a.download = `unidades-negocio-${Date.now()}.csv`; a.click()
+    const XLSX = await import('xlsx')
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Unidades de Negócio')
+    XLSX.writeFile(wb, `unidades-negocio-${Date.now()}.xlsx`)
   }
 
   // ── Value cell components ─────────────────────────────────────────────────
@@ -436,8 +436,8 @@ export default function UnidadesNegocioPage() {
           <Button variant="outline" size="sm" onClick={() => load(selUnidades, selPeriods)}>
             <RefreshCw size={13} /> Atualizar
           </Button>
-          <Button variant="outline" size="sm" onClick={exportCSV} disabled={tree.length === 0}>
-            <Download size={13} /> Exportar CSV
+          <Button variant="outline" size="sm" onClick={exportXLSX} disabled={tree.length === 0}>
+            <Download size={13} /> Exportar Excel
           </Button>
         </div>
       </div>

@@ -550,7 +550,7 @@ export default function DreGerencialPage() {
   const collapseAll = () => setExpanded(new Set())
 
   // ── Export CSV ──────────────────────────────────────────────────────────────
-  const exportCSV = () => {
+  const exportXLSX = async () => {
     const header = viewMode === 'total'
       ? ['Linha DRE', 'Budget', 'Razão', 'Variação', '%']
       : ['Linha DRE', ...dataPeriods.flatMap(p => [`Budget ${formatPeriodo(p)}`, `Razão ${formatPeriodo(p)}`])]
@@ -558,10 +558,11 @@ export default function DreGerencialPage() {
       if (viewMode === 'total') return ['  '.repeat(r.depth) + r.name, r.budget, r.razao, r.variacao, r.variacao_pct.toFixed(2)]
       return ['  '.repeat(r.depth) + r.name, ...dataPeriods.flatMap(p => [r.byPeriod[p]?.budget ?? 0, r.byPeriod[p]?.razao ?? 0])]
     })
-    const csv = [header, ...rows].map(r => r.join(';')).join('\n')
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = url; a.download = 'dre-gerencial.csv'; a.click()
+    const XLSX = await import('xlsx')
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'DRE Gerencial')
+    XLSX.writeFile(wb, 'dre-gerencial.xlsx')
   }
 
   // ── Save view ───────────────────────────────────────────────────────────────
@@ -659,7 +660,7 @@ export default function DreGerencialPage() {
         {/* Filters */}
         <div className="flex items-center gap-2">
           <YearFilter periodos={periodos} selYear={selYear} onChange={handleYearChange} />
-          <Button variant="outline" size="sm" onClick={exportCSV}><Download size={13} /> CSV</Button>
+          <Button variant="outline" size="sm" onClick={exportXLSX}><Download size={13} /> Excel</Button>
           <button
             onClick={() => setPanelOpen(v => !v)}
             className={cn(
