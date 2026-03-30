@@ -2,10 +2,16 @@
 // Used by app/dre/page.tsx and app/dept/page.tsx
 import { safePct } from '@/lib/utils'
 
+export type FormulaGerencial =
+  | { type: 'percent_of_line'; ref_nome: string; percent: number }
+  | { type: 'fixed'; value: number }
+
 export interface DRELinha {
-  id: number; ordem: number; nome: string; tipo: 'grupo' | 'subtotal'
+  id: number; ordem: number; nome: string
+  tipo: 'grupo' | 'subtotal' | 'calculada'
   sinal: number; formula_grupos: string; formula_sinais: string
   negrito: number; separador: number
+  formula_gerencial?: FormulaGerencial | null
 }
 
 export interface TreeNode {
@@ -15,6 +21,7 @@ export interface TreeNode {
   isSeparator?: boolean
   isBold?: boolean
   isAccount?: boolean
+  isCalculated?: boolean
   depth: number
   ordem: number
   budget: number
@@ -187,6 +194,7 @@ export function buildTreeFromLinhas(
 
   const result: TreeNode[] = []
   for (const linha of dreLinhas) {
+    if (linha.tipo === 'calculada') continue  // handled in the page layer
     if (linha.tipo === 'subtotal') {
       let subBudget = 0, subRazao = 0
       const subByPeriod: Record<string, { budget: number; razao: number }> = {}

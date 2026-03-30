@@ -1,13 +1,13 @@
 'use client'
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { ChevronRight, ChevronDown, Settings2, EyeOff, RotateCcw, Save, Trash2, X, Check, Filter, Download } from 'lucide-react'
+import { ChevronRight, ChevronDown, Settings2, EyeOff, RotateCcw, Save, Trash2, X, Check, Filter, Download, Plus, GripVertical, Calculator, Percent } from 'lucide-react'
 import { YearFilter } from '@/components/YearFilter'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForVariance, cn, safePct } from '@/lib/utils'
 import { buildTreeFromLinhas, flattenTree, toQuarterLabel, groupByQuarter, sortQuarterLabels } from '@/lib/dre-utils'
-import type { DRERow, DREAccountRow, DRELinha, TreeNode } from '@/lib/dre-utils'
+import type { DRERow, DREAccountRow, DRELinha, TreeNode, FormulaGerencial } from '@/lib/dre-utils'
 import dynamic from 'next/dynamic'
 
 const WaterfallChart = dynamic(() => import('@/components/DreWaterfallChart'), {
@@ -395,6 +395,21 @@ export default function DreGerencialPage() {
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string>('')
   const isFirstRef = useRef(true)
+  // ── Linhas Gerenciais (calculadas + drag & drop) ──────────────────────────────
+  const [showAddLineModal, setShowAddLineModal] = useState(false)
+  const [orderChanged,     setOrderChanged]     = useState(false)
+  const [savingOrder,      setSavingOrder]      = useState(false)
+  const [isMaster,         setIsMaster]         = useState(false)
+  // drag state (only for depth-0 rows)
+  const dragItemRef = useRef<string | null>(null)
+  const [dragOver,         setDragOver]         = useState<string | null>(null)
+  // ── Add Line Modal ───────────────────────────────────────────────────────────
+  const [newLineName,        setNewLineName]        = useState('')
+  const [newLineFormulaType, setNewLineFormulaType] = useState<'percent_of_line' | 'fixed'>('percent_of_line')
+  const [newLineRefNome,     setNewLineRefNome]     = useState('')
+  const [newLinePercent,     setNewLinePercent]     = useState('-5')
+  const [newLineValue,       setNewLineValue]       = useState('')
+  const [addingLine,         setAddingLine]         = useState(false)
 
   // ── Init ────────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -406,6 +421,7 @@ export default function DreGerencialPage() {
         const meDepts: string[] = me?.departments ?? (me?.department ? [me.department] : [])
         const isDept = me?.role === 'dept' && meDepts.length > 0
         if (isDept) setDeptUser({ department: meDepts[0], departments: meDepts })
+        setIsMaster(me?.role === 'master')
 
         const raw = localStorage.getItem(storageKey(userId))
         if (raw) setSavedViews(JSON.parse(raw))
@@ -495,11 +511,49 @@ export default function DreGerencialPage() {
     setExpandedYears(new Set([year]))
   }
 
-  // ── Tree com exclusões ──────────────────────────────────────────────────────
+  // ── Tree com exclusões + linhas calculadas ──────────────────────────────────
   const tree = useMemo((): TreeNode[] => {
     if (!rawData.length || !dreLinhas.length) return []
     const { rows, accounts } = applyExclusions(rawData, accountData, exclusions)
-    return buildTreeFromLinhas(rows, hierarchy, dreLinhas, accounts)
+    const baseTree = buildTreeFromLinhas(rows, hierarchy, dreLinhas, accounts)
+
+    const calculatedLinhas = dreLinhas.filter(l => l.tipo === 'calculada' && l.formula_gerencial)
+    if (!calculatedLinhas.length) return baseTree
+
+    const result = [...baseTree]
+    for (const linha of calculatedLinhas) {
+      const fg = linha.formula_gerencial!
+      let budget = 0, razao = 0
+      const byPeriod: Record<string, { budget: number; razao: number }> = {}
+
+      if (fg.type === 'percent_of_line') {
+        const refNode = baseTree.find(n => n.name === fg.ref_nome)
+        if (refNode) {
+          const pct = fg.percent / 100
+          budget = refNode.budget * pct
+          razao = refNode.razao * pct
+          for (const [p, v] of Object.entries(refNode.byPeriod)) {
+            byPeriod[p] = { budget: v.budget * pct, razao: v.razao * pct }
+          }
+        }
+      } else if (fg.type === 'fixed') {
+        budget = fg.value
+        razao = fg.value
+      }
+
+      const var_ = razao - budget
+      const node: TreeNode = {
+        name: linha.nome, isGroup: true, isBold: linha.negrito === 1,
+        isSeparator: false, isCalculated: true, depth: 0, ordem: linha.ordem,
+        budget, razao, variacao: var_,
+        variacao_pct: safePct(var_, budget),
+        children: [], byPeriod,
+      }
+      const insertIdx = result.findIndex(n => n.ordem > linha.ordem)
+      if (insertIdx === -1) result.push(node)
+      else result.splice(insertIdx, 0, node)
+    }
+    return result
   }, [rawData, accountData, hierarchy, dreLinhas, exclusions])
 
   // ── Dados derivados ──────────────────────────────────────────────────────────
@@ -608,6 +662,79 @@ export default function DreGerencialPage() {
 
   const exclusionCount = exclusions.size
 
+  // ── Drag & drop handlers ─────────────────────────────────────────────────────
+  function handleDragStart(nome: string) {
+    dragItemRef.current = nome
+  }
+
+  function handleDrop(targetNome: string) {
+    if (!dragItemRef.current || dragItemRef.current === targetNome) {
+      setDragOver(null); return
+    }
+    const from = dreLinhas.findIndex(l => l.nome === dragItemRef.current)
+    const to   = dreLinhas.findIndex(l => l.nome === targetNome)
+    if (from < 0 || to < 0) { setDragOver(null); return }
+    const next = [...dreLinhas]
+    const [item] = next.splice(from, 1)
+    next.splice(to, 0, item)
+    setDreLinhas(next.map((l, i) => ({ ...l, ordem: (i + 1) * 10 })))
+    setOrderChanged(true)
+    setDragOver(null)
+    dragItemRef.current = null
+  }
+
+  // ── Save order ───────────────────────────────────────────────────────────────
+  async function saveDreLinhaOrder() {
+    setSavingOrder(true)
+    try {
+      const updates = dreLinhas.map(l => ({ id: l.id, ordem: l.ordem }))
+      const r = await fetch('/api/dre/linhas', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      })
+      if (r.ok) setOrderChanged(false)
+    } catch { /* ignore */ } finally {
+      setSavingOrder(false)
+    }
+  }
+
+  // ── Add calculated line ──────────────────────────────────────────────────────
+  async function addCalculatedLine() {
+    if (!newLineName.trim()) return
+    setAddingLine(true)
+    try {
+      const formula_gerencial: FormulaGerencial = newLineFormulaType === 'percent_of_line'
+        ? { type: 'percent_of_line', ref_nome: newLineRefNome, percent: parseFloat(newLinePercent) || 0 }
+        : { type: 'fixed', value: parseFloat(newLineValue) || 0 }
+      const maxOrdem = dreLinhas.length ? Math.max(...dreLinhas.map(l => l.ordem)) : 0
+      const r = await fetch('/api/dre/linhas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: newLineName.trim(), formula_gerencial, ordem: maxOrdem + 10, negrito: true }),
+      })
+      if (r.ok) {
+        const newLinha = await r.json()
+        setDreLinhas(prev => [...prev, newLinha])
+        setShowAddLineModal(false)
+        setNewLineName('')
+        setNewLineRefNome('')
+        setNewLinePercent('-5')
+        setNewLineValue('')
+      }
+    } catch { /* ignore */ } finally {
+      setAddingLine(false)
+    }
+  }
+
+  // ── Delete calculated line ───────────────────────────────────────────────────
+  async function deleteCalculatedLine(id: number) {
+    try {
+      const r = await fetch(`/api/dre/linhas?id=${id}`, { method: 'DELETE' })
+      if (r.ok) setDreLinhas(prev => prev.filter(l => l.id !== id))
+    } catch { /* ignore */ }
+  }
+
   return (
     <div className="flex flex-col h-full min-h-screen bg-gray-50">
 
@@ -685,6 +812,20 @@ export default function DreGerencialPage() {
               title="Limpar exclusões"
             >
               <RotateCcw size={12} />
+            </button>
+          )}
+          {isMaster && orderChanged && (
+            <button onClick={saveDreLinhaOrder} disabled={savingOrder}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition-colors">
+              <Save size={12} />
+              {savingOrder ? 'Salvando...' : 'Salvar Ordem'}
+            </button>
+          )}
+          {isMaster && (
+            <button onClick={() => setShowAddLineModal(true)}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-dashed border-blue-300 text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition-colors">
+              <Plus size={12} />
+              Nova Linha
             </button>
           )}
         </div>
@@ -914,6 +1055,7 @@ export default function DreGerencialPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-gray-50">
+                      {isMaster && <th className="w-7 px-1" />}
                       <th className="text-left px-5 py-3 font-medium text-gray-500">Demonstrativo Gerencial</th>
                       <th className="text-right px-5 py-3 font-medium text-gray-500">Vlr. Orçado</th>
                       <th className="text-right px-5 py-3 font-medium text-gray-500">Vlr. Realizado</th>
@@ -922,16 +1064,47 @@ export default function DreGerencialPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {flatRows.map((row, i) => (
-                      <tr key={i} className={cn('border-b transition-colors', row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50')}>
+                    {flatRows.map((row, i) => {
+                      const calcLinha = row.isCalculated ? dreLinhas.find(l => l.nome === row.name && l.tipo === 'calculada') : null
+                      const isDragTarget = dragOver === row.name
+                      return (
+                      <tr key={i}
+                        draggable={isMaster && row.depth === 0}
+                        onDragStart={isMaster && row.depth === 0 ? () => handleDragStart(row.name) : undefined}
+                        onDragOver={isMaster && row.depth === 0 ? e => { e.preventDefault(); setDragOver(row.name) } : undefined}
+                        onDrop={isMaster && row.depth === 0 ? () => handleDrop(row.name) : undefined}
+                        onDragEnd={isMaster ? () => { setDragOver(null); dragItemRef.current = null } : undefined}
+                        className={cn(
+                          'border-b transition-colors',
+                          row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50',
+                          row.isCalculated && 'border-l-2 border-blue-400 bg-blue-50/30',
+                          isDragTarget && 'ring-2 ring-inset ring-blue-400 bg-blue-50',
+                        )}>
+                        {isMaster && (
+                          <td className="px-1 py-2 text-center w-7">
+                            {row.depth === 0 && (
+                              row.isCalculated && calcLinha ? (
+                                <button onClick={() => deleteCalculatedLine(calcLinha.id)}
+                                  className="text-gray-300 hover:text-red-400 transition-colors" title="Remover linha">
+                                  <Trash2 size={12} />
+                                </button>
+                              ) : (
+                                <span className="text-gray-300 cursor-grab active:cursor-grabbing">
+                                  <GripVertical size={13} />
+                                </span>
+                              )
+                            )}
+                          </td>
+                        )}
                         <td className={cn('px-5 py-2.5', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : row.isAccount ? 'text-gray-500 text-xs' : 'text-gray-700')}
                           style={{ paddingLeft: `${20 + row.depth * 24}px` }}>
                           <div className="flex items-center gap-1.5">
-                            {row.isGroup && !row.isSubtotal ? (
+                            {row.isGroup && !row.isSubtotal && !row.isCalculated ? (
                               <button onClick={() => toggleExpand(row.agrupamento || row.name)} className="p-0.5 hover:bg-gray-200 rounded">
                                 {expanded.has(row.agrupamento || row.name) ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
                               </button>
                             ) : <span className="w-5" />}
+                            {row.isCalculated && <Calculator size={12} className="text-blue-400 flex-shrink-0" />}
                             {row.name}
                           </div>
                         </td>
@@ -942,7 +1115,7 @@ export default function DreGerencialPage() {
                           <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(row.variacao))}>{formatPct(row.variacao_pct)}</span>
                         </td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                 </table>
               </div>
@@ -1239,6 +1412,79 @@ export default function DreGerencialPage() {
           )}
         </main>
       </div>
+
+      {/* Add Line Modal */}
+      {showAddLineModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setShowAddLineModal(false)}>
+          <div className="bg-white rounded-xl shadow-xl p-6 w-96" onClick={e => e.stopPropagation()}>
+            <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+              <Calculator size={15} className="text-blue-500" />
+              Nova Linha Gerencial
+            </h3>
+            <p className="text-xs text-gray-500 mb-4">Adiciona uma linha calculada visível apenas nesta DRE Gerencial.</p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-gray-700 block mb-1">Nome da linha</label>
+                <input type="text" value={newLineName} onChange={e => setNewLineName(e.target.value)}
+                  placeholder="Ex: TEF (Tributo Específico do Futebol)"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-700 block mb-1">Tipo de fórmula</label>
+                <div className="flex gap-2">
+                  <button onClick={() => setNewLineFormulaType('percent_of_line')}
+                    className={cn('flex-1 text-xs py-1.5 rounded-lg border transition-colors',
+                      newLineFormulaType === 'percent_of_line' ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-600 hover:border-gray-300')}>
+                    % de uma linha
+                  </button>
+                  <button onClick={() => setNewLineFormulaType('fixed')}
+                    className={cn('flex-1 text-xs py-1.5 rounded-lg border transition-colors',
+                      newLineFormulaType === 'fixed' ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-600 hover:border-gray-300')}>
+                    Valor fixo
+                  </button>
+                </div>
+              </div>
+              {newLineFormulaType === 'percent_of_line' && (
+                <>
+                  <div>
+                    <label className="text-xs font-medium text-gray-700 block mb-1">Linha de referência</label>
+                    <select value={newLineRefNome} onChange={e => setNewLineRefNome(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
+                      <option value="">Selecione...</option>
+                      {dreLinhas.filter(l => l.tipo !== 'calculada').map(l => (
+                        <option key={l.id} value={l.nome}>{l.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-700 block mb-1">Percentual (%)</label>
+                    <input type="number" value={newLinePercent} onChange={e => setNewLinePercent(e.target.value)}
+                      placeholder="-5"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                    <p className="text-[11px] text-gray-400 mt-0.5">Use negativo para deduções (ex: -5 para -5%)</p>
+                  </div>
+                </>
+              )}
+              {newLineFormulaType === 'fixed' && (
+                <div>
+                  <label className="text-xs font-medium text-gray-700 block mb-1">Valor (R$)</label>
+                  <input type="number" value={newLineValue} onChange={e => setNewLineValue(e.target.value)}
+                    placeholder="Ex: -1000000"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2 justify-end mt-5">
+              <button onClick={() => setShowAddLineModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>
+              <Button onClick={addCalculatedLine} disabled={!newLineName.trim() || addingLine}
+                className="bg-gray-900 text-white hover:bg-gray-700 text-sm px-4 py-2">
+                <Plus size={13} className="mr-1.5" />
+                {addingLine ? 'Adicionando...' : 'Adicionar'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Save Modal */}
       {showSaveModal && (
