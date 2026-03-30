@@ -448,13 +448,13 @@ function ExecChartCard({
                         <rect x={px} y={py} width={pw} height={ph} fill={cellFill} rx={3} ry={3} />
                         {showName && (
                           <text x={px + pw / 2} y={textY + 10} textAnchor="middle"
-                            fill="rgba(255,255,255,0.85)" fontSize={9} fontWeight={300} style={{ pointerEvents: 'none' }}>
+                            fill="rgba(255,255,255,0.9)" fontSize={9} fontWeight="normal" style={{ pointerEvents: 'none', fontFamily: 'inherit' }}>
                             {truncated}
                           </text>
                         )}
                         {showLabel && (
                           <text x={px + pw / 2} y={showName ? textY + 24 : textY + 10} textAnchor="middle"
-                            fill="#fff" fontSize={9} fontWeight={400} style={{ pointerEvents: 'none' }}>
+                            fill="rgba(255,255,255,0.75)" fontSize={9} fontWeight="normal" style={{ pointerEvents: 'none', fontFamily: 'inherit' }}>
                             {label}
                           </text>
                         )}
@@ -859,7 +859,6 @@ export default function ExecCharts({
       <div className="flex items-center justify-between mb-3">
         <div>
           <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Gráficos Executivos</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Top-N agrupamentos por grupo DRE · personalizado</p>
         </div>
         {canEdit && (
           <Button size="sm" variant="outline" onClick={() => { setEditing(null); setShowModal(true) }}>
