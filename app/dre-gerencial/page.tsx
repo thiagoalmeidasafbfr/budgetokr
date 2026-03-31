@@ -1166,8 +1166,6 @@ export default function DreGerencialPage() {
                       const isDragTarget = dragOver === row.name
                       return (
                       <tr key={i}
-                        draggable={row.depth === 0}
-                        onDragStart={row.depth === 0 ? () => handleDragStart(row.name) : undefined}
                         onDragOver={row.depth === 0 ? e => { e.preventDefault(); setDragOver(row.name) } : undefined}
                         onDrop={row.depth === 0 ? () => handleDrop(row.name) : undefined}
                         onDragEnd={() => { setDragOver(null); dragItemRef.current = null }}
@@ -1179,7 +1177,11 @@ export default function DreGerencialPage() {
                         )}>
                         <td className="px-1 py-2 text-center w-7">
                           {row.depth === 0 && (
-                            <span className="text-gray-300 cursor-grab active:cursor-grabbing">
+                            <span
+                              draggable
+                              onDragStart={() => handleDragStart(row.name)}
+                              className="text-gray-300 cursor-grab active:cursor-grabbing inline-flex"
+                            >
                               <GripVertical size={13} />
                             </span>
                           )}
