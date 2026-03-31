@@ -70,15 +70,16 @@ ALTER TABLE contas_contabeis ENABLE ROW LEVEL SECURITY;
 
 -- ─── Estrutura da DRE (linhas, subtotais, sinais) ────────────────────────────
 CREATE TABLE IF NOT EXISTS dre_linhas (
-  id             BIGSERIAL PRIMARY KEY,
-  ordem          INTEGER     NOT NULL DEFAULT 999,
-  nome           TEXT        NOT NULL UNIQUE,
-  tipo           TEXT        NOT NULL DEFAULT 'grupo',   -- 'grupo' | 'subtotal'
-  sinal          INTEGER     NOT NULL DEFAULT 1,
-  formula_grupos JSONB       DEFAULT '[]',
-  formula_sinais JSONB       DEFAULT '[]',
-  negrito        BOOLEAN     NOT NULL DEFAULT FALSE,
-  separador      BOOLEAN     NOT NULL DEFAULT FALSE
+  id                BIGSERIAL PRIMARY KEY,
+  ordem             INTEGER     NOT NULL DEFAULT 999,
+  nome              TEXT        NOT NULL UNIQUE,
+  tipo              TEXT        NOT NULL DEFAULT 'grupo',   -- 'grupo' | 'subtotal' | 'calculada'
+  sinal             INTEGER     NOT NULL DEFAULT 1,
+  formula_grupos    JSONB       DEFAULT '[]',
+  formula_sinais    JSONB       DEFAULT '[]',
+  negrito           BOOLEAN     NOT NULL DEFAULT FALSE,
+  separador         BOOLEAN     NOT NULL DEFAULT FALSE,
+  formula_gerencial JSONB       DEFAULT NULL               -- used when tipo = 'calculada'
 );
 ALTER TABLE dre_linhas ENABLE ROW LEVEL SECURITY;
 

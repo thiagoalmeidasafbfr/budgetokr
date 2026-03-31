@@ -32,8 +32,10 @@ interface SavedView {
   createdAt: string
 }
 
-const storageKey  = (userId: string) => `dre_gerencial_views_${userId}`
-const activeKey   = (userId: string) => `dre_gerencial_active_${userId}`
+const storageKey      = (userId: string) => `dre_gerencial_views_${userId}`
+const activeKey       = (userId: string) => `dre_gerencial_active_${userId}`
+const customLinhasKey = (userId: string) => `dre_gerencial_custom_linhas_${userId}`
+const customOrderKey  = (userId: string) => `dre_gerencial_linha_ordem_${userId}`
 
 // ─── Helper: apply exclusions to raw data ─────────────────────────────────────
 
@@ -434,7 +436,27 @@ export default function DreGerencialPage() {
           fetch('/api/dre?type=distinct&col=nome_departamento').then(r => r.json()),
           fetch('/api/dre?type=distinct&col=data_lancamento').then(r => r.json()),
         ])
-        setDreLinhas(Array.isArray(linhas) ? linhas : [])
+        const dbLinhas: DRELinha[] = Array.isArray(linhas) ? linhas : []
+        // Merge DB lines with user-specific custom lines from localStorage
+        let savedCustom: DRELinha[] = []
+        try {
+          const raw = localStorage.getItem(customLinhasKey(userId))
+          if (raw) savedCustom = JSON.parse(raw)
+        } catch { /* ignore */ }
+        const dbIds = new Set(dbLinhas.map(l => l.id))
+        const userLinhas = savedCustom.filter(l => (l.id ?? 0) < 0 && !dbIds.has(l.id))
+        let allLinhas: DRELinha[] = [...dbLinhas, ...userLinhas]
+        // Apply user's custom ordering if saved
+        try {
+          const orderRaw = localStorage.getItem(customOrderKey(userId))
+          if (orderRaw) {
+            const orderMap = new Map<number, number>(
+              (JSON.parse(orderRaw) as Array<{ id: number; ordem: number }>).map(({ id, ordem }) => [id, ordem])
+            )
+            allLinhas = allLinhas.map(l => orderMap.has(l.id) ? { ...l, ordem: orderMap.get(l.id)! } : l)
+          }
+        } catch { /* ignore */ }
+        setDreLinhas(allLinhas.sort((a, b) => a.ordem - b.ordem))
         setHierarchy(Array.isArray(hier) ? hier : [])
         setDepartamentos(Array.isArray(depts) ? depts : [])
         const allPeriods = ([...new Set(
@@ -520,6 +542,10 @@ export default function DreGerencialPage() {
     const calculatedLinhas = dreLinhas.filter(l => l.tipo === 'calculada' && l.formula_gerencial)
     if (!calculatedLinhas.length) return baseTree
 
+    // Build nodeMap from baseTree so formulas can reference any already-computed node
+    const nodeMap = new Map<string, TreeNode>()
+    for (const node of baseTree) nodeMap.set(node.name, node)
+
     const result = [...baseTree]
     for (const linha of calculatedLinhas) {
       const fg = linha.formula_gerencial!
@@ -527,7 +553,8 @@ export default function DreGerencialPage() {
       const byPeriod: Record<string, { budget: number; razao: number }> = {}
 
       if (fg.type === 'percent_of_line') {
-        const refNode = baseTree.find(n => n.name === fg.ref_nome)
+        // Use nodeMap so a formula can reference a previously inserted calculated line
+        const refNode = nodeMap.get(fg.ref_nome)
         if (refNode) {
           const pct = fg.percent / 100
           budget = refNode.budget * pct
@@ -549,10 +576,60 @@ export default function DreGerencialPage() {
         variacao_pct: safePct(var_, budget),
         children: [], byPeriod,
       }
+      nodeMap.set(linha.nome, node)
       const insertIdx = result.findIndex(n => n.ordem > linha.ordem)
       if (insertIdx === -1) result.push(node)
       else result.splice(insertIdx, 0, node)
     }
+
+    // Recompute subtotals so they include any calculated lines inserted above them.
+    // The baseTree subtotals only summed 'grupo' lines; now we also add 'calculada' lines.
+    const subtotalLinhas = dreLinhas.filter(l => l.tipo === 'subtotal')
+    if (subtotalLinhas.length > 0) {
+      for (let i = 0; i < result.length; i++) {
+        const subtotalLinha = subtotalLinhas.find(l => l.nome === result[i].name)
+        if (!subtotalLinha) continue
+
+        // Check if any calculada line sits above this subtotal — skip expensive recompute otherwise
+        const hasCalcAbove = calculatedLinhas.some(l => l.ordem < subtotalLinha.ordem)
+        if (!hasCalcAbove) continue
+
+        let subBudget = 0, subRazao = 0
+        const subByPeriod: Record<string, { budget: number; razao: number }> = {}
+
+        for (const prevLinha of dreLinhas) {
+          if (prevLinha.tipo === 'subtotal') continue
+          if (prevLinha.ordem >= subtotalLinha.ordem) continue
+          const prevNode = nodeMap.get(prevLinha.nome)
+          if (!prevNode) continue
+          subBudget += prevNode.budget
+          subRazao  += prevNode.razao
+          for (const [p, v] of Object.entries(prevNode.byPeriod)) {
+            if (!subByPeriod[p]) subByPeriod[p] = { budget: 0, razao: 0 }
+            subByPeriod[p].budget += v.budget
+            subByPeriod[p].razao  += v.razao
+          }
+        }
+
+        subBudget *= subtotalLinha.sinal
+        subRazao  *= subtotalLinha.sinal
+        for (const p of Object.keys(subByPeriod)) {
+          subByPeriod[p].budget *= subtotalLinha.sinal
+          subByPeriod[p].razao  *= subtotalLinha.sinal
+        }
+
+        const var_ = subRazao - subBudget
+        const updated: TreeNode = {
+          ...result[i],
+          budget: subBudget, razao: subRazao, variacao: var_,
+          variacao_pct: safePct(var_, subBudget),
+          byPeriod: subByPeriod,
+        }
+        result[i] = updated
+        nodeMap.set(subtotalLinha.nome, updated)
+      }
+    }
+
     return result
   }, [rawData, accountData, hierarchy, dreLinhas, exclusions])
 
@@ -662,6 +739,14 @@ export default function DreGerencialPage() {
 
   const exclusionCount = exclusions.size
 
+  // ── Custom linhas storage helper ─────────────────────────────────────────────
+  function saveCustomLinhasToStorage(linhas: DRELinha[]) {
+    const custom = linhas.filter(l => (l.id ?? 0) < 0)
+    try {
+      localStorage.setItem(customLinhasKey(currentUserId), JSON.stringify(custom))
+    } catch { /* ignore */ }
+  }
+
   // ── Drag & drop handlers ─────────────────────────────────────────────────────
   function handleDragStart(nome: string) {
     dragItemRef.current = nome
@@ -687,13 +772,12 @@ export default function DreGerencialPage() {
   async function saveDreLinhaOrder() {
     setSavingOrder(true)
     try {
-      const updates = dreLinhas.map(l => ({ id: l.id, ordem: l.ordem }))
-      const r = await fetch('/api/dre/linhas', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ updates }),
-      })
-      if (r.ok) setOrderChanged(false)
+      // Persist ordering per-user in localStorage
+      const orderData = dreLinhas.map(l => ({ id: l.id, ordem: l.ordem }))
+      localStorage.setItem(customOrderKey(currentUserId), JSON.stringify(orderData))
+      // Also persist custom lines' new ordem
+      saveCustomLinhasToStorage(dreLinhas)
+      setOrderChanged(false)
     } catch { /* ignore */ } finally {
       setSavingOrder(false)
     }
@@ -708,31 +792,46 @@ export default function DreGerencialPage() {
         ? { type: 'percent_of_line', ref_nome: newLineRefNome, percent: parseFloat(newLinePercent) || 0 }
         : { type: 'fixed', value: parseFloat(newLineValue) || 0 }
       const maxOrdem = dreLinhas.length ? Math.max(...dreLinhas.map(l => l.ordem)) : 0
-      const r = await fetch('/api/dre/linhas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: newLineName.trim(), formula_gerencial, ordem: maxOrdem + 10, negrito: true }),
-      })
-      if (r.ok) {
-        const newLinha = await r.json()
-        setDreLinhas(prev => [...prev, newLinha])
-        setShowAddLineModal(false)
-        setNewLineName('')
-        setNewLineRefNome('')
-        setNewLinePercent('-5')
-        setNewLineValue('')
+      // Store as per-user local line (negative id = local only, never touches DB)
+      const newLinha: DRELinha = {
+        id: -(Date.now()),
+        nome: newLineName.trim(),
+        tipo: 'calculada',
+        sinal: 1,
+        formula_grupos: '[]',
+        formula_sinais: '[]',
+        negrito: 1,
+        separador: 0,
+        ordem: maxOrdem + 10,
+        formula_gerencial,
       }
-    } catch { /* ignore */ } finally {
+      const updated = [...dreLinhas, newLinha]
+      setDreLinhas(updated)
+      saveCustomLinhasToStorage(updated)
+      setShowAddLineModal(false)
+      setNewLineName('')
+      setNewLineRefNome('')
+      setNewLinePercent('-5')
+      setNewLineValue('')
+    } finally {
       setAddingLine(false)
     }
   }
 
   // ── Delete calculated line ───────────────────────────────────────────────────
   async function deleteCalculatedLine(id: number) {
-    try {
-      const r = await fetch(`/api/dre/linhas?id=${id}`, { method: 'DELETE' })
-      if (r.ok) setDreLinhas(prev => prev.filter(l => l.id !== id))
-    } catch { /* ignore */ }
+    if (id < 0) {
+      // Local-only line: remove from state and localStorage
+      const updated = dreLinhas.filter(l => l.id !== id)
+      setDreLinhas(updated)
+      saveCustomLinhasToStorage(updated)
+    } else {
+      // DB-saved line: call API (requires master on backend)
+      try {
+        const r = await fetch(`/api/dre/linhas?id=${id}`, { method: 'DELETE' })
+        if (r.ok) setDreLinhas(prev => prev.filter(l => l.id !== id))
+      } catch { /* ignore */ }
+    }
   }
 
   return (
@@ -814,20 +913,18 @@ export default function DreGerencialPage() {
               <RotateCcw size={12} />
             </button>
           )}
-          {isMaster && orderChanged && (
+          {orderChanged && (
             <button onClick={saveDreLinhaOrder} disabled={savingOrder}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition-colors">
               <Save size={12} />
               {savingOrder ? 'Salvando...' : 'Salvar Ordem'}
             </button>
           )}
-          {isMaster && (
-            <button onClick={() => setShowAddLineModal(true)}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-dashed border-blue-300 text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition-colors">
-              <Plus size={12} />
-              Nova Linha
-            </button>
-          )}
+          <button onClick={() => setShowAddLineModal(true)}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-dashed border-blue-300 text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition-colors">
+            <Plus size={12} />
+            Nova Linha
+          </button>
         </div>
       </div>
 
@@ -1055,7 +1152,7 @@ export default function DreGerencialPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-gray-50">
-                      {isMaster && <th className="w-7 px-1" />}
+                      <th className="w-7 px-1" />
                       <th className="text-left px-5 py-3 font-medium text-gray-500">Demonstrativo Gerencial</th>
                       <th className="text-right px-5 py-3 font-medium text-gray-500">Vlr. Orçado</th>
                       <th className="text-right px-5 py-3 font-medium text-gray-500">Vlr. Realizado</th>
@@ -1069,33 +1166,33 @@ export default function DreGerencialPage() {
                       const isDragTarget = dragOver === row.name
                       return (
                       <tr key={i}
-                        draggable={isMaster && row.depth === 0}
-                        onDragStart={isMaster && row.depth === 0 ? () => handleDragStart(row.name) : undefined}
-                        onDragOver={isMaster && row.depth === 0 ? e => { e.preventDefault(); setDragOver(row.name) } : undefined}
-                        onDrop={isMaster && row.depth === 0 ? () => handleDrop(row.name) : undefined}
-                        onDragEnd={isMaster ? () => { setDragOver(null); dragItemRef.current = null } : undefined}
+                        draggable={row.depth === 0}
+                        onDragStart={row.depth === 0 ? () => handleDragStart(row.name) : undefined}
+                        onDragOver={row.depth === 0 ? e => { e.preventDefault(); setDragOver(row.name) } : undefined}
+                        onDrop={row.depth === 0 ? () => handleDrop(row.name) : undefined}
+                        onDragEnd={() => { setDragOver(null); dragItemRef.current = null }}
                         className={cn(
                           'border-b transition-colors',
                           row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50',
                           row.isCalculated && 'border-l-2 border-blue-400 bg-blue-50/30',
                           isDragTarget && 'ring-2 ring-inset ring-blue-400 bg-blue-50',
                         )}>
-                        {isMaster && (
-                          <td className="px-1 py-2 text-center w-7">
-                            {row.depth === 0 && (
-                              row.isCalculated && calcLinha ? (
+                        <td className="px-1 py-2 text-center w-7">
+                          {row.depth === 0 && (
+                            row.isCalculated && calcLinha ? (
+                              ((calcLinha.id ?? 0) < 0 || isMaster) && (
                                 <button onClick={() => deleteCalculatedLine(calcLinha.id)}
                                   className="text-gray-300 hover:text-red-400 transition-colors" title="Remover linha">
                                   <Trash2 size={12} />
                                 </button>
-                              ) : (
-                                <span className="text-gray-300 cursor-grab active:cursor-grabbing">
-                                  <GripVertical size={13} />
-                                </span>
                               )
-                            )}
-                          </td>
-                        )}
+                            ) : (
+                              <span className="text-gray-300 cursor-grab active:cursor-grabbing">
+                                <GripVertical size={13} />
+                              </span>
+                            )
+                          )}
+                        </td>
                         <td className={cn('px-5 py-2.5', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : row.isAccount ? 'text-gray-500 text-xs' : 'text-gray-700')}
                           style={{ paddingLeft: `${20 + row.depth * 24}px` }}>
                           <div className="flex items-center gap-1.5">
