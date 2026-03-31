@@ -1179,18 +1179,9 @@ export default function DreGerencialPage() {
                         )}>
                         <td className="px-1 py-2 text-center w-7">
                           {row.depth === 0 && (
-                            row.isCalculated && calcLinha ? (
-                              ((calcLinha.id ?? 0) < 0 || isMaster) && (
-                                <button onClick={() => deleteCalculatedLine(calcLinha.id)}
-                                  className="text-gray-300 hover:text-red-400 transition-colors" title="Remover linha">
-                                  <Trash2 size={12} />
-                                </button>
-                              )
-                            ) : (
-                              <span className="text-gray-300 cursor-grab active:cursor-grabbing">
-                                <GripVertical size={13} />
-                              </span>
-                            )
+                            <span className="text-gray-300 cursor-grab active:cursor-grabbing">
+                              <GripVertical size={13} />
+                            </span>
                           )}
                         </td>
                         <td className={cn('px-5 py-2.5', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : row.isAccount ? 'text-gray-500 text-xs' : 'text-gray-700')}
@@ -1203,6 +1194,12 @@ export default function DreGerencialPage() {
                             ) : <span className="w-5" />}
                             {row.isCalculated && <Calculator size={12} className="text-blue-400 flex-shrink-0" />}
                             {row.name}
+                            {row.isCalculated && calcLinha && ((calcLinha.id ?? 0) < 0 || isMaster) && (
+                              <button onClick={e => { e.stopPropagation(); deleteCalculatedLine(calcLinha.id) }}
+                                className="ml-auto text-gray-300 hover:text-red-400 transition-colors flex-shrink-0" title="Remover linha">
+                                <Trash2 size={11} />
+                              </button>
+                            )}
                           </div>
                         </td>
                         <td className={cn('px-5 py-2.5 text-right', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-600')}>{formatCurrency(row.budget)}</td>
