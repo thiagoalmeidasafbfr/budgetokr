@@ -1,104 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@700&family=Big+Shoulders+Display:wght@900&family=IBM+Plex+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-void: #0C0B0F;
+  --color-ink: #1A1820;
+  --color-surface: #FFFFFF;
+  --color-base: #F7F6F2;
+  --color-base-2: #EFEDE8;
+  --color-border: #E4DFD5;
+  --color-muted: #7C7670;
+  --color-faint: #B2ACA4;
+  --color-gold: #B8924A;
+  --color-gold-bright: #D4A95C;
+  --color-gold-bg: #FBF7EE;
+  --color-gold-border: #E2C98A;
+  --color-gold-deep: #6B4E18;
+  --color-danger: #B91C1C;
+  --color-warn: #B45309;
+  --color-ok: #166534;
+
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-heading: 'Big Shoulders Display', Impact, sans-serif;
+  --font-mono: 'IBM Plex Mono', Menlo, monospace;
+}
+
+:root {
+  --void: #0C0B0F;
+  --ink: #1A1820;
+  --surface: #FFFFFF;
+  --base: #F7F6F2;
+  --base-2: #EFEDE8;
+  --border: #E4DFD5;
+  --muted: #7C7670;
+  --faint: #B2ACA4;
+  --gold: #B8924A;
+  --gold-bright: #D4A95C;
+  --gold-bg: #FBF7EE;
+  --gold-border: #E2C98A;
+  --gold-deep: #6B4E18;
+  --danger: #B91C1C;
+  --warn: #B45309;
+  --ok: #166534;
+}
 
 * {
   box-sizing: border-box;
 }
 
 body {
-  font-family: Inter, system-ui, sans-serif;
-}
-
-/* ── Dark mode base ──────────────────────────────────────────────────────── */
-.dark {
-  color-scheme: dark;
-}
-.dark body,
-:where(.dark) body {
-  background-color: #0f172a;
-  color: #e2e8f0;
+  /* font handled by Tailwind via font-sans */
 }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
-.dark ::-webkit-scrollbar-thumb { background: #475569; }
-.dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
-
-/* ─── Dark Mode — Global color remapping ─────────────────────────────────── */
-/* Backgrounds */
-.dark .bg-white         { background-color: #1e293b !important; }
-.dark .bg-gray-50       { background-color: #0f172a !important; }
-.dark .bg-gray-50\/60   { background-color: rgba(15, 23, 42, 0.6) !important; }
-.dark .bg-gray-50\/80   { background-color: rgba(15, 23, 42, 0.8) !important; }
-.dark .bg-gray-100      { background-color: #1e293b !important; }
-.dark .bg-gray-100\/80  { background-color: rgba(30, 41, 59, 0.8) !important; }
-.dark .bg-gray-200      { background-color: #334155 !important; }
-
-/* Text */
-.dark .text-gray-900    { color: #f1f5f9 !important; }
-.dark .text-gray-800    { color: #e2e8f0 !important; }
-.dark .text-gray-700    { color: #cbd5e1 !important; }
-.dark .text-gray-600    { color: #94a3b8 !important; }
-.dark .text-gray-500    { color: #94a3b8 !important; }
-.dark .text-gray-400    { color: #64748b !important; }
-
-/* Borders */
-.dark .border-gray-50   { border-color: #1e293b !important; }
-.dark .border-gray-100  { border-color: #334155 !important; }
-.dark .border-gray-200  { border-color: #475569 !important; }
-.dark .border-gray-300  { border-color: #475569 !important; }
-
-/* Hover */
-.dark .hover\:bg-gray-50:hover       { background-color: #334155 !important; }
-.dark .hover\:bg-gray-100:hover      { background-color: #334155 !important; }
-.dark .hover\:bg-gray-100\/80:hover  { background-color: rgba(30, 41, 59, 0.8) !important; }
-.dark .hover\:bg-gray-200:hover      { background-color: #475569 !important; }
-.dark .hover\:text-gray-800:hover { color: #e2e8f0 !important; }
-.dark .hover\:text-gray-900:hover { color: #f1f5f9 !important; }
-
-/* Colored backgrounds — translucent in dark */
-.dark .bg-indigo-50     { background-color: rgba(99, 102, 241, 0.15) !important; }
-.dark .bg-indigo-100    { background-color: rgba(99, 102, 241, 0.2) !important; }
-.dark .bg-emerald-50    { background-color: rgba(16, 185, 129, 0.15) !important; }
-.dark .bg-emerald-100   { background-color: rgba(16, 185, 129, 0.2) !important; }
-.dark .bg-red-50        { background-color: rgba(239, 68, 68, 0.15) !important; }
-.dark .bg-purple-50     { background-color: rgba(168, 85, 247, 0.15) !important; }
-.dark .bg-amber-50      { background-color: rgba(245, 158, 11, 0.15) !important; }
-.dark .bg-blue-50       { background-color: rgba(59, 130, 246, 0.15) !important; }
-
-/* Shadows */
-.dark .shadow-sm, .dark .shadow-md, .dark .shadow-lg,
-.dark .shadow-xl, .dark .shadow-2xl {
-  --tw-shadow-color: rgba(0, 0, 0, 0.5) !important;
-}
-
-/* Inputs / forms */
-.dark input, .dark select, .dark textarea {
-  background-color: #1e293b;
-  color: #e2e8f0;
-  border-color: #475569;
-}
-.dark input::placeholder, .dark textarea::placeholder { color: #64748b; }
-.dark input:focus, .dark select:focus, .dark textarea:focus { border-color: #6366f1; }
-
-/* Table */
-.dark thead.bg-gray-700 { background-color: #0f172a !important; }
-.dark tfoot.bg-gray-800 { background-color: #0f172a !important; }
-
-/* Pulse skeleton */
-.dark .animate-pulse { background-color: #334155 !important; }
-
-/* Dividers */
-.dark .divide-gray-100 > :not(:first-child) { border-color: #334155 !important; }
-.dark .divide-gray-200 > :not(:first-child) { border-color: #475569 !important; }
-
-/* Ring */
-.dark .ring-indigo-100 { --tw-ring-color: #312e81 !important; }
-.dark .ring-gray-100   { --tw-ring-color: #334155 !important; }
+::-webkit-scrollbar-thumb { background: #E4DFD5; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #B2ACA4; }
 
 /* ─── Mobile UX improvements ─────────────────────────────────────────────── */
 @media (max-width: 767px) {
@@ -119,8 +78,6 @@ body {
 /* ─── Print ──────────────────────────────────────────────────────────────── */
 @media print {
   .no-print { display: none !important; }
-  body, .dark body { background: white !important; color: black !important; }
-  .dark .bg-white { background-color: white !important; }
-  .dark .text-gray-900 { color: black !important; }
+  body { background: white !important; color: black !important; }
   .print-full { width: 100% !important; max-width: none !important; }
 }
