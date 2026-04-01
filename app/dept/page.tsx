@@ -965,11 +965,11 @@ function MedidaDisplayCard({ card, dept }: { card: MedidaCard; dept?: string }) 
           <div className="space-y-1">
             {/* Delta — main number */}
             {ytdBudget !== 0 ? (
-              <p className={cn('text-2xl font-bold', deltaGood ? 'text-emerald-600' : 'text-red-500')}>
+              <p className={cn('text-2xl font-bold', deltaGood ? 'text-emerald-600' : 'text-red-500')} style={{ fontFamily: 'var(--font-heading)', fontWeight: 900 }}>
                 {formatDelta(delta)}
               </p>
             ) : (
-              <p className="text-2xl font-bold text-gray-900">{formatVal(ytdRazao)}</p>
+              <p className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-heading)', fontWeight: 900 }}>{formatVal(ytdRazao)}</p>
             )}
 
             {/* Realizado and Budget — smaller row */}
@@ -1059,7 +1059,7 @@ function KpiCard({ kpi, valores, onEditValores, dept }: KpiCardProps) {
 
         {latest != null ? (
           <div>
-            <p className="text-2xl font-bold text-gray-900">{formatValue(latest.valor)}</p>
+            <p className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-heading)', fontWeight: 900 }}>{formatValue(latest.valor)}</p>
             {hasMeta && metaDiff !== null && (
               <p className={cn('text-xs font-medium', metaDiff >= 0 ? 'text-emerald-600' : 'text-red-500')}>
                 Meta: {formatValue(latest.meta!)}
