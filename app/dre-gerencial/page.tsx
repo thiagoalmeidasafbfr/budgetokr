@@ -1,6 +1,6 @@
 'use client'
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { ChevronRight, ChevronDown, Settings2, EyeOff, RotateCcw, Save, Trash2, X, Check, Filter, Download, Plus, GripVertical, Calculator, Percent } from 'lucide-react'
+import { ChevronRight, ChevronDown, Settings2, EyeOff, RotateCcw, Save, Trash2, X, Check, Filter, Download, Plus, GripVertical, Calculator, Percent, Pencil } from 'lucide-react'
 import { YearFilter } from '@/components/YearFilter'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -410,6 +410,7 @@ export default function DreGerencialPage() {
   const dragItemRef = useRef<string | null>(null)
   const [dragOver,         setDragOver]         = useState<string | null>(null)
   // ── Add Line Modal ───────────────────────────────────────────────────────────
+  const [editingLinhaId,       setEditingLinhaId]       = useState<number | null>(null)
   const [newLineName,          setNewLineName]          = useState('')
   const [newLineIsAnalise,     setNewLineIsAnalise]     = useState(false)
   const [newLineFormulaType,   setNewLineFormulaType]   = useState<'percent_of_line' | 'fixed' | 'divide_lines' | 'multiply_lines'>('percent_of_line')
@@ -886,7 +887,48 @@ export default function DreGerencialPage() {
     }
   }
 
-  // ── Add calculated line ──────────────────────────────────────────────────────
+  function resetLineModal() {
+    setEditingLinhaId(null)
+    setNewLineName('')
+    setNewLineIsAnalise(false)
+    setNewLineFormulaType('percent_of_line')
+    setNewLineRefNome('')
+    setNewLinePercent('-5')
+    setNewLineValue('')
+    setNewLineNumeradorNome('')
+    setNewLineDenomNome('')
+    setNewLineMultANome('')
+    setNewLineMultBNome('')
+  }
+
+  function openEditModal(linha: DRELinha) {
+    const fg = linha.formula_gerencial
+    setEditingLinhaId(linha.id)
+    setNewLineName(linha.nome)
+    setNewLineIsAnalise(linha.isAnalise ?? false)
+    if (!fg) {
+      setNewLineFormulaType('fixed')
+      setNewLineValue('0')
+    } else if (fg.type === 'percent_of_line') {
+      setNewLineFormulaType('percent_of_line')
+      setNewLineRefNome(fg.ref_nome)
+      setNewLinePercent(String(fg.percent))
+    } else if (fg.type === 'divide_lines') {
+      setNewLineFormulaType('divide_lines')
+      setNewLineNumeradorNome(fg.numerator_nome)
+      setNewLineDenomNome(fg.denominator_nome)
+    } else if (fg.type === 'multiply_lines') {
+      setNewLineFormulaType('multiply_lines')
+      setNewLineMultANome(fg.line_a_nome)
+      setNewLineMultBNome(fg.line_b_nome)
+    } else if (fg.type === 'fixed') {
+      setNewLineFormulaType('fixed')
+      setNewLineValue(String(fg.value))
+    }
+    setShowAddLineModal(true)
+  }
+
+  // ── Add / update calculated line ─────────────────────────────────────────────
   async function addCalculatedLine() {
     if (!newLineName.trim()) return
     setAddingLine(true)
@@ -901,34 +943,35 @@ export default function DreGerencialPage() {
       } else {
         formula_gerencial = { type: 'fixed', value: parseFloat(newLineValue) || 0 }
       }
-      const maxOrdem = dreLinhas.length ? Math.max(...dreLinhas.map(l => l.ordem)) : 0
-      const newLinha: DRELinha = {
-        id: -(Date.now()),
-        nome: newLineName.trim(),
-        tipo: 'calculada',
-        sinal: 1,
-        formula_grupos: '[]',
-        formula_sinais: '[]',
-        negrito: 1,
-        separador: 0,
-        ordem: maxOrdem + 10,
-        formula_gerencial,
-        isAnalise: newLineIsAnalise,
+
+      let updated: DRELinha[]
+      if (editingLinhaId !== null) {
+        // Update existing line — preserve id and ordem
+        updated = dreLinhas.map(l => l.id === editingLinhaId
+          ? { ...l, nome: newLineName.trim(), formula_gerencial, isAnalise: newLineIsAnalise }
+          : l)
+      } else {
+        const maxOrdem = dreLinhas.length ? Math.max(...dreLinhas.map(l => l.ordem)) : 0
+        const newLinha: DRELinha = {
+          id: -(Date.now()),
+          nome: newLineName.trim(),
+          tipo: 'calculada',
+          sinal: 1,
+          formula_grupos: '[]',
+          formula_sinais: '[]',
+          negrito: 1,
+          separador: 0,
+          ordem: maxOrdem + 10,
+          formula_gerencial,
+          isAnalise: newLineIsAnalise,
+        }
+        updated = [...dreLinhas, newLinha]
       }
-      const updated = [...dreLinhas, newLinha]
+
       setDreLinhas(updated)
       if (!activeView) saveCustomLinhasToStorage(updated)
       setShowAddLineModal(false)
-      setNewLineName('')
-      setNewLineIsAnalise(false)
-      setNewLineFormulaType('percent_of_line')
-      setNewLineRefNome('')
-      setNewLinePercent('-5')
-      setNewLineValue('')
-      setNewLineNumeradorNome('')
-      setNewLineDenomNome('')
-      setNewLineMultANome('')
-      setNewLineMultBNome('')
+      resetLineModal()
     } finally {
       setAddingLine(false)
     }
@@ -1317,10 +1360,16 @@ export default function DreGerencialPage() {
                             {row.isAnalise && <Calculator size={12} className="text-purple-400 flex-shrink-0" />}
                             <span className={row.isAnalise ? 'italic text-purple-900' : ''}>{row.name}</span>
                             {row.isCalculated && calcLinha && ((calcLinha.id ?? 0) < 0 || isMaster) && (
-                              <button onClick={e => { e.stopPropagation(); deleteCalculatedLine(calcLinha.id) }}
-                                className="ml-auto text-gray-300 hover:text-red-400 transition-colors flex-shrink-0" title="Remover linha">
-                                <Trash2 size={11} />
-                              </button>
+                              <span className="ml-auto flex items-center gap-1 flex-shrink-0">
+                                <button onClick={e => { e.stopPropagation(); openEditModal(calcLinha) }}
+                                  className="text-gray-300 hover:text-blue-400 transition-colors" title="Editar linha">
+                                  <Pencil size={11} />
+                                </button>
+                                <button onClick={e => { e.stopPropagation(); deleteCalculatedLine(calcLinha.id) }}
+                                  className="text-gray-300 hover:text-red-400 transition-colors" title="Remover linha">
+                                  <Trash2 size={11} />
+                                </button>
+                              </span>
                             )}
                           </div>
                         </td>
@@ -1631,11 +1680,11 @@ export default function DreGerencialPage() {
 
       {/* Add Line Modal */}
       {showAddLineModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setShowAddLineModal(false)}>
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => { setShowAddLineModal(false); resetLineModal() }}>
           <div className="bg-white rounded-xl shadow-xl p-6 w-96" onClick={e => e.stopPropagation()}>
             <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
-              <Calculator size={15} className="text-blue-500" />
-              Nova Linha Gerencial
+              {editingLinhaId !== null ? <Pencil size={15} className="text-blue-500" /> : <Calculator size={15} className="text-blue-500" />}
+              {editingLinhaId !== null ? 'Editar Linha Gerencial' : 'Nova Linha Gerencial'}
             </h3>
             <p className="text-xs text-gray-500 mb-4">Adiciona uma linha calculada visível apenas nesta DRE Gerencial.</p>
             <div className="space-y-3">
@@ -1751,11 +1800,11 @@ export default function DreGerencialPage() {
               )}
             </div>
             <div className="flex gap-2 justify-end mt-5">
-              <button onClick={() => setShowAddLineModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>
+              <button onClick={() => { setShowAddLineModal(false); resetLineModal() }} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>
               <Button onClick={addCalculatedLine} disabled={!newLineName.trim() || addingLine}
                 className="bg-gray-900 text-white hover:bg-gray-700 text-sm px-4 py-2">
-                <Plus size={13} className="mr-1.5" />
-                {addingLine ? 'Adicionando...' : 'Adicionar'}
+                {editingLinhaId !== null ? <Pencil size={13} className="mr-1.5" /> : <Plus size={13} className="mr-1.5" />}
+                {addingLine ? 'Salvando...' : editingLinhaId !== null ? 'Salvar' : 'Adicionar'}
               </Button>
             </div>
           </div>
