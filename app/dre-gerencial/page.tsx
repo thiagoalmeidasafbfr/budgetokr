@@ -1358,7 +1358,7 @@ export default function DreGerencialPage() {
                             ) : <span className="w-5" />}
                             {row.isCalculated && !row.isAnalise && <Calculator size={12} className="flex-shrink-0" style={{ color: '#B8924A' }} />}
                             {row.isAnalise && <Calculator size={12} className="flex-shrink-0" style={{ color: '#6B4E18' }} />}
-                            <span className={row.isAnalise ? 'italic' : '' : ''}>{row.name}</span>
+                            <span className={row.isAnalise ? 'italic text-[#6B4E18]' : ''}>{row.name}</span>
                             {row.isCalculated && calcLinha && ((calcLinha.id ?? 0) < 0 || isMaster) && (
                               <span className="ml-auto flex items-center gap-1 flex-shrink-0">
                                 <button onClick={e => { e.stopPropagation(); openEditModal(calcLinha) }}
