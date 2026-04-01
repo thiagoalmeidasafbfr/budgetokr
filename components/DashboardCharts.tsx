@@ -132,7 +132,7 @@ export default function DashboardCharts({ periodChartData, deptVariance }: {
       <div className="w-[40%] flex-shrink-0">
         <Card className="overflow-hidden h-full">
           <CardHeader className="pb-1 border-b border-gray-100">
-            <CardTitle className="text-sm font-semibold text-gray-700">Budget vs Realizado por Período</CardTitle>
+            <CardTitle className="font-heading text-base tracking-tight text-gray-800 uppercase">Budget vs Realizado por Período</CardTitle>
             <p className="text-xs text-gray-400 mt-0.5">Linha: variação acumulada YTD</p>
           </CardHeader>
           <CardContent className="pt-4 pb-2">
@@ -160,7 +160,7 @@ export default function DashboardCharts({ periodChartData, deptVariance }: {
       <div className="flex-1">
         <Card className="overflow-hidden h-full">
           <CardHeader className="pb-1 border-b border-gray-100">
-            <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <CardTitle className="font-heading text-base tracking-tight text-gray-800 uppercase flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block flex-shrink-0" />
               Top Variação Positiva
             </CardTitle>
@@ -179,7 +179,7 @@ export default function DashboardCharts({ periodChartData, deptVariance }: {
       <div className="flex-1">
         <Card className="overflow-hidden h-full">
           <CardHeader className="pb-1 border-b border-gray-100">
-            <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <CardTitle className="font-heading text-base tracking-tight text-gray-800 uppercase flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-red-500 inline-block flex-shrink-0" />
               Top Variação Negativa
             </CardTitle>
