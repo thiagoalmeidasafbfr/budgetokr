@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      <body className="bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-slate-100 antialiased" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
+      <body className="bg-[#F7F6F2] dark:bg-[#0C0B0F] text-[#1A1820] dark:text-slate-100 antialiased" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
         <ThemeProvider>
           <MobileMenuProvider>
             <div className="flex min-h-screen">
