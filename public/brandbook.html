@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@700&family=Big+Shoulders+Display:wght@900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <title>Brand Book | Glorioso Finance</title>
+    <style>
+        :root {
+            /* Palette Final Adaptada */
+            --void: #0C0B0F;
+            --ink: #1A1820;
+            --surface: #FFFFFF;
+            --base: #F7F6F2;
+            --border: #E4DFD5;
+            --gold: #B8924A;
+            --gold-bg: #FBF7EE;
+            --gold-deep: #6B4E18;
+            --ok: #166534;
+            --danger: #B91C1C;
+        }
+
+        body { 
+            background-color: var(--base); 
+            color: var(--ink); 
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .font-display { font-family: 'Cormorant Garamond', serif; }
+        .font-heading { font-family: 'Big Shoulders Display', sans-serif; }
+        .font-mono { font-family: 'IBM Plex Mono', monospace; }
+        
+        .sidebar-bg { background-color: var(--ink); }
+        .card-shadow { box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .border-thin { border: 0.5px solid var(--border); }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: var(--base); }
+        ::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 10px; }
+    </style>
+</head>
+<body class="selection:bg-[#FBF7EE] selection:text-[#B8924A]">
+
+    <div class="flex min-h-screen">
+        <aside class="w-72 sidebar-bg hidden lg:flex flex-col p-8 sticky top-0 h-screen">
+            <div class="mb-12">
+                <div class="flex items-center gap-2">
+                    <span class="text-[#B8924A] text-2xl">✦</span>
+                    <div class="flex flex-col leading-none">
+                        <span class="font-display text-2xl tracking-tight text-white">Glorioso</span>
+                        <span class="font-heading text-[0.65rem] tracking-[0.4em] text-[#B8924A] -mt-1 ml-0.5">FINANCE</span>
+                    </div>
+                </div>
+            </div>
+            
+            <nav class="space-y-6 flex-1">
+                <p class="font-mono text-[10px] text-gray-500 tracking-widest uppercase">Diretrizes</p>
+                <div class="space-y-2">
+                    <a href="#logo" class="block text-[#B8924A] font-mono text-sm">01. Logo & Símbolo</a>
+                    <a href="#cores" class="block text-gray-400 hover:text-white font-mono text-sm transition-colors">02. Alquimia de Cores</a>
+                    <a href="#tipografia" class="block text-gray-400 hover:text-white font-mono text-sm transition-colors">03. Tipografia</a>
+                    <a href="#componentes" class="block text-gray-400 hover:text-white font-mono text-sm transition-colors">04. Componentes de Elite</a>
+                </div>
+            </nav>
+
+            <div class="pt-8 border-t border-white/10 flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-[#B8924A] to-[#6B4E18] border border-white/20"></div>
+                <div>
+                    <p class="text-xs text-white font-medium">Master</p>
+                    <p class="text-[10px] text-gray-500 uppercase">Administrador</p>
+                </div>
+            </div>
+        </aside>
+
+        <main class="flex-1 p-8 md:p-16 max-w-6xl mx-auto overflow-y-auto">
+            
+            <section id="logo" class="mb-32">
+                <h2 class="font-heading text-5xl tracking-tighter mb-12 uppercase border-b border-border pb-4">01. Logo & Identidade</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
+                    <div class="space-y-6">
+                        <p class="text-sm leading-relaxed text-gray-600">
+                            O wordmark do Glorioso Finance foi projetado para transmitir autoridade instantânea. A <span class="font-bold italic">Estrela Solitária (✦)</span> em ouro atua como o ponto de ignição, simbolizando clareza em dados complexos.
+                        </p>
+                        <div class="p-12 bg-white border-thin rounded-lg flex items-center justify-center">
+                            <div class="flex items-center gap-3 scale-150">
+                                <span class="text-[#B8924A] text-4xl">✦</span>
+                                <div class="flex flex-col leading-none">
+                                    <span class="font-display text-4xl tracking-tight text-ink">Glorioso</span>
+                                    <span class="font-heading text-[0.8rem] tracking-[0.5em] text-[#B8924A] -mt-1.5 ml-1">FINANCE</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-ink p-12 rounded-lg flex items-center justify-center">
+                        <div class="flex items-center gap-3 scale-125 opacity-90">
+                            <span class="text-[#B8924A] text-4xl">✦</span>
+                            <div class="flex flex-col leading-none">
+                                <span class="font-display text-4xl tracking-tight text-white">Glorioso</span>
+                                <span class="font-heading text-[0.8rem] tracking-[0.5em] text-[#B8924A] -mt-1.5 ml-1">FINANCE</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="cores" class="mb-32">
+                <h2 class="font-heading text-5xl tracking-tighter mb-12 uppercase border-b border-border pb-4">02. Alquimia de Cores</h2>
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="group">
+                        <div class="h-32 w-full bg-[#1A1820] border border-black mb-3"></div>
+                        <p class="font-mono text-xs uppercase font-bold">Ink</p>
+                        <p class="font-mono text-[10px] text-gray-400">#1A1820</p>
+                    </div>
+                    <div class="group">
+                        <div class="h-32 w-full bg-[#F7F6F2] border-thin mb-3"></div>
+                        <p class="font-mono text-xs uppercase font-bold">Paper (Base)</p>
+                        <p class="font-mono text-[10px] text-gray-400">#F7F6F2</p>
+                    </div>
+                    <div class="group">
+                        <div class="h-32 w-full bg-[#B8924A] border-thin mb-3"></div>
+                        <p class="font-mono text-xs uppercase font-bold">Gold</p>
+                        <p class="font-mono text-[10px] text-gray-400">#B8924A</p>
+                    </div>
+                    <div class="group">
+                        <div class="h-32 w-full bg-white border-thin shadow-sm mb-3"></div>
+                        <p class="font-mono text-xs uppercase font-bold">Surface</p>
+                        <p class="font-mono text-[10px] text-gray-400">#FFFFFF</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="tipografia" class="mb-32">
+                <h2 class="font-heading text-5xl tracking-tighter mb-12 uppercase border-b border-border pb-4">03. Tipografia Técnica</h2>
+                <div class="space-y-16">
+                    <div class="border-l-[0.5px] border-gold pl-8">
+                        <p class="font-mono text-[10px] text-[#B8924A] uppercase tracking-widest mb-4">Métricas & Impacto (Heading)</p>
+                        <h3 class="font-heading text-8xl uppercase tracking-tighter text-ink leading-tight">R$ 109.673.000,00</h3>
+                        <p class="mt-4 text-gray-500 font-medium tracking-widest uppercase text-xs">Big Shoulders Display / 900</p>
+                    </div>
+                    <div class="border-l-[0.5px] border-ink pl-8">
+                        <p class="font-mono text-[10px] text-gray-400 uppercase tracking-widest mb-4">Herança & Editoriais (Display)</p>
+                        <h3 class="font-display text-7xl text-ink leading-tight italic">Relatório de Performance Mensal</h3>
+                        <p class="mt-4 text-gray-500 font-medium tracking-widest uppercase text-xs">Cormorant Garamond / 700 / Italic</p>
+                    </div>
+                    <div class="border-l-[0.5px] border-border pl-8">
+                        <p class="font-mono text-[10px] text-gray-400 uppercase tracking-widest mb-4">Dados & Tabelas (Mono)</p>
+                        <h3 class="font-mono text-5xl text-ink leading-tight">Vlr. Orçado: R$ 550.062.611</h3>
+                        <p class="mt-4 text-gray-500 font-medium tracking-widest uppercase text-xs">IBM Plex Mono / 400</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="componentes" class="mb-32">
+                <h2 class="font-heading text-5xl tracking-tighter mb-12 uppercase border-b border-border pb-4">04. Componentes Operacionais</h2>
+                
+                <div class="mb-12">
+                    <p class="font-mono text-[10px] text-gray-400 uppercase tracking-widest mb-6">Cards de Performance (Dashboard)</p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="bg-white border-thin p-8 rounded-lg card-shadow">
+                            <p class="font-heading text-[0.65rem] tracking-[0.4em] text-[#B8924A] uppercase mb-4 text-center">Budget YTD</p>
+                            <h4 class="font-heading text-5xl text-center text-ink">-R$ 109.67M</h4>
+                            <p class="font-mono text-[10px] text-center text-gray-400 mt-4">YTD • 01/2026—03/2026</p>
+                        </div>
+                        <div class="bg-white border-thin p-8 rounded-lg card-shadow border-[#E2C98A] bg-[#FBF7EE]">
+                            <p class="font-heading text-[0.65rem] tracking-[0.4em] text-[#6B4E18] uppercase mb-4 text-center">Variação de Performance</p>
+                            <h4 class="font-heading text-5xl text-center text-[#166534]">+26.4%</h4>
+                            <div class="flex justify-center mt-4">
+                                <span class="font-mono text-[10px] bg-white border border-[#E2C98A] px-2 py-1 text-[#6B4E18]">DENTRO DA MARGEM</span>
+                            </div>
+                        </div>
+                        <div class="bg-white border-thin p-8 rounded-lg card-shadow">
+                            <p class="font-heading text-[0.65rem] tracking-[0.4em] text-[#B8924A] uppercase mb-4 text-center">Realizado YTD</p>
+                            <h4 class="font-heading text-5xl text-center text-ink">-R$ 80.75M</h4>
+                            <p class="font-mono text-[10px] text-center text-gray-400 mt-4 tracking-widest">VERIFICADO</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <p class="font-mono text-[10px] text-gray-400 uppercase tracking-widest mb-6">Estrutura de Dados (DRE Gerencial)</p>
+                    <div class="bg-white border-thin rounded-lg overflow-hidden">
+                        <table class="w-full text-left font-mono text-xs">
+                            <thead>
+                                <tr class="bg-base border-b border-border">
+                                    <th class="p-4 text-gray-500 font-medium">DEMONSTRATIVO</th>
+                                    <th class="p-4 text-gray-500 font-medium text-right font-mono">VLR. ORÇADO</th>
+                                    <th class="p-4 text-gray-500 font-medium text-right font-mono">VLR. REALIZADO</th>
+                                    <th class="p-4 text-gray-500 font-medium text-right font-mono text-gold">VARIAÇÃO %</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-[#E4DFD5]">
+                                <tr>
+                                    <td class="p-4 font-bold text-ink">Revenues</td>
+                                    <td class="p-4 text-right">R$ 550.062.611</td>
+                                    <td class="p-4 text-right">R$ 186.098.259</td>
+                                    <td class="p-4 text-right text-danger font-bold">-66.2%</td>
+                                </tr>
+                                <tr class="bg-[#FBF7EE]/50">
+                                    <td class="p-4 font-bold text-gold-deep italic">(=) Net Revenue</td>
+                                    <td class="p-4 text-right font-bold">R$ 539.351.838</td>
+                                    <td class="p-4 text-right font-bold">R$ 181.396.251</td>
+                                    <td class="p-4 text-right text-danger font-bold">-66.4%</td>
+                                </tr>
+                                <tr>
+                                    <td class="p-4 text-gray-600">(-) Costs</td>
+                                    <td class="p-4 text-right">R$ 139.723.317</td>
+                                    <td class="p-4 text-right">R$ 125.038.761</td>
+                                    <td class="p-4 text-right text-ok">+10.5%</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <footer class="p-8 border-t border-border text-center bg-white">
+        <p class="font-mono text-[10px] text-gray-400 uppercase tracking-[0.4em]">© 2026 Glorioso Finance | Performance Department | Rio de Janeiro</p>
+    </footer>
+
+</body>
+</html>
