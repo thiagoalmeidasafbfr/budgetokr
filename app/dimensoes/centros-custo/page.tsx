@@ -51,8 +51,8 @@ export default function CentrosCustoPage() {
     <div className="space-y-4 max-w-5xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-gray-900">Centros de Custo</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{rows.length} registros</p>
+          <h1 className="page-title text-2xl md:text-3xl">Centros de Custo</h1>
+          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#B8924A", opacity: 0.55, letterSpacing: "0.04em" }}>{rows.length} registros</p>
         </div>
         <Button size="sm" onClick={startNew}><Plus size={14} /> Adicionar</Button>
       </div>

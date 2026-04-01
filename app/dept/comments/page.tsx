@@ -271,10 +271,10 @@ export default function DeptCommentsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <h1 className="page-title text-2xl md:text-3xl flex items-center gap-2">
             <MessageSquare size={22} className="text-gray-600" /> Meus Comentários
           </h1>
-          <p className="text-gray-500 text-sm mt-0.5">Seus comentários na DRE e respostas do master</p>
+          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#B8924A", opacity: 0.55, letterSpacing: "0.04em" }}>Seus comentários na DRE e respostas do master</p>
         </div>
         <button
           onClick={load}

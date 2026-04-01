@@ -48,10 +48,10 @@ export default function AuditPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl md:text-2xl font-bold text-gray-900 flex items-center gap-2">
+        <h1 className="page-title text-2xl md:text-3xl flex items-center gap-2">
           <History size={22} className="text-gray-600" /> Audit Trail
         </h1>
-        <p className="text-gray-500 text-sm mt-0.5">Histórico de alterações em lançamentos</p>
+        <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#B8924A", opacity: 0.55, letterSpacing: "0.04em" }}>Histórico de alterações em lançamentos</p>
       </div>
 
       <Card>

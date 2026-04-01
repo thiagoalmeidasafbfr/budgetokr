@@ -373,8 +373,8 @@ export default function AnalisePage() {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div className="min-w-0">
-          <h1 className="text-xl md:text-2xl font-bold text-gray-900">Análise Budget vs Razão</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{data.length.toLocaleString()} registros</p>
+          <h1 className="page-title text-2xl md:text-3xl">Análise Budget vs Razão</h1>
+          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#B8924A", opacity: 0.55, letterSpacing: "0.04em" }}>{data.length.toLocaleString()} registros</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
           <YearFilter periodos={periodos} selYear={selYear} onChange={y => { setSelYear(y) }} />
@@ -781,8 +781,8 @@ export default function AnalisePage() {
                           <th className="text-left px-3 py-2.5 font-medium text-gray-500 w-20">Período</th>
                           <th className="text-right px-3 py-2.5 font-medium text-gray-500">Budget (mês)</th>
                           <th className="text-right px-3 py-2.5 font-medium text-gray-500">Realizado (mês)</th>
-                          <th className="text-right px-3 py-2.5 font-medium text-blue-600">Budget YTD</th>
-                          <th className="text-right px-3 py-2.5 font-medium text-blue-600">Realizado YTD</th>
+                          <th className="text-right px-3 py-2.5 font-medium" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', letterSpacing: '0.1em', color: '#B8924A', opacity: 0.7 }}>Budget YTD</th>
+                          <th className="text-right px-3 py-2.5 font-medium" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', letterSpacing: '0.1em', color: '#B8924A', opacity: 0.7 }}>Realizado YTD</th>
                           <th className="text-right px-3 py-2.5 font-medium text-gray-500">Variação YTD</th>
                         </tr>
                       </thead>
@@ -806,8 +806,8 @@ export default function AnalisePage() {
                                 <td className="px-3 py-2 text-gray-600 font-mono text-xs">{formatPeriodo(r.periodo)}</td>
                                 <td className="px-3 py-2 text-right text-gray-600">{formatCurrency(r.budget)}</td>
                                 <td className="px-3 py-2 text-right text-gray-600">{formatCurrency(r.razao)}</td>
-                                <td className="px-3 py-2 text-right text-blue-700 font-medium">{formatCurrency(r.ytdBudget)}</td>
-                                <td className="px-3 py-2 text-right text-blue-700 font-medium">{formatCurrency(r.ytdRazao)}</td>
+                                <td className="px-3 py-2 text-right font-medium" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px', color: '#6B4E18' }}>{formatCurrency(r.ytdBudget)}</td>
+                                <td className="px-3 py-2 text-right font-medium" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px', color: '#6B4E18' }}>{formatCurrency(r.ytdRazao)}</td>
                                 <td className={cn('px-3 py-2 text-right font-semibold', r.ytdVariacao >= 0 ? 'text-emerald-600' : 'text-red-500')}>
                                   {formatCurrency(r.ytdVariacao)}
                                 </td>

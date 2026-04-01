@@ -282,8 +282,8 @@ export default function PlanoContasPage() {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-gray-900">Plano de Contas</h1>
-          <p className="text-gray-500 text-sm mt-0.5">
+          <h1 className="page-title text-2xl md:text-3xl">Plano de Contas</h1>
+          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#B8924A", opacity: 0.55, letterSpacing: "0.04em" }}>
             Análise hierárquica por nível do plano de contas · Budget vs Razão
             {data && <span className="ml-2 text-gray-400">· {data.totalContas} contas · {data.maxLevel} níveis</span>}
           </p>

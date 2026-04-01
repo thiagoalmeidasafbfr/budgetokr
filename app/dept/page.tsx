@@ -1973,10 +1973,10 @@ export default function DeptDashboardPage() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
               <div className="min-w-0">
-                <h1 className="text-xl md:text-2xl font-bold text-gray-900 truncate">
+                <h1 className="page-title text-2xl md:text-3xl truncate">
                   {combineDepts ? forcedDepts.join(' + ') : selDept}
                 </h1>
-                <p className="text-gray-500 text-sm mt-0.5">
+                <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#B8924A", opacity: 0.55, letterSpacing: "0.04em" }}>
                   {combineDepts && <span className="text-gray-700 font-medium mr-1">[Combinado]</span>}
                   {selPeriods.length > 0
                     ? `${selPeriods.length} período(s) selecionado(s)`

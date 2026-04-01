@@ -566,7 +566,7 @@ export default function DREPage() {
             </button>
           )}
           <button
-            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2"
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-[#FBF7EE] hover:text-[#B8924A] flex items-center gap-2"
             onClick={() => {
               openCommentDialog(ctxMenu.node, ctxMenu.tipo === 'razao' ? 'realizado' : 'budget', ctxMenu.periodo)
               setCtxMenu(null)
@@ -666,8 +666,8 @@ export default function DREPage() {
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div className="min-w-0">
-          <h1 className="text-xl md:text-2xl font-bold text-gray-900">DRE — Demonstrativo de Resultados</h1>
-          <p className="text-gray-500 text-sm mt-0.5">P&L por linha contábil · Budget vs Razão</p>
+          <h1 className="page-title text-2xl md:text-3xl">DRE — Demonstrativo de Resultados</h1>
+          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#B8924A', opacity: 0.55, letterSpacing: '0.04em' }}>P&L por linha contábil · Budget vs Razão</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
           <YearFilter periodos={periodos} selYear={selYear} onChange={handleYearChange} />
@@ -1354,7 +1354,7 @@ export default function DREPage() {
                           <button onClick={() => {
                             setCompA(monthOptions[monthOptions.length - 1])
                             setCompB(monthOptions[monthOptions.length - 2])
-                          }} className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium">
+                          }} className="text-xs px-2.5 py-1 rounded-lg font-medium" style={{ backgroundColor: '#FBF7EE', color: '#6B4E18', border: '0.5px solid #E2C98A' }}>
                             MoM
                           </button>
                         )}
@@ -1377,7 +1377,7 @@ export default function DREPage() {
                           <button onClick={() => {
                             setCompA(quarterOptions[quarterOptions.length - 1])
                             setCompB(quarterOptions[quarterOptions.length - 2])
-                          }} className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium">
+                          }} className="text-xs px-2.5 py-1 rounded-lg font-medium" style={{ backgroundColor: '#FBF7EE', color: '#6B4E18', border: '0.5px solid #E2C98A' }}>
                             QoQ
                           </button>
                         )}

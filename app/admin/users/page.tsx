@@ -585,7 +585,7 @@ export default function UsersPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Users size={20} className="text-gray-600" />
-          <h1 className="text-xl font-bold text-gray-900">Gerenciar Usuários</h1>
+          <h1 className="page-title text-2xl md:text-3xl">Gerenciar Usuários</h1>
           <span className="text-sm text-gray-500 ml-1">({users.length} usuários)</span>
         </div>
         <div className="flex gap-2">

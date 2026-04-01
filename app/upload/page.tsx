@@ -196,8 +196,8 @@ export default function UploadPage() {
   return (
     <div className="max-w-3xl mx-auto space-y-5">
       <div>
-        <h1 className="text-xl md:text-2xl font-bold text-gray-900">Importar Dados</h1>
-        <p className="text-gray-500 text-sm mt-0.5">Importe cada tabela separadamente via Excel</p>
+        <h1 className="page-title text-2xl md:text-3xl">Importar Dados</h1>
+        <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#B8924A", opacity: 0.55, letterSpacing: "0.04em" }}>Importe cada tabela separadamente via Excel</p>
       </div>
 
       {/* Stepper */}

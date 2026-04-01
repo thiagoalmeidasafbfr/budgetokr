@@ -77,11 +77,11 @@ export default function LoginLogsPage() {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <h1 className="page-title text-2xl md:text-3xl flex items-center gap-2">
             <Shield size={22} className="text-gray-600" />
             Log de Acessos
           </h1>
-          <p className="text-gray-500 text-sm mt-0.5">
+          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#B8924A", opacity: 0.55, letterSpacing: "0.04em" }}>
             {data?.total.toLocaleString() ?? '—'} tentativas registradas
           </p>
         </div>

@@ -33,6 +33,54 @@ body {
 .font-heading  { font-family: 'Big Shoulders Display', sans-serif; }
 .font-mono, code, pre { font-family: 'IBM Plex Mono', monospace; }
 
+/* ── Page title — Cormorant Garamond 700 Italic ──────────────────────────── */
+.page-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 700;
+  font-style: italic;
+  color: #1A1820;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.dark .page-title { color: #f1f5f9; }
+
+/* ── Section label — IBM Plex Mono uppercase gold ────────────────────────── */
+.section-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #B8924A;
+  opacity: 0.6;
+}
+
+/* ── Table header mono ────────────────────────────────────────────────────── */
+.th-mono {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #B8924A;
+  opacity: 0.65;
+}
+
+/* ── Brand tab active ─────────────────────────────────────────────────────── */
+.tab-active {
+  background-color: #1A1820;
+  color: #B8924A;
+  border: 0.5px solid rgba(184,146,74,0.3);
+}
+.tab-inactive {
+  background-color: #FFFFFF;
+  color: #1A1820;
+  border: 0.5px solid #E4DFD5;
+}
+.tab-inactive:hover {
+  background-color: #FBF7EE;
+}
+
 /* ── Selection ───────────────────────────────────────────────────────────── */
 ::selection {
   background-color: var(--gold-bg);
