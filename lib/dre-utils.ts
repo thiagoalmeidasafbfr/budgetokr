@@ -5,6 +5,8 @@ import { safePct } from '@/lib/utils'
 export type FormulaGerencial =
   | { type: 'percent_of_line'; ref_nome: string; percent: number }
   | { type: 'fixed'; value: number }
+  | { type: 'divide_lines'; numerator_nome: string; denominator_nome: string }
+  | { type: 'multiply_lines'; line_a_nome: string; line_b_nome: string }
 
 export interface DRELinha {
   id: number; ordem: number; nome: string
@@ -12,6 +14,7 @@ export interface DRELinha {
   sinal: number; formula_grupos: string; formula_sinais: string
   negrito: number; separador: number
   formula_gerencial?: FormulaGerencial | null
+  isAnalise?: boolean  // analysis lines: displayed only, not included in subtotals
 }
 
 export interface TreeNode {
@@ -22,6 +25,7 @@ export interface TreeNode {
   isBold?: boolean
   isAccount?: boolean
   isCalculated?: boolean
+  isAnalise?: boolean
   depth: number
   ordem: number
   budget: number
