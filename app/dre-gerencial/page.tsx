@@ -29,6 +29,10 @@ type ExclusionKey = string
 interface SavedView {
   name: string
   exclusions: ExclusionKey[]
+  selCentros?: string[]
+  selDepts?: string[]
+  customLinhas?: DRELinha[]
+  linhaOrdem?: Array<{ id: number; ordem: number }>
   createdAt: string
 }
 
@@ -699,9 +703,15 @@ export default function DreGerencialPage() {
   // ── Save view ───────────────────────────────────────────────────────────────
   function saveView() {
     if (!saveName.trim()) return
+    const customLinhas = dreLinhas.filter(l => (l.id ?? 0) < 0)
+    const linhaOrdem   = dreLinhas.map(l => ({ id: l.id, ordem: l.ordem }))
     const view: SavedView = {
       name: saveName.trim(),
       exclusions: [...exclusions],
+      selCentros: [...selCentros],
+      selDepts:   deptUser ? undefined : [...selDepts],   // só salva depts para master
+      customLinhas,
+      linhaOrdem,
       createdAt: new Date().toISOString(),
     }
     const next = [...savedViews.filter(v => v.name !== view.name), view]
@@ -709,6 +719,7 @@ export default function DreGerencialPage() {
     setActiveView(view.name)
     setShowSaveModal(false)
     setSaveName('')
+    setOrderChanged(false)
     try {
       localStorage.setItem(storageKey(currentUserId), JSON.stringify(next))
       localStorage.setItem(activeKey(currentUserId), view.name)
@@ -716,7 +727,30 @@ export default function DreGerencialPage() {
   }
 
   function loadView(view: SavedView) {
+    // Exclusões
     setExclusions(new Set(view.exclusions))
+
+    // Filtros de centros / depts
+    if (view.selCentros !== undefined) setSelCentros(view.selCentros)
+    if (view.selDepts   !== undefined && !deptUser) setSelDepts(view.selDepts)
+
+    // Linhas customizadas + ordenação
+    const customLinhas = view.customLinhas ?? []
+    const dbLinhas     = dreLinhas.filter(l => (l.id ?? 0) > 0)
+    let allLinhas: DRELinha[] = [...dbLinhas, ...customLinhas]
+    if (view.linhaOrdem) {
+      const orderMap = new Map(view.linhaOrdem.map(({ id, ordem }) => [id, ordem]))
+      allLinhas = allLinhas.map(l => orderMap.has(l.id) ? { ...l, ordem: orderMap.get(l.id)! } : l)
+    }
+    allLinhas.sort((a, b) => a.ordem - b.ordem)
+    setDreLinhas(allLinhas)
+    setOrderChanged(false)
+    try {
+      localStorage.setItem(customLinhasKey(currentUserId), JSON.stringify(customLinhas))
+      if (view.linhaOrdem)
+        localStorage.setItem(customOrderKey(currentUserId), JSON.stringify(view.linhaOrdem))
+    } catch { /* ignore */ }
+
     setActiveView(view.name)
     try { localStorage.setItem(activeKey(currentUserId), view.name) } catch { /* ignore */ }
   }
@@ -733,11 +767,14 @@ export default function DreGerencialPage() {
 
   function clearExclusions() {
     setExclusions(new Set())
+    setSelCentros([])
     setActiveView('')
     try { localStorage.removeItem(activeKey(currentUserId)) } catch { /* ignore */ }
   }
 
-  const exclusionCount = exclusions.size
+  const exclusionCount     = exclusions.size
+  const customLinhasCount  = dreLinhas.filter(l => (l.id ?? 0) < 0).length
+  const hasCustomizations  = exclusionCount > 0 || selCentros.length > 0 || customLinhasCount > 0 || orderChanged
 
   // ── Custom linhas storage helper ─────────────────────────────────────────────
   function saveCustomLinhasToStorage(linhas: DRELinha[]) {
@@ -872,7 +909,7 @@ export default function DreGerencialPage() {
               </button>
             </div>
           ))}
-          {exclusionCount > 0 && (
+          {hasCustomizations && (
             <button
               onClick={() => setShowSaveModal(true)}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-dashed border-gray-300 rounded-md text-gray-500 hover:border-gray-400 hover:text-gray-700 transition-colors"
@@ -904,11 +941,11 @@ export default function DreGerencialPage() {
               </Badge>
             )}
           </button>
-          {exclusionCount > 0 && (
+          {(exclusionCount > 0 || selCentros.length > 0) && (
             <button
               onClick={clearExclusions}
               className="flex items-center gap-1 text-xs px-2 py-1.5 rounded-md border border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-200 transition-colors"
-              title="Limpar exclusões"
+              title="Limpar exclusões e centros"
             >
               <RotateCcw size={12} />
             </button>
@@ -1587,9 +1624,15 @@ export default function DreGerencialPage() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setShowSaveModal(false)}>
           <div className="bg-white rounded-xl shadow-xl p-6 w-80" onClick={e => e.stopPropagation()}>
             <h3 className="font-semibold text-gray-900 mb-1">Salvar visão gerencial</h3>
-            <p className="text-xs text-gray-500 mb-4">
-              Salva as exclusões atuais ({exclusionCount} {exclusionCount === 1 ? 'item' : 'itens'}) com um nome para reutilizar depois.
-            </p>
+            <p className="text-xs text-gray-500 mb-2">Salva um preset com nome para reutilizar depois. O preset inclui:</p>
+            <ul className="text-xs text-gray-400 mb-4 space-y-0.5 pl-3">
+              {exclusionCount > 0 && <li>· {exclusionCount} {exclusionCount === 1 ? 'exclusão' : 'exclusões'} de linha/agrupamento/conta</li>}
+              {selCentros.length > 0 && <li>· {selCentros.length} {selCentros.length === 1 ? 'centro de custo' : 'centros de custo'} selecionado{selCentros.length === 1 ? '' : 's'}</li>}
+              {!deptUser && selDepts.length > 0 && <li>· {selDepts.length} {selDepts.length === 1 ? 'departamento' : 'departamentos'} selecionado{selDepts.length === 1 ? '' : 's'}</li>}
+              {customLinhasCount > 0 && <li>· {customLinhasCount} {customLinhasCount === 1 ? 'linha adicionada' : 'linhas adicionadas'}</li>}
+              {orderChanged && <li>· Ordem personalizada das linhas</li>}
+              {exclusionCount === 0 && selCentros.length === 0 && customLinhasCount === 0 && !orderChanged && <li>· Configuração atual (sem alterações pendentes)</li>}
+            </ul>
             <input
               type="text"
               value={saveName}
