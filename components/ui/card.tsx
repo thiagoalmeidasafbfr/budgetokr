@@ -3,7 +3,12 @@ import { cn } from "@/lib/utils"
 
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm", className)} {...props} />
+    <div
+      ref={ref}
+      className={cn("rounded-xl bg-white", className)}
+      style={{ border: '0.5px solid #E4DFD5', boxShadow: '0 2px 4px rgba(26,24,32,0.03)' }}
+      {...props}
+    />
   )
 )
 Card.displayName = "Card"
@@ -17,14 +22,24 @@ CardHeader.displayName = "CardHeader"
 
 const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => (
-    <h3 ref={ref} className={cn("font-semibold text-gray-900 dark:text-white text-base leading-none", className)} {...props} />
+    <h3
+      ref={ref}
+      className={cn("font-semibold text-base leading-none", className)}
+      style={{ color: '#1A1820' }}
+      {...props}
+    />
   )
 )
 CardTitle.displayName = "CardTitle"
 
 const CardDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
   ({ className, ...props }, ref) => (
-    <p ref={ref} className={cn("text-sm text-gray-500 dark:text-slate-400", className)} {...props} />
+    <p
+      ref={ref}
+      className={cn("text-xs", className)}
+      style={{ color: '#B8924A', opacity: 0.6, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: '0.04em' }}
+      {...props}
+    />
   )
 )
 CardDescription.displayName = "CardDescription"
