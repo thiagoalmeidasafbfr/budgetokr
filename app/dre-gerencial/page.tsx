@@ -844,8 +844,8 @@ export default function DreGerencialPage() {
       // Persist ordering per-user in localStorage
       const orderData = dreLinhas.map(l => ({ id: l.id, ordem: l.ordem }))
       localStorage.setItem(customOrderKey(currentUserId), JSON.stringify(orderData))
-      // Also persist custom lines' new ordem
-      saveCustomLinhasToStorage(dreLinhas)
+      // Only persist custom lines' new ordem globally when no view is active
+      if (!activeView) saveCustomLinhasToStorage(dreLinhas)
       setOrderChanged(false)
     } catch { /* ignore */ } finally {
       setSavingOrder(false)
