@@ -50,7 +50,7 @@
 }
 
 body {
-  /* font handled by Tailwind via font-sans */
+  background-color: #F7F6F2;
 }
 
 /* Custom scrollbar */
