@@ -1,9 +1,28 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { Big_Shoulders_Display, Cormorant_Garamond, IBM_Plex_Mono } from 'next/font/google'
 import { Sidebar } from '@/components/Sidebar'
 import { TopBar } from '@/components/TopBar'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { MobileMenuProvider } from '@/components/MobileMenuProvider'
+
+const bigShoulders = Big_Shoulders_Display({
+  weight: ['900'],
+  subsets: ['latin'],
+  variable: '--font-heading',
+})
+
+const cormorant = Cormorant_Garamond({
+  weight: ['700'],
+  subsets: ['latin'],
+  variable: '--font-display',
+})
+
+const ibmMono = IBM_Plex_Mono({
+  weight: ['400', '500'],
+  subsets: ['latin'],
+  variable: '--font-mono',
+})
 
 export const metadata: Metadata = {
   title: 'Glorioso Finance',
@@ -14,7 +33,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      <body className="bg-base text-ink antialiased">
+      <body className={`${bigShoulders.variable} ${cormorant.variable} ${ibmMono.variable} bg-base text-ink antialiased`}>
         <ThemeProvider>
           <MobileMenuProvider>
             <div className="flex min-h-screen">
