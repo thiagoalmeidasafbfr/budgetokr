@@ -723,6 +723,10 @@ export default function DreGerencialPage() {
     try {
       localStorage.setItem(storageKey(currentUserId), JSON.stringify(next))
       localStorage.setItem(activeKey(currentUserId), view.name)
+      // Remove view-owned lines from global storage so they don't persist outside this view
+      const viewLinhaNames = new Set(customLinhas.map(l => l.nome))
+      const remainingGlobal = dreLinhas.filter(l => (l.id ?? 0) < 0 && !viewLinhaNames.has(l.nome))
+      localStorage.setItem(customLinhasKey(currentUserId), JSON.stringify(remainingGlobal))
     } catch { /* ignore */ }
   }
 
@@ -872,7 +876,8 @@ export default function DreGerencialPage() {
       }
       const updated = [...dreLinhas, newLinha]
       setDreLinhas(updated)
-      saveCustomLinhasToStorage(updated)
+      // Only persist globally when no view is active — view-active lines belong to the view
+      if (!activeView) saveCustomLinhasToStorage(updated)
       setShowAddLineModal(false)
       setNewLineName('')
       setNewLineRefNome('')
@@ -886,10 +891,10 @@ export default function DreGerencialPage() {
   // ── Delete calculated line ───────────────────────────────────────────────────
   async function deleteCalculatedLine(id: number) {
     if (id < 0) {
-      // Local-only line: remove from state and localStorage
+      // Local-only line: remove from state and localStorage (only if no view active)
       const updated = dreLinhas.filter(l => l.id !== id)
       setDreLinhas(updated)
-      saveCustomLinhasToStorage(updated)
+      if (!activeView) saveCustomLinhasToStorage(updated)
     } else {
       // DB-saved line: call API (requires master on backend)
       try {
