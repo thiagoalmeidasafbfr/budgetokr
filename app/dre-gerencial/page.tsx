@@ -734,10 +734,23 @@ export default function DreGerencialPage() {
     if (view.selCentros !== undefined) setSelCentros(view.selCentros)
     if (view.selDepts   !== undefined && !deptUser) setSelDepts(view.selDepts)
 
-    // Linhas customizadas + ordenação
-    const customLinhas = view.customLinhas ?? []
-    const dbLinhas     = dreLinhas.filter(l => (l.id ?? 0) > 0)
-    let allLinhas: DRELinha[] = [...dbLinhas, ...customLinhas]
+    // Linhas: lê o estado base do localStorage (linhas globais do usuário)
+    // e adiciona as linhas EXCLUSIVAS da visão apenas na memória.
+    // O localStorage base NÃO é alterado — ao sair da visão, o estado global é restaurado.
+    let globalCustom: DRELinha[] = []
+    try {
+      const raw = localStorage.getItem(customLinhasKey(currentUserId))
+      if (raw) globalCustom = JSON.parse(raw)
+    } catch { /* ignore */ }
+
+    const viewLinhas  = view.customLinhas ?? []
+    const globalNomes = new Set(globalCustom.map(l => l.nome))
+    // Linhas presentes na visão mas ausentes no estado global → view-only (temporárias)
+    const viewOnly = viewLinhas.filter(l => !globalNomes.has(l.nome))
+
+    const dbLinhas = dreLinhas.filter(l => (l.id ?? 0) > 0)
+    let allLinhas: DRELinha[] = [...dbLinhas, ...globalCustom, ...viewOnly]
+
     if (view.linhaOrdem) {
       const orderMap = new Map(view.linhaOrdem.map(({ id, ordem }) => [id, ordem]))
       allLinhas = allLinhas.map(l => orderMap.has(l.id) ? { ...l, ordem: orderMap.get(l.id)! } : l)
@@ -745,11 +758,6 @@ export default function DreGerencialPage() {
     allLinhas.sort((a, b) => a.ordem - b.ordem)
     setDreLinhas(allLinhas)
     setOrderChanged(false)
-    try {
-      localStorage.setItem(customLinhasKey(currentUserId), JSON.stringify(customLinhas))
-      if (view.linhaOrdem)
-        localStorage.setItem(customOrderKey(currentUserId), JSON.stringify(view.linhaOrdem))
-    } catch { /* ignore */ }
 
     setActiveView(view.name)
     try { localStorage.setItem(activeKey(currentUserId), view.name) } catch { /* ignore */ }
@@ -769,6 +777,26 @@ export default function DreGerencialPage() {
     setExclusions(new Set())
     setSelCentros([])
     setActiveView('')
+    // Restore global base state (removes view-only lines from memory)
+    const dbLinhas = dreLinhas.filter(l => (l.id ?? 0) > 0)
+    let globalCustom: DRELinha[] = []
+    try {
+      const raw = localStorage.getItem(customLinhasKey(currentUserId))
+      if (raw) globalCustom = JSON.parse(raw)
+    } catch { /* ignore */ }
+    let allLinhas = [...dbLinhas, ...globalCustom]
+    try {
+      const orderRaw = localStorage.getItem(customOrderKey(currentUserId))
+      if (orderRaw) {
+        const orderMap = new Map<number, number>(
+          (JSON.parse(orderRaw) as Array<{ id: number; ordem: number }>).map(({ id, ordem }) => [id, ordem])
+        )
+        allLinhas = allLinhas.map(l => orderMap.has(l.id) ? { ...l, ordem: orderMap.get(l.id)! } : l)
+      }
+    } catch { /* ignore */ }
+    allLinhas.sort((a, b) => a.ordem - b.ordem)
+    setDreLinhas(allLinhas)
+    setOrderChanged(false)
     try { localStorage.removeItem(activeKey(currentUserId)) } catch { /* ignore */ }
   }
 
