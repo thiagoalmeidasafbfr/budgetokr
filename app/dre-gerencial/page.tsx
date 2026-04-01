@@ -410,11 +410,16 @@ export default function DreGerencialPage() {
   const dragItemRef = useRef<string | null>(null)
   const [dragOver,         setDragOver]         = useState<string | null>(null)
   // ── Add Line Modal ───────────────────────────────────────────────────────────
-  const [newLineName,        setNewLineName]        = useState('')
-  const [newLineFormulaType, setNewLineFormulaType] = useState<'percent_of_line' | 'fixed'>('percent_of_line')
-  const [newLineRefNome,     setNewLineRefNome]     = useState('')
-  const [newLinePercent,     setNewLinePercent]     = useState('-5')
-  const [newLineValue,       setNewLineValue]       = useState('')
+  const [newLineName,          setNewLineName]          = useState('')
+  const [newLineIsAnalise,     setNewLineIsAnalise]     = useState(false)
+  const [newLineFormulaType,   setNewLineFormulaType]   = useState<'percent_of_line' | 'fixed' | 'divide_lines' | 'multiply_lines'>('percent_of_line')
+  const [newLineRefNome,       setNewLineRefNome]       = useState('')
+  const [newLinePercent,       setNewLinePercent]       = useState('-5')
+  const [newLineValue,         setNewLineValue]         = useState('')
+  const [newLineNumeradorNome, setNewLineNumeradorNome] = useState('')
+  const [newLineDenomNome,     setNewLineDenomNome]     = useState('')
+  const [newLineMultANome,     setNewLineMultANome]     = useState('')
+  const [newLineMultBNome,     setNewLineMultBNome]     = useState('')
   const [addingLine,         setAddingLine]         = useState(false)
 
   // ── Init ────────────────────────────────────────────────────────────────────
@@ -557,7 +562,6 @@ export default function DreGerencialPage() {
       const byPeriod: Record<string, { budget: number; razao: number }> = {}
 
       if (fg.type === 'percent_of_line') {
-        // Use nodeMap so a formula can reference a previously inserted calculated line
         const refNode = nodeMap.get(fg.ref_nome)
         if (refNode) {
           const pct = fg.percent / 100
@@ -570,12 +574,41 @@ export default function DreGerencialPage() {
       } else if (fg.type === 'fixed') {
         budget = fg.value
         razao = fg.value
+      } else if (fg.type === 'divide_lines') {
+        const numNode = nodeMap.get(fg.numerator_nome)
+        const denNode = nodeMap.get(fg.denominator_nome)
+        if (numNode && denNode) {
+          budget = denNode.budget !== 0 ? numNode.budget / denNode.budget : 0
+          razao  = denNode.razao  !== 0 ? numNode.razao  / denNode.razao  : 0
+          for (const [p, v] of Object.entries(numNode.byPeriod)) {
+            const d = denNode.byPeriod[p]
+            byPeriod[p] = {
+              budget: (d && d.budget !== 0) ? v.budget / d.budget : 0,
+              razao:  (d && d.razao  !== 0) ? v.razao  / d.razao  : 0,
+            }
+          }
+        }
+      } else if (fg.type === 'multiply_lines') {
+        const aNode = nodeMap.get(fg.line_a_nome)
+        const bNode = nodeMap.get(fg.line_b_nome)
+        if (aNode && bNode) {
+          budget = aNode.budget * bNode.budget
+          razao  = aNode.razao  * bNode.razao
+          for (const [p, v] of Object.entries(aNode.byPeriod)) {
+            const b = bNode.byPeriod[p]
+            byPeriod[p] = {
+              budget: v.budget * (b ? b.budget : 0),
+              razao:  v.razao  * (b ? b.razao  : 0),
+            }
+          }
+        }
       }
 
       const var_ = razao - budget
       const node: TreeNode = {
         name: linha.nome, isGroup: true, isBold: linha.negrito === 1,
-        isSeparator: false, isCalculated: true, depth: 0, ordem: linha.ordem,
+        isSeparator: false, isCalculated: true, isAnalise: linha.isAnalise,
+        depth: 0, ordem: linha.ordem,
         budget, razao, variacao: var_,
         variacao_pct: safePct(var_, budget),
         children: [], byPeriod,
@@ -603,6 +636,7 @@ export default function DreGerencialPage() {
 
         for (const prevLinha of dreLinhas) {
           if (prevLinha.tipo === 'subtotal') continue
+          if (prevLinha.isAnalise) continue  // analysis lines don't contribute to subtotals
           if (prevLinha.ordem >= subtotalLinha.ordem) continue
           const prevNode = nodeMap.get(prevLinha.nome)
           if (!prevNode) continue
@@ -857,11 +891,17 @@ export default function DreGerencialPage() {
     if (!newLineName.trim()) return
     setAddingLine(true)
     try {
-      const formula_gerencial: FormulaGerencial = newLineFormulaType === 'percent_of_line'
-        ? { type: 'percent_of_line', ref_nome: newLineRefNome, percent: parseFloat(newLinePercent) || 0 }
-        : { type: 'fixed', value: parseFloat(newLineValue) || 0 }
+      let formula_gerencial: FormulaGerencial
+      if (newLineFormulaType === 'percent_of_line') {
+        formula_gerencial = { type: 'percent_of_line', ref_nome: newLineRefNome, percent: parseFloat(newLinePercent) || 0 }
+      } else if (newLineFormulaType === 'divide_lines') {
+        formula_gerencial = { type: 'divide_lines', numerator_nome: newLineNumeradorNome, denominator_nome: newLineDenomNome }
+      } else if (newLineFormulaType === 'multiply_lines') {
+        formula_gerencial = { type: 'multiply_lines', line_a_nome: newLineMultANome, line_b_nome: newLineMultBNome }
+      } else {
+        formula_gerencial = { type: 'fixed', value: parseFloat(newLineValue) || 0 }
+      }
       const maxOrdem = dreLinhas.length ? Math.max(...dreLinhas.map(l => l.ordem)) : 0
-      // Store as per-user local line (negative id = local only, never touches DB)
       const newLinha: DRELinha = {
         id: -(Date.now()),
         nome: newLineName.trim(),
@@ -873,16 +913,22 @@ export default function DreGerencialPage() {
         separador: 0,
         ordem: maxOrdem + 10,
         formula_gerencial,
+        isAnalise: newLineIsAnalise,
       }
       const updated = [...dreLinhas, newLinha]
       setDreLinhas(updated)
-      // Only persist globally when no view is active — view-active lines belong to the view
       if (!activeView) saveCustomLinhasToStorage(updated)
       setShowAddLineModal(false)
       setNewLineName('')
+      setNewLineIsAnalise(false)
+      setNewLineFormulaType('percent_of_line')
       setNewLineRefNome('')
       setNewLinePercent('-5')
       setNewLineValue('')
+      setNewLineNumeradorNome('')
+      setNewLineDenomNome('')
+      setNewLineMultANome('')
+      setNewLineMultBNome('')
     } finally {
       setAddingLine(false)
     }
@@ -1233,7 +1279,9 @@ export default function DreGerencialPage() {
                   <tbody>
                     {flatRows.map((row, i) => {
                       const calcLinha = row.isCalculated ? dreLinhas.find(l => l.nome === row.name && l.tipo === 'calculada') : null
+                      const isDivide   = calcLinha?.formula_gerencial?.type === 'divide_lines'
                       const isDragTarget = dragOver === row.name
+                      const fmtVal = (v: number) => isDivide ? formatPct(v * 100) : formatCurrency(v)
                       return (
                       <tr key={i}
                         onDragOver={row.depth === 0 ? e => { e.preventDefault(); setDragOver(row.name) } : undefined}
@@ -1242,7 +1290,8 @@ export default function DreGerencialPage() {
                         className={cn(
                           'border-b transition-colors',
                           row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50',
-                          row.isCalculated && 'border-l-2 border-blue-400 bg-blue-50/30',
+                          row.isCalculated && !row.isAnalise && 'border-l-2 border-blue-400 bg-blue-50/30',
+                          row.isAnalise && 'border-l-2 border-purple-400 bg-purple-50/30',
                           isDragTarget && 'ring-2 ring-inset ring-blue-400 bg-blue-50',
                         )}>
                         <td className="px-1 py-2 text-center w-7">
@@ -1264,8 +1313,9 @@ export default function DreGerencialPage() {
                                 {expanded.has(row.agrupamento || row.name) ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
                               </button>
                             ) : <span className="w-5" />}
-                            {row.isCalculated && <Calculator size={12} className="text-blue-400 flex-shrink-0" />}
-                            {row.name}
+                            {row.isCalculated && !row.isAnalise && <Calculator size={12} className="text-blue-400 flex-shrink-0" />}
+                            {row.isAnalise && <Calculator size={12} className="text-purple-400 flex-shrink-0" />}
+                            <span className={row.isAnalise ? 'italic text-purple-900' : ''}>{row.name}</span>
                             {row.isCalculated && calcLinha && ((calcLinha.id ?? 0) < 0 || isMaster) && (
                               <button onClick={e => { e.stopPropagation(); deleteCalculatedLine(calcLinha.id) }}
                                 className="ml-auto text-gray-300 hover:text-red-400 transition-colors flex-shrink-0" title="Remover linha">
@@ -1274,11 +1324,11 @@ export default function DreGerencialPage() {
                             )}
                           </div>
                         </td>
-                        <td className={cn('px-5 py-2.5 text-right', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-600')}>{formatCurrency(row.budget)}</td>
-                        <td className={cn('px-5 py-2.5 text-right', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-600')}>{formatCurrency(row.razao)}</td>
-                        <td className={cn('px-5 py-2.5 text-right font-semibold', colorForVariance(row.variacao))}>{formatCurrency(row.variacao)}</td>
+                        <td className={cn('px-5 py-2.5 text-right', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-600', row.isAnalise && 'text-purple-700')}>{fmtVal(row.budget)}</td>
+                        <td className={cn('px-5 py-2.5 text-right', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-600', row.isAnalise && 'text-purple-700')}>{fmtVal(row.razao)}</td>
+                        <td className={cn('px-5 py-2.5 text-right font-semibold', row.isAnalise ? 'text-purple-500' : colorForVariance(row.variacao))}>{fmtVal(row.variacao)}</td>
                         <td className="px-5 py-2.5 text-right">
-                          <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(row.variacao))}>{formatPct(row.variacao_pct)}</span>
+                          {!isDivide && <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(row.variacao))}>{formatPct(row.variacao_pct)}</span>}
                         </td>
                       </tr>
                     )})}
@@ -1592,24 +1642,42 @@ export default function DreGerencialPage() {
               <div>
                 <label className="text-xs font-medium text-gray-700 block mb-1">Nome da linha</label>
                 <input type="text" value={newLineName} onChange={e => setNewLineName(e.target.value)}
-                  placeholder="Ex: TEF (Tributo Específico do Futebol)"
+                  placeholder="Ex: Margem Bruta"
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
               </div>
+
+              {/* Tipo: Valor vs Análise */}
               <div>
-                <label className="text-xs font-medium text-gray-700 block mb-1">Tipo de fórmula</label>
+                <label className="text-xs font-medium text-gray-700 block mb-1">Tipo de linha</label>
                 <div className="flex gap-2">
-                  <button onClick={() => setNewLineFormulaType('percent_of_line')}
+                  <button onClick={() => setNewLineIsAnalise(false)}
                     className={cn('flex-1 text-xs py-1.5 rounded-lg border transition-colors',
-                      newLineFormulaType === 'percent_of_line' ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-600 hover:border-gray-300')}>
-                    % de uma linha
+                      !newLineIsAnalise ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-600 hover:border-gray-300')}>
+                    Valor (soma ao resultado)
                   </button>
-                  <button onClick={() => setNewLineFormulaType('fixed')}
+                  <button onClick={() => setNewLineIsAnalise(true)}
                     className={cn('flex-1 text-xs py-1.5 rounded-lg border transition-colors',
-                      newLineFormulaType === 'fixed' ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-600 hover:border-gray-300')}>
-                    Valor fixo
+                      newLineIsAnalise ? 'bg-purple-700 text-white border-purple-700' : 'border-gray-200 text-gray-600 hover:border-gray-300')}>
+                    Análise (só exibição)
                   </button>
                 </div>
+                {newLineIsAnalise && <p className="text-[11px] text-purple-500 mt-0.5">Não afeta subtotais. Ideal para margens e índices.</p>}
               </div>
+
+              {/* Tipo de fórmula */}
+              <div>
+                <label className="text-xs font-medium text-gray-700 block mb-1">Fórmula</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {(['percent_of_line', 'divide_lines', 'multiply_lines', 'fixed'] as const).map(t => (
+                    <button key={t} onClick={() => setNewLineFormulaType(t)}
+                      className={cn('text-xs py-1.5 rounded-lg border transition-colors',
+                        newLineFormulaType === t ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-600 hover:border-gray-300')}>
+                      {t === 'percent_of_line' ? '% de linha' : t === 'divide_lines' ? 'A ÷ B' : t === 'multiply_lines' ? 'A × B' : 'Valor fixo'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {newLineFormulaType === 'percent_of_line' && (
                 <>
                   <div>
@@ -1617,9 +1685,7 @@ export default function DreGerencialPage() {
                     <select value={newLineRefNome} onChange={e => setNewLineRefNome(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
                       <option value="">Selecione...</option>
-                      {dreLinhas.filter(l => l.tipo !== 'calculada').map(l => (
-                        <option key={l.id} value={l.nome}>{l.nome}</option>
-                      ))}
+                      {dreLinhas.map(l => <option key={l.id} value={l.nome}>{l.nome}</option>)}
                     </select>
                   </div>
                   <div>
@@ -1631,6 +1697,50 @@ export default function DreGerencialPage() {
                   </div>
                 </>
               )}
+
+              {newLineFormulaType === 'divide_lines' && (
+                <>
+                  <div>
+                    <label className="text-xs font-medium text-gray-700 block mb-1">Numerador (linha A)</label>
+                    <select value={newLineNumeradorNome} onChange={e => setNewLineNumeradorNome(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
+                      <option value="">Selecione...</option>
+                      {dreLinhas.map(l => <option key={l.id} value={l.nome}>{l.nome}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-700 block mb-1">Denominador (linha B)</label>
+                    <select value={newLineDenomNome} onChange={e => setNewLineDenomNome(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
+                      <option value="">Selecione...</option>
+                      {dreLinhas.map(l => <option key={l.id} value={l.nome}>{l.nome}</option>)}
+                    </select>
+                  </div>
+                  <p className="text-[11px] text-gray-400">Resultado exibido em %. Ex: Resultado Bruto ÷ Receita = Margem Bruta.</p>
+                </>
+              )}
+
+              {newLineFormulaType === 'multiply_lines' && (
+                <>
+                  <div>
+                    <label className="text-xs font-medium text-gray-700 block mb-1">Linha A</label>
+                    <select value={newLineMultANome} onChange={e => setNewLineMultANome(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
+                      <option value="">Selecione...</option>
+                      {dreLinhas.map(l => <option key={l.id} value={l.nome}>{l.nome}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-700 block mb-1">Linha B</label>
+                    <select value={newLineMultBNome} onChange={e => setNewLineMultBNome(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
+                      <option value="">Selecione...</option>
+                      {dreLinhas.map(l => <option key={l.id} value={l.nome}>{l.nome}</option>)}
+                    </select>
+                  </div>
+                </>
+              )}
+
               {newLineFormulaType === 'fixed' && (
                 <div>
                   <label className="text-xs font-medium text-gray-700 block mb-1">Valor (R$)</label>
