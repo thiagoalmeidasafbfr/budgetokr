@@ -271,12 +271,9 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      {/* Always-visible top strip: left controls + right (year filter + optional big numbers) */}
-      <div className={cn('flex items-start gap-8', isWidgetVisible('summary') ? 'pb-6' : '')}
-        style={isWidgetVisible('summary') ? { borderBottom: '0.5px solid #E4DFD5' } : {}}
-      >
-        {/* Left: always-visible controls — only Widgets button */}
-        <div className="flex-shrink-0 flex flex-col gap-3 pt-1">
+      {/* Header row — full width */}
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2">
           <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px', letterSpacing: '0.2em', textTransform: 'uppercase', color: '#B8924A', opacity: 0.5 }}>
             Dashboard
           </p>
@@ -293,34 +290,34 @@ export default function Dashboard() {
             {widgetPanel}
           </div>
         </div>
-        {/* Right: year filter top-right + big numbers (when summary visible) */}
-        <div className="flex-1 flex flex-col gap-5">
-          <div className="flex justify-end">
-            <YearFilter periodos={allPeriodos} selYear={selYear} onChange={setSelYear} />
-          </div>
-          {isWidgetVisible('summary') && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <SummaryCard
-                title={selYear && hasYtdData ? 'Budget YTD' : 'Budget Total'}
-                value={abbrev(displayBudget)}
-                sub={selYear && hasYtdData ? ytdLabelSub : undefined}
-              />
-              <SummaryCard
-                title="Variação de Performance"
-                value={`${variacaoPct >= 0 ? '+' : ''}${formatPct(variacaoPct)}`}
-                badge={variacao >= 0 ? 'Dentro da Margem' : 'Fora da Margem'}
-                featured
-                color={variacao >= 0 ? '#166534' : '#B91C1C'}
-              />
-              <SummaryCard
-                title={selYear && hasYtdData ? 'Realizado YTD' : 'Realizado Total'}
-                value={abbrev(displayRazao)}
-                sub="Verificado"
-              />
-            </div>
-          )}
-        </div>
+        <YearFilter periodos={allPeriodos} selYear={selYear} onChange={setSelYear} />
       </div>
+
+      {/* Summary cards — full width, aligned with charts */}
+      {isWidgetVisible('summary') && (
+        <div
+          className="grid grid-cols-1 md:grid-cols-3 gap-4 pb-5"
+          style={{ borderBottom: '0.5px solid #E4DFD5' }}
+        >
+          <SummaryCard
+            title={selYear && hasYtdData ? 'Budget YTD' : 'Budget Total'}
+            value={abbrev(displayBudget)}
+            sub={selYear && hasYtdData ? ytdLabelSub : undefined}
+          />
+          <SummaryCard
+            title="Variação de Performance"
+            value={formatPct(variacaoPct)}
+            badge={variacao >= 0 ? 'Dentro da Margem' : 'Fora da Margem'}
+            featured
+            color={variacao >= 0 ? '#166534' : '#B91C1C'}
+          />
+          <SummaryCard
+            title={selYear && hasYtdData ? 'Realizado YTD' : 'Realizado Total'}
+            value={abbrev(displayRazao)}
+            sub="Verificado"
+          />
+        </div>
+      )}
 
       {/* Remaining widgets in custom order (summary handled above) */}
       {sortedWidgets.filter(w => w.visible && w.id !== 'summary').map(w => {
@@ -424,13 +421,14 @@ function SummaryCard({ title, value, sub, badge, featured = false, color }: {
   const valueColor = color ?? '#1A1820'
   return (
     <div
-      className="flex flex-col items-center justify-center rounded-xl px-8 py-7"
+      className="flex flex-col items-center justify-center px-8 py-7"
       style={{
-        backgroundColor: featured ? '#FBF7EE' : '#FFFFFF',
-        border: featured ? '1px solid #E2C98A' : '0.5px solid #E4DFD5',
+        borderRadius: '8px',
+        backgroundColor: featured ? '#FDFBF6' : '#FFFFFF',
+        border: featured ? '1px solid rgba(184,146,74,0.35)' : '0.5px solid #E4DFD5',
         boxShadow: featured
-          ? '0 4px 20px rgba(184,146,74,0.12)'
-          : '0 2px 8px rgba(26,24,32,0.03)',
+          ? '0 2px 12px rgba(184,146,74,0.08)'
+          : '0 2px 6px rgba(26,24,32,0.03)',
         minHeight: '160px',
       }}
     >
