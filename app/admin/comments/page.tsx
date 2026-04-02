@@ -445,10 +445,10 @@ export default function CommentsLogPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <h1 className="page-title text-2xl md:text-3xl flex items-center gap-2">
             <MessageSquare size={22} className="text-gray-600" /> Tickets de Comentários
           </h1>
-          <p className="text-gray-500 text-sm mt-0.5">Comentários dos departamentos · gerenciamento de tickets</p>
+          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#B8924A", opacity: 0.55, letterSpacing: "0.04em" }}>Comentários dos departamentos · gerenciamento de tickets</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={load} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-colors" title="Atualizar">

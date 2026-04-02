@@ -3,8 +3,8 @@ import { cn } from '@/lib/utils'
 import { Calendar } from 'lucide-react'
 
 interface YearFilterProps {
-  periodos: string[]       // all available YYYY-MM strings
-  selYear: string | null   // currently selected year, null = all years
+  periodos: string[]
+  selYear: string | null
   onChange: (year: string | null) => void
   className?: string
 }
@@ -12,22 +12,26 @@ interface YearFilterProps {
 export function YearFilter({ periodos, selYear, onChange, className }: YearFilterProps) {
   const years = [...new Set(periodos.map(p => p.substring(0, 4)).filter(Boolean))].sort()
 
-  // Only render if there are multiple years to choose from
   if (years.length <= 1) return null
+
+  const monoStyle: React.CSSProperties = {
+    fontFamily: "'IBM Plex Mono', monospace",
+    fontSize: '11px',
+    letterSpacing: '0.06em',
+  }
 
   return (
     <div className={cn('flex items-center gap-1.5', className)}>
-      <Calendar size={13} className="text-gray-400 flex-shrink-0 hidden sm:block" />
-      <span className="text-xs text-gray-500 flex-shrink-0 hidden sm:inline">Ano:</span>
+      <Calendar size={13} className="flex-shrink-0 hidden sm:block" style={{ color: '#B8924A', opacity: 0.5 }} />
+      <span className="flex-shrink-0 hidden sm:inline" style={{ ...monoStyle, color: '#B8924A', opacity: 0.5 }}>Ano:</span>
       <div className="flex gap-1 flex-wrap">
         <button
           onClick={() => onChange(null)}
-          className={cn(
-            'px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
-            selYear === null
-              ? 'bg-gray-800 text-white shadow-sm'
-              : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-          )}
+          className="px-2.5 py-1 rounded-lg transition-all"
+          style={selYear === null
+            ? { ...monoStyle, backgroundColor: '#1A1820', color: '#B8924A', border: '0.5px solid rgba(184,146,74,0.3)' }
+            : { ...monoStyle, backgroundColor: '#FFFFFF', color: '#1A1820', border: '0.5px solid #E4DFD5' }
+          }
         >
           Todos
         </button>
@@ -35,12 +39,11 @@ export function YearFilter({ periodos, selYear, onChange, className }: YearFilte
           <button
             key={y}
             onClick={() => onChange(y)}
-            className={cn(
-              'px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
-              selYear === y
-                ? 'bg-gray-800 text-white shadow-sm'
-                : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-            )}
+            className="px-2.5 py-1 rounded-lg transition-all"
+            style={selYear === y
+              ? { ...monoStyle, backgroundColor: '#1A1820', color: '#B8924A', border: '0.5px solid rgba(184,146,74,0.3)' }
+              : { ...monoStyle, backgroundColor: '#FFFFFF', color: '#1A1820', border: '0.5px solid #E4DFD5' }
+            }
           >
             {y}
           </button>

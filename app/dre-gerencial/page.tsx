@@ -999,7 +999,7 @@ export default function DreGerencialPage() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-3 md:px-6 py-3 md:py-4 flex items-center gap-4 flex-wrap">
         <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-semibold text-gray-900">DRE Gerencial</h1>
+          <h1 className="page-title text-2xl md:text-3xl">DRE Gerencial</h1>
           <p className="text-xs text-gray-400 mt-0.5">
             Visão personalizada — exclua linhas, agrupamentos ou contas do cálculo
           </p>
@@ -1074,13 +1074,13 @@ export default function DreGerencialPage() {
           )}
           {orderChanged && (
             <button onClick={saveDreLinhaOrder} disabled={savingOrder}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition-colors">
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-[#E2C98A] bg-[#FBF7EE] text-[#6B4E18] hover:bg-[#FBF7EE]/80 disabled:opacity-50 transition-colors">
               <Save size={12} />
               {savingOrder ? 'Salvando...' : 'Salvar Ordem'}
             </button>
           )}
           <button onClick={() => setShowAddLineModal(true)}
-            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-dashed border-blue-300 text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition-colors">
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-dashed border-[#E2C98A] text-[#B8924A] hover:border-[#B8924A] hover:bg-[#FBF7EE] transition-colors">
             <Plus size={12} />
             Nova Linha
           </button>
@@ -1333,9 +1333,9 @@ export default function DreGerencialPage() {
                         className={cn(
                           'border-b transition-colors',
                           row.isGroup ? 'bg-gray-50/80 hover:bg-gray-100/80' : 'border-gray-50 hover:bg-gray-50',
-                          row.isCalculated && !row.isAnalise && 'border-l-2 border-blue-400 bg-blue-50/30',
-                          row.isAnalise && 'border-l-2 border-purple-400 bg-purple-50/30',
-                          isDragTarget && 'ring-2 ring-inset ring-blue-400 bg-blue-50',
+                          row.isCalculated && !row.isAnalise && 'border-l-2 border-[#B8924A] bg-[#FBF7EE]/40',
+                          row.isAnalise && 'border-l-2 border-[#6B4E18] bg-[#FBF7EE]/60',
+                          isDragTarget && 'ring-2 ring-inset ring-[#B8924A] bg-[#FBF7EE]',
                         )}>
                         <td className="px-1 py-2 text-center w-7">
                           {row.depth === 0 && (
@@ -1356,13 +1356,13 @@ export default function DreGerencialPage() {
                                 {expanded.has(row.agrupamento || row.name) ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
                               </button>
                             ) : <span className="w-5" />}
-                            {row.isCalculated && !row.isAnalise && <Calculator size={12} className="text-blue-400 flex-shrink-0" />}
-                            {row.isAnalise && <Calculator size={12} className="text-purple-400 flex-shrink-0" />}
-                            <span className={row.isAnalise ? 'italic text-purple-900' : ''}>{row.name}</span>
+                            {row.isCalculated && !row.isAnalise && <Calculator size={12} className="flex-shrink-0" style={{ color: '#B8924A' }} />}
+                            {row.isAnalise && <Calculator size={12} className="flex-shrink-0" style={{ color: '#6B4E18' }} />}
+                            <span className={row.isAnalise ? 'italic text-[#6B4E18]' : ''}>{row.name}</span>
                             {row.isCalculated && calcLinha && ((calcLinha.id ?? 0) < 0 || isMaster) && (
                               <span className="ml-auto flex items-center gap-1 flex-shrink-0">
                                 <button onClick={e => { e.stopPropagation(); openEditModal(calcLinha) }}
-                                  className="text-gray-300 hover:text-blue-400 transition-colors" title="Editar linha">
+                                  className="text-gray-300 hover:text-[#B8924A] transition-colors" title="Editar linha">
                                   <Pencil size={11} />
                                 </button>
                                 <button onClick={e => { e.stopPropagation(); deleteCalculatedLine(calcLinha.id) }}
@@ -1373,9 +1373,9 @@ export default function DreGerencialPage() {
                             )}
                           </div>
                         </td>
-                        <td className={cn('px-5 py-2.5 text-right', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-600', row.isAnalise && 'text-purple-700')}>{fmtVal(row.budget)}</td>
-                        <td className={cn('px-5 py-2.5 text-right', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-600', row.isAnalise && 'text-purple-700')}>{fmtVal(row.razao)}</td>
-                        <td className={cn('px-5 py-2.5 text-right font-semibold', row.isAnalise ? 'text-purple-500' : colorForVariance(row.variacao))}>{fmtVal(row.variacao)}</td>
+                        <td className={cn('px-5 py-2.5 text-right', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-600', (row.isAnalise ? 'text-[#6B4E18]' : ''))}>{fmtVal(row.budget)}</td>
+                        <td className={cn('px-5 py-2.5 text-right', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-600', (row.isAnalise ? 'text-[#6B4E18]' : ''))}>{fmtVal(row.razao)}</td>
+                        <td className={cn('px-5 py-2.5 text-right font-semibold', row.isAnalise ? 'text-[#B8924A]' : colorForVariance(row.variacao))}>{fmtVal(row.variacao)}</td>
                         <td className="px-5 py-2.5 text-right">
                           {!isDivide && <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', bgColorForVariance(row.variacao))}>{formatPct(row.variacao_pct)}</span>}
                         </td>
@@ -1604,9 +1604,9 @@ export default function DreGerencialPage() {
                       </div>
                       <div className="flex items-center gap-1 border-l border-gray-200 pl-3">
                         <span className="text-xs text-gray-400 mr-1">Rápido:</span>
-                        {compMode === 'mes' && monthOpts.length >= 2 && <button onClick={() => { setCompA(monthOpts[monthOpts.length-1]); setCompB(monthOpts[monthOpts.length-2]) }} className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium">MoM</button>}
-                        {compMode === 'trimestre' && quarterOpts.length >= 2 && <button onClick={() => { setCompA(quarterOpts[quarterOpts.length-1]); setCompB(quarterOpts[quarterOpts.length-2]) }} className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium">QoQ</button>}
-                        {compMode === 'ano' && yearOpts.length >= 2 && <button onClick={() => { setCompA(yearOpts[yearOpts.length-1]); setCompB(yearOpts[yearOpts.length-2]) }} className="text-xs px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 font-medium">YoY</button>}
+                        {compMode === 'mes' && monthOpts.length >= 2 && <button onClick={() => { setCompA(monthOpts[monthOpts.length-1]); setCompB(monthOpts[monthOpts.length-2]) }} className="text-xs px-2.5 py-1 rounded-lg bg-[#FBF7EE] text-[#6B4E18] hover:bg-[#FBF7EE]/80 font-medium">MoM</button>}
+                        {compMode === 'trimestre' && quarterOpts.length >= 2 && <button onClick={() => { setCompA(quarterOpts[quarterOpts.length-1]); setCompB(quarterOpts[quarterOpts.length-2]) }} className="text-xs px-2.5 py-1 rounded-lg bg-[#FBF7EE] text-[#6B4E18] hover:bg-[#FBF7EE]/80 font-medium">QoQ</button>}
+                        {compMode === 'ano' && yearOpts.length >= 2 && <button onClick={() => { setCompA(yearOpts[yearOpts.length-1]); setCompB(yearOpts[yearOpts.length-2]) }} className="text-xs px-2.5 py-1 rounded-lg bg-[#FBF7EE] text-[#6B4E18] hover:bg-[#FBF7EE]/80 font-medium">YoY</button>}
                       </div>
                       {hasSel && <Badge variant="secondary" className="text-xs">{fmtOpt(compA)} vs {fmtOpt(compB)}</Badge>}
                     </div>
@@ -1682,8 +1682,8 @@ export default function DreGerencialPage() {
       {showAddLineModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => { setShowAddLineModal(false); resetLineModal() }}>
           <div className="bg-white rounded-xl shadow-xl p-6 w-96" onClick={e => e.stopPropagation()}>
-            <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
-              {editingLinhaId !== null ? <Pencil size={15} className="text-blue-500" /> : <Calculator size={15} className="text-blue-500" />}
+            <h3 className="font-semibold mb-1 flex items-center gap-2" style={{ color: '#1A1820' }}>
+              {editingLinhaId !== null ? <Pencil size={15} style={{ color: '#B8924A' }} /> : <Calculator size={15} style={{ color: '#B8924A' }} />}
               {editingLinhaId !== null ? 'Editar Linha Gerencial' : 'Nova Linha Gerencial'}
             </h3>
             <p className="text-xs text-gray-500 mb-4">Adiciona uma linha calculada visível apenas nesta DRE Gerencial.</p>
@@ -1706,11 +1706,11 @@ export default function DreGerencialPage() {
                   </button>
                   <button onClick={() => setNewLineIsAnalise(true)}
                     className={cn('flex-1 text-xs py-1.5 rounded-lg border transition-colors',
-                      newLineIsAnalise ? 'bg-purple-700 text-white border-purple-700' : 'border-gray-200 text-gray-600 hover:border-gray-300')}>
+                      newLineIsAnalise ? 'bg-[#1A1820] text-[#B8924A] border-[rgba(184,146,74,0.3)]' : 'border-[#E4DFD5] text-[#1A1820] hover:border-[#B8924A]')}>
                     Análise (só exibição)
                   </button>
                 </div>
-                {newLineIsAnalise && <p className="text-[11px] text-purple-500 mt-0.5">Não afeta subtotais. Ideal para margens e índices.</p>}
+                {newLineIsAnalise && <p className="text-[11px] mt-0.5" style={{ color: '#B8924A', opacity: 0.7 }}>Não afeta subtotais. Ideal para margens e índices.</p>}
               </div>
 
               {/* Tipo de fórmula */}

@@ -158,8 +158,8 @@ export default function CapexPage() {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div className="min-w-0">
-          <h1 className="text-xl md:text-2xl font-bold text-gray-900">CAPEX — Investimentos</h1>
-          <p className="text-gray-500 text-sm mt-0.5">Budget vs Realizado por projeto · {data.length.toLocaleString()} registros</p>
+          <h1 className="page-title text-2xl md:text-3xl">CAPEX — Investimentos</h1>
+          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#B8924A", opacity: 0.55, letterSpacing: "0.04em" }}>Budget vs Realizado por projeto · {data.length.toLocaleString()} registros</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
           <YearFilter periodos={periodos} selYear={selYear} onChange={y => setSelYear(y)} />

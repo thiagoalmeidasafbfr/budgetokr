@@ -5,10 +5,10 @@ import { Loader2, AlertCircle } from 'lucide-react'
 
 export default function LoginPage() {
   const router = useRouter()
-  const [userId, setUserId]   = useState('')
+  const [userId, setUserId]     = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError]     = useState('')
-  const [loading, setLoading] = useState(false)
+  const [error, setError]       = useState('')
+  const [loading, setLoading]   = useState(false)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -25,7 +25,6 @@ export default function LoginPage() {
         setError(data.error || 'Erro ao autenticar')
         return
       }
-      // dept users vão para /dept, master vai para /
       if (data.role === 'dept') {
         router.push('/dept')
       } else {
@@ -40,25 +39,104 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex items-center justify-center p-4">
+    <div
+      className="min-h-screen flex items-center justify-center p-4"
+      style={{ backgroundColor: '#F7F6F2' }}
+    >
       <div className="w-full max-w-sm">
-        {/* Logo */}
-        <div className="flex items-center justify-center mb-8">
-          <img
-            src="/lgloginbotafogo.png"
-            alt="Logo"
-            className="h-20 w-auto object-contain"
-          />
+
+        {/* ── Logo / Wordmark ─────────────────────────────────────────────── */}
+        <div className="flex flex-col items-center mb-10">
+          <div className="flex items-center gap-3 mb-4">
+            <span style={{ color: '#B8924A', fontSize: '2rem', lineHeight: 1 }}>✦</span>
+            <div className="flex flex-col leading-none">
+              <span
+                style={{
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontSize: '2.2rem',
+                  fontWeight: 700,
+                  color: '#1A1820',
+                  letterSpacing: '-0.02em',
+                  lineHeight: 1,
+                }}
+              >
+                Glorioso
+              </span>
+              <span
+                style={{
+                  fontFamily: "'Big Shoulders Display', sans-serif",
+                  fontSize: '0.65rem',
+                  fontWeight: 900,
+                  letterSpacing: '0.45em',
+                  color: '#B8924A',
+                  marginTop: '-1px',
+                  marginLeft: '3px',
+                }}
+              >
+                FINANCE
+              </span>
+            </div>
+          </div>
+          <p
+            style={{
+              fontFamily: "'IBM Plex Mono', monospace",
+              fontSize: '10px',
+              letterSpacing: '0.12em',
+              color: '#B8924A',
+              opacity: 0.6,
+              textTransform: 'uppercase',
+            }}
+          >
+            Plataforma de Gestão Financeira
+          </p>
         </div>
 
-        {/* Card */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-8">
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Entrar</h1>
-          <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">Acesse com seu usuário e senha</p>
+        {/* ── Card ────────────────────────────────────────────────────────── */}
+        <div
+          className="rounded-2xl p-8"
+          style={{
+            backgroundColor: '#FFFFFF',
+            border: '0.5px solid #E4DFD5',
+            boxShadow: '0 2px 8px rgba(26,24,32,0.04)',
+          }}
+        >
+          <h1
+            className="mb-1"
+            style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontSize: '1.5rem',
+              fontWeight: 700,
+              color: '#1A1820',
+              letterSpacing: '-0.01em',
+            }}
+          >
+            Entrar
+          </h1>
+          <p
+            className="mb-6"
+            style={{
+              fontFamily: "'IBM Plex Mono', monospace",
+              fontSize: '11px',
+              color: '#B8924A',
+              opacity: 0.6,
+              letterSpacing: '0.04em',
+            }}
+          >
+            Acesse com seu usuário e senha
+          </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+              <label
+                className="block text-xs font-medium mb-1.5"
+                style={{
+                  color: '#1A1820',
+                  fontFamily: "'IBM Plex Mono', monospace",
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  fontSize: '10px',
+                }}
+              >
                 Usuário
               </label>
               <input
@@ -68,12 +146,29 @@ export default function LoginPage() {
                 required
                 autoFocus
                 placeholder="ex: financeiro"
-                className="w-full px-3.5 py-2.5 border border-gray-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent transition-all dark:placeholder-slate-400"
+                className="w-full px-3.5 py-2.5 rounded-lg text-sm focus:outline-none transition-all"
+                style={{
+                  border: '0.5px solid #E4DFD5',
+                  backgroundColor: '#F7F6F2',
+                  color: '#1A1820',
+                  fontFamily: "'IBM Plex Mono', monospace",
+                }}
+                onFocus={e => { e.currentTarget.style.borderColor = '#B8924A'; e.currentTarget.style.backgroundColor = '#FFFFFF' }}
+                onBlur={e => { e.currentTarget.style.borderColor = '#E4DFD5'; e.currentTarget.style.backgroundColor = '#F7F6F2' }}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+              <label
+                className="block text-xs font-medium mb-1.5"
+                style={{
+                  color: '#1A1820',
+                  fontFamily: "'IBM Plex Mono', monospace",
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  fontSize: '10px',
+                }}
+              >
                 Senha
               </label>
               <input
@@ -82,12 +177,27 @@ export default function LoginPage() {
                 onChange={e => setPassword(e.target.value)}
                 required
                 placeholder="••••••••"
-                className="w-full px-3.5 py-2.5 border border-gray-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent transition-all dark:placeholder-slate-400"
+                className="w-full px-3.5 py-2.5 rounded-lg text-sm focus:outline-none transition-all"
+                style={{
+                  border: '0.5px solid #E4DFD5',
+                  backgroundColor: '#F7F6F2',
+                  color: '#1A1820',
+                  fontFamily: "'IBM Plex Mono', monospace",
+                }}
+                onFocus={e => { e.currentTarget.style.borderColor = '#B8924A'; e.currentTarget.style.backgroundColor = '#FFFFFF' }}
+                onBlur={e => { e.currentTarget.style.borderColor = '#E4DFD5'; e.currentTarget.style.backgroundColor = '#F7F6F2' }}
               />
             </div>
 
             {error && (
-              <div className="flex items-center gap-2 text-red-600 dark:text-red-400 text-sm bg-red-50 dark:bg-red-950 rounded-lg px-3.5 py-2.5">
+              <div
+                className="flex items-center gap-2 text-sm rounded-lg px-3.5 py-2.5"
+                style={{
+                  backgroundColor: 'rgba(185,28,28,0.06)',
+                  border: '0.5px solid rgba(185,28,28,0.2)',
+                  color: '#B91C1C',
+                }}
+              >
                 <AlertCircle size={14} className="flex-shrink-0" />
                 {error}
               </div>
@@ -96,16 +206,36 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gray-900 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 mt-2"
+              className="w-full py-2.5 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 mt-2"
+              style={{
+                backgroundColor: '#1A1820',
+                color: '#B8924A',
+                border: '0.5px solid rgba(184,146,74,0.3)',
+                fontFamily: "'IBM Plex Mono', monospace",
+                letterSpacing: '0.08em',
+              }}
+              onMouseEnter={e => { if (!loading) e.currentTarget.style.backgroundColor = '#0C0B0F' }}
+              onMouseLeave={e => { if (!loading) e.currentTarget.style.backgroundColor = '#1A1820' }}
             >
               {loading && <Loader2 size={14} className="animate-spin" />}
-              {loading ? 'Entrando...' : 'Entrar'}
+              {loading ? 'Autenticando...' : 'Entrar'}
             </button>
           </form>
         </div>
 
-        <p className="text-center text-xs text-gray-400 dark:text-slate-500 mt-4">
-          Fale com o administrador para obter acesso
+        {/* ── Footer ──────────────────────────────────────────────────────── */}
+        <p
+          className="text-center mt-5"
+          style={{
+            fontFamily: "'IBM Plex Mono', monospace",
+            fontSize: '9px',
+            letterSpacing: '0.15em',
+            color: '#B8924A',
+            opacity: 0.4,
+            textTransform: 'uppercase',
+          }}
+        >
+          © 2026 Glorioso Finance · Rio de Janeiro
         </p>
       </div>
     </div>

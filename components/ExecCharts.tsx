@@ -42,6 +42,10 @@ interface ChartItem {
 // ─── Palettes ─────────────────────────────────────────────────────────────────
 
 const PALETTES: Record<string, { label: string; colors: string[] }> = {
+  glorioso: {
+    label: 'Glorioso',
+    colors: ['#1A1820','#B8924A','#6B4E18','#334155','#166534','#B91C1C','#475569','#D97706','#064e3b','#7c3aed'],
+  },
   mixed: {
     label: 'Variado',
     colors: ['#334155','#1d4ed8','#059669','#d97706','#e11d48','#7c3aed','#0891b2','#065f46','#92400e','#9f1239'],
@@ -68,7 +72,7 @@ const PALETTES: Record<string, { label: string; colors: string[] }> = {
   },
 }
 
-const DEFAULT_PALETTE = 'mixed'
+const DEFAULT_PALETTE = 'glorioso'
 
 function getPalette(key: string): string[] {
   return (PALETTES[key] ?? PALETTES[DEFAULT_PALETTE]).colors
@@ -102,9 +106,9 @@ function ExecTooltip({
     ? `${total > 0 ? ((val / total) * 100).toFixed(1) : 0}%`
     : formatCurrency(val)
   return (
-    <div style={{ background: '#0f172a', borderRadius: 10, padding: '8px 12px', border: '1px solid rgba(255,255,255,0.1)', fontSize: 12 }}>
-      <p style={{ color: '#94a3b8', marginBottom: 4, fontWeight: 600 }}>{d.name}</p>
-      <p style={{ color: '#fff', fontWeight: 700 }}>{display}</p>
+    <div style={{ background: '#1A1820', borderRadius: 6, padding: '10px 14px', border: '0.5px solid rgba(184,146,74,0.25)', minWidth: 160 }}>
+      <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: '#B8924A', opacity: 0.7, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>{d.name}</p>
+      <p style={{ fontFamily: "'Big Shoulders Display', sans-serif", fontWeight: 900, fontSize: 18, color: '#fff', letterSpacing: '-0.01em' }}>{display}</p>
     </div>
   )
 }
@@ -279,26 +283,31 @@ function ExecChartCard({
   // ── Active shape (hover effect on pie/donut) ───────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const renderActiveShape = (props: any) => {
-    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, percent } = props
+    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, percent, value } = props
     return (
       <g>
         <Sector
           cx={cx} cy={cy}
-          innerRadius={innerRadius - (innerRadius > 0 ? 3 : 0)}
-          outerRadius={outerRadius + 7}
+          innerRadius={innerRadius}
+          outerRadius={outerRadius + 5}
           startAngle={startAngle}
           endAngle={endAngle}
           fill={fill}
-          opacity={1}
-          stroke={fill}
-          strokeWidth={1}
+          opacity={0.97}
+          stroke="#fff"
+          strokeWidth={1.5}
         />
-        {/* Center text for donut */}
         {innerRadius > 0 && (
-          <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central"
-            fontSize={12} fontWeight={700} fill="#1e293b" style={{ pointerEvents: 'none' }}>
-            {`${(percent * 100).toFixed(1)}%`}
-          </text>
+          <>
+            <text x={cx} y={cy - 7} textAnchor="middle" dominantBaseline="central"
+              style={{ fontFamily: "'Big Shoulders Display', sans-serif", fontWeight: 900, fontSize: 15, fill: '#1A1820', pointerEvents: 'none', letterSpacing: '-0.01em' }}>
+              {tickFmt(value)}
+            </text>
+            <text x={cx} y={cy + 10} textAnchor="middle" dominantBaseline="central"
+              style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 8, fill: '#B8924A', pointerEvents: 'none', letterSpacing: '0.06em' }}>
+              {`${(percent * 100).toFixed(1)}%`}
+            </text>
+          </>
         )}
       </g>
     )
@@ -306,40 +315,62 @@ function ExecChartCard({
 
   return (
     <Card className="overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+      <div className="flex items-start justify-between px-5 py-4" style={{ borderBottom: '0.5px solid #E4DFD5' }}>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-gray-800 truncate">{config.title}</p>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <p className="truncate leading-none" style={{
+            fontFamily: "'Big Shoulders Display', sans-serif", fontWeight: 900,
+            fontSize: '13px', letterSpacing: '-0.01em', textTransform: 'uppercase', color: '#1A1820',
+          }}>{config.title}</p>
+          <p className="mt-1.5" style={{
+            fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px',
+            letterSpacing: '0.1em', color: '#B8924A', opacity: 0.6, textTransform: 'uppercase',
+          }}>
             {fieldLabel} · Top {config.topN}
-            {config.groupBy && config.groupBy !== 'agrupamento_arvore' && (
-              <span className="ml-1 text-amber-600">· {{
-                dre:             'Categoria DRE',
-                conta_contabil:  'Conta',
-                centro_custo:    'Centro de Custo',
-                contrapartida:   'Contrapartida',
-                departamento:    'Departamento',
-                unidade_negocio: 'Unidade de Negócio',
-              }[config.groupBy]}</span>
-            )}
-            {config.dreGroup && <span className="ml-1">· {config.dreGroup}</span>}
+            {config.groupBy && config.groupBy !== 'agrupamento_arvore' && ` · ${{
+              dre:             'DRE',
+              conta_contabil:  'Conta',
+              centro_custo:    'C. Custo',
+              contrapartida:   'Contrapartida',
+              departamento:    'Dept.',
+              unidade_negocio: 'Unidade',
+            }[config.groupBy]}`}
+            {config.dreGroup && ` · ${config.dreGroup}`}
           </p>
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
-          <button onClick={load} className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors" title="Atualizar">
-            <RefreshCw size={12} />
+        <div className="flex items-center gap-0.5 flex-shrink-0 ml-3">
+          <button onClick={load}
+            className="p-1.5 rounded transition-colors"
+            style={{ color: '#B8924A', opacity: 0.4 }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+            onMouseLeave={e => (e.currentTarget.style.opacity = '0.4')}
+            title="Atualizar">
+            <RefreshCw size={11} />
           </button>
           {!loading && items.length > 0 && (
-            <button onClick={exportPng} className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors" title="Exportar PNG">
-              <Download size={12} />
+            <button onClick={exportPng}
+              className="p-1.5 rounded transition-colors"
+              style={{ color: '#B8924A', opacity: 0.4 }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+              onMouseLeave={e => (e.currentTarget.style.opacity = '0.4')}
+              title="Exportar PNG">
+              <Download size={11} />
             </button>
           )}
           {canEdit && (
             <>
-              <button onClick={onEdit} className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
-                <Settings2 size={12} />
+              <button onClick={onEdit}
+                className="p-1.5 rounded transition-colors"
+                style={{ color: '#B8924A', opacity: 0.4 }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                onMouseLeave={e => (e.currentTarget.style.opacity = '0.4')}>
+                <Settings2 size={11} />
               </button>
-              <button onClick={onDelete} className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
-                <X size={12} />
+              <button onClick={onDelete}
+                className="p-1.5 rounded transition-colors"
+                style={{ color: '#B8924A', opacity: 0.4 }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = '0.4')}
+                onMouseLeave={e => (e.currentTarget.style.opacity = '0.4')}>
+                <X size={11} />
               </button>
             </>
           )}
@@ -348,11 +379,19 @@ function ExecChartCard({
 
       <CardContent className="p-4">
         {loading ? (
-          <div className="h-[220px] flex items-center justify-center">
-            <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-700 rounded-full animate-spin" />
+          <div className="h-[220px] flex flex-col justify-end gap-2 pb-3 px-2">
+            {[55, 75, 40, 90, 65].map((h, i) => (
+              <div key={i} className="rounded-sm animate-pulse w-full"
+                style={{ height: `${h * 1.6}px`, maxHeight: 36, background: `rgba(184,146,74,${0.04 + i * 0.025})` }} />
+            ))}
           </div>
         ) : items.length === 0 ? (
-          <div className="h-[220px] flex items-center justify-center text-sm text-gray-400">Sem dados</div>
+          <div className="h-[220px] flex flex-col items-center justify-center gap-3">
+            <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: '#FBF7EE', border: '0.5px solid #E4DFD5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <BarChart2 size={18} style={{ color: '#B8924A', opacity: 0.4 }} />
+            </div>
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px', color: '#B8924A', opacity: 0.35, letterSpacing: '0.15em', textTransform: 'uppercase' }}>Sem dados</p>
+          </div>
         ) : (
           <div className="space-y-3">
             <div ref={chartRef}>
@@ -382,14 +421,13 @@ function ExecChartCard({
                   <Tooltip content={tooltip} />
                 </PieChart>
               ) : config.chartType === 'bar_h' ? (
-                <BarChart data={absItems} layout="vertical" margin={{ top: 0, right: 55, left: 0, bottom: 0 }}>
-                  <CartesianGrid horizontal={false} stroke="#f1f5f9" />
-                  <XAxis type="number" tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 9, fill: '#475569' }} axisLine={false} tickLine={false}
+                <BarChart data={absItems} layout="vertical" margin={{ top: 0, right: 52, left: 0, bottom: 0 }}>
+                  <XAxis type="number" tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 9, fill: '#475569', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false}
                     tickFormatter={(v: string) => v.length > 17 ? v.slice(0, 16) + '…' : v} />
-                  <Tooltip content={tooltip} cursor={{ fill: '#f8fafc' }} />
-                  <Bar dataKey="absValue" name={fieldLabel} radius={[0,3,3,0]} maxBarSize={14}
-                    label={barLabel ? { ...barLabel, position: 'right' } : false}>
+                  <Tooltip content={tooltip} cursor={{ fill: 'rgba(184,146,74,0.04)' }} />
+                  <Bar dataKey="absValue" name={fieldLabel} radius={[0,2,2,0]} maxBarSize={16}
+                    label={barLabel ? { ...barLabel, position: 'right', fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, fill: '#94a3b8' } : false}>
                     {absItems.map((_, i) => (
                       <Cell key={i} fill={palette[i % palette.length]} />
                     ))}
@@ -398,22 +436,22 @@ function ExecChartCard({
                 </BarChart>
               ) : config.chartType === 'area' ? (
                 <AreaChart data={absItems} margin={{ top: 14, right: 8, left: -10, bottom: 24 }}>
-                  <CartesianGrid vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0}
+                  <CartesianGrid vertical={false} stroke="#F0EDE8" strokeWidth={0.5} />
+                  <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0}
                     tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 11) + '…' : v} />
-                  <YAxis tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                  <Tooltip content={tooltip} cursor={{ stroke: areaColor, strokeWidth: 1 }} />
+                  <YAxis tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} />
+                  <Tooltip content={tooltip} cursor={{ stroke: areaColor, strokeWidth: 1, strokeDasharray: '4 2' }} />
                   <Area
                     type="monotone"
                     dataKey="absValue"
                     name={fieldLabel}
                     stroke={areaColor}
-                    strokeWidth={2.5}
+                    strokeWidth={2}
                     fill={areaColor}
-                    fillOpacity={0.15}
-                    dot={{ fill: areaColor, r: 3, strokeWidth: 0 }}
+                    fillOpacity={0.08}
+                    dot={{ fill: areaColor, r: 3.5, strokeWidth: 2, stroke: '#fff' }}
                     activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff', fill: areaColor }}
-                    label={barLabel ? { ...barLabel, position: 'top' } : false}
+                    label={barLabel ? { ...barLabel, position: 'top', fontFamily: "'IBM Plex Mono', monospace" } : false}
                   />
                   {refLine}
                 </AreaChart>
@@ -466,13 +504,13 @@ function ExecChartCard({
                 </Treemap>
               ) : (
                 <BarChart data={absItems} margin={{ top: 14, right: 8, left: -10, bottom: 24 }}>
-                  <CartesianGrid vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0}
+                  <CartesianGrid vertical={false} stroke="#F0EDE8" strokeWidth={0.5} />
+                  <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0}
                     tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 11) + '…' : v} />
-                  <YAxis tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                  <Tooltip content={tooltip} cursor={{ fill: '#f8fafc' }} />
-                  <Bar dataKey="absValue" name={fieldLabel} radius={[3,3,0,0]} maxBarSize={30}
-                    label={barLabel ? { ...barLabel, position: 'top' } : false}>
+                  <YAxis tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} />
+                  <Tooltip content={tooltip} cursor={{ fill: 'rgba(184,146,74,0.04)' }} />
+                  <Bar dataKey="absValue" name={fieldLabel} radius={[2,2,0,0]} maxBarSize={28}
+                    label={barLabel ? { ...barLabel, position: 'top', fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, fill: '#94a3b8' } : false}>
                     {absItems.map((_, i) => (
                       <Cell key={i} fill={palette[i % palette.length]} />
                     ))}
@@ -484,15 +522,16 @@ function ExecChartCard({
             </div>
 
             {/* Legend */}
-            <div className="flex flex-wrap gap-x-3 gap-y-1">
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1" style={{ borderTop: '0.5px solid #F0EDE8' }}>
               {items.map((it, i) => {
                 const pct = total > 0 ? ((Math.abs(it.value) / total) * 100).toFixed(0) : '0'
                 return (
-                  <div key={i} className="flex items-center gap-1 text-[10px] text-gray-500">
-                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: palette[i % palette.length] }} />
-                    <span className="truncate max-w-[110px]" title={it.name}>{it.name}</span>
-                    <span className="text-gray-400">
-                      {vf === 'percent' ? `${pct}%` : `(${pct}%)`}
+                  <div key={i} className="flex items-center gap-1.5">
+                    <span className="flex-shrink-0 rounded-sm" style={{ width: 3, height: 14, background: palette[i % palette.length] }} />
+                    <span className="truncate max-w-[90px]" title={it.name}
+                      style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: '#475569' }}>{it.name}</span>
+                    <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: '#B8924A', opacity: 0.6 }}>
+                      {pct}%
                     </span>
                   </div>
                 )

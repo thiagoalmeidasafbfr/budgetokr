@@ -170,8 +170,8 @@ export default function MedidasPage() {
     <div className="max-w-4xl mx-auto space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-gray-900">Medidas</h1>
-          <p className="text-gray-500 text-sm mt-0.5">Defina KPIs como SG&A, COGS, Headcount usando filtros no star schema</p>
+          <h1 className="page-title text-2xl md:text-3xl">Medidas</h1>
+          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#B8924A", opacity: 0.55, letterSpacing: "0.04em" }}>Defina KPIs como SG&A, COGS, Headcount usando filtros no star schema</p>
         </div>
         {editing === null && <Button onClick={() => { setForm(emptyForm()); setEditing(-1); setError(null) }}><Plus size={15} /> Nova Medida</Button>}
       </div>
@@ -411,7 +411,7 @@ export default function MedidasPage() {
                       return (
                         <span key={i} className="contents">
                           {connector && (
-                            <span className={cn('text-[10px] font-bold px-1', connector === 'OR' ? 'text-amber-500' : 'text-blue-500')}>
+                            <span className={cn('text-[10px] font-bold px-1', connector === 'OR' ? 'text-[#B8924A]' : 'text-[#6B4E18]')}>
                               {connector === 'OR' ? 'OU' : 'E'}
                             </span>
                           )}
@@ -430,7 +430,7 @@ export default function MedidasPage() {
                           return (
                             <span key={i} className="contents">
                               {connector && (
-                                <span className={cn('text-[10px] font-bold px-1', connector === 'OR' ? 'text-amber-500' : 'text-blue-500')}>
+                                <span className={cn('text-[10px] font-bold px-1', connector === 'OR' ? 'text-[#B8924A]' : 'text-[#6B4E18]')}>
                                   {connector === 'OR' ? 'OU' : 'E'}
                                 </span>
                               )}
@@ -524,7 +524,7 @@ function FilterSection({
                     'text-xs font-bold px-2 py-0.5 rounded flex-shrink-0 cursor-pointer transition-colors border',
                     logic === 'OR'
                       ? 'bg-amber-100 text-amber-600 border-amber-300 hover:bg-amber-200'
-                      : 'bg-blue-100 text-blue-600 border-blue-300 hover:bg-blue-200'
+                      : 'bg-[#FBF7EE] text-[#6B4E18] border-[#E2C98A] hover:bg-[#FBF7EE]/80'
                   )}>
                   {logic === 'OR' ? 'OU' : 'E'}
                 </button>

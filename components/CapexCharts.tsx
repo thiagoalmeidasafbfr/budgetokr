@@ -41,8 +41,8 @@ export default function CapexCharts({ chartData, groupBy }: { chartData: ChartRo
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={chartData} margin={{ top: 0, right: 0, left: -10, bottom: 30 }}>
               <CartesianGrid vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="key" angle={-30} textAnchor="end" tick={{ fontSize: 10, fill: '#94a3b8' }} interval={0} axisLine={false} tickLine={false} />
-              <YAxis tickFormatter={v => formatCurrency(v).replace('R$\u00a0', '')} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="key" angle={-30} textAnchor="end" tick={{ fontSize: 10, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} interval={0} axisLine={false} tickLine={false} />
+              <YAxis tickFormatter={v => formatCurrency(v).replace('R$\u00a0', '')} tick={{ fontSize: 10, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} />
               <Tooltip content={<DarkTooltip />} cursor={{ fill: '#f8fafc' }} />
               <Bar dataKey="budget" name="Budget"    fill="#cbd5e1" radius={[3,3,0,0]} />
               <Bar dataKey="razao"  name="Realizado" fill="#334155" radius={[3,3,0,0]} />
@@ -52,7 +52,7 @@ export default function CapexCharts({ chartData, groupBy }: { chartData: ChartRo
             {[{ color: '#cbd5e1', label: 'Budget' }, { color: '#334155', label: 'Realizado' }].map(l => (
               <div key={l.label} className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-sm inline-block" style={{ background: l.color }} />
-                <span className="text-xs text-gray-500">{l.label}</span>
+                <span className="font-mono text-[10px] text-gray-500">{l.label}</span>
               </div>
             ))}
           </div>
@@ -64,8 +64,8 @@ export default function CapexCharts({ chartData, groupBy }: { chartData: ChartRo
           <ResponsiveContainer width="100%" height={Math.max(240, chartData.length * 28)}>
             <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 20, left: 80, bottom: 0 }}>
               <CartesianGrid horizontal={false} stroke="#f1f5f9" />
-              <XAxis type="number" tickFormatter={v => formatCurrency(v).replace('R$\u00a0', '')} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-              <YAxis type="category" dataKey="key" width={140} tick={{ fontSize: 10, fill: '#475569' }} axisLine={false} tickLine={false} />
+              <XAxis type="number" tickFormatter={v => formatCurrency(v).replace('R$\u00a0', '')} tick={{ fontSize: 10, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="key" width={140} tick={{ fontSize: 10, fill: '#475569', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} />
               <Tooltip content={<VariacaoTooltip />} cursor={{ fill: '#f8fafc' }} />
               <Bar dataKey="variacao" name="Variação" radius={[0,3,3,0]}>
                 {chartData.map((e, i) => <Cell key={i} fill={e.variacao >= 0 ? '#059669' : '#dc2626'} />)}

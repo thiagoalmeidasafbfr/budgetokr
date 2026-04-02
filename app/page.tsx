@@ -120,21 +120,23 @@ export default function Dashboard() {
 
   if (loading) return (
     <div className="flex items-center justify-center h-[70vh]">
-      <div className="flex flex-col items-center gap-2">
-        <div className="w-7 h-7 border-2 border-gray-700 border-t-transparent rounded-full animate-spin" />
-        <p className="text-gray-400 text-sm">Carregando…</p>
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-7 h-7 rounded-full animate-spin" style={{ border: '2px solid rgba(184,146,74,0.2)', borderTopColor: '#B8924A' }} />
+        <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11px', color: '#B8924A', opacity: 0.5, letterSpacing: '0.1em' }}>
+          Carregando…
+        </p>
       </div>
     </div>
   )
 
   if (empty) return (
     <div className="flex flex-col items-center justify-center h-[70vh] gap-4">
-      <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center">
-        <AlertCircle size={30} className="text-gray-500" />
+      <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ backgroundColor: '#FBF7EE', border: '0.5px solid #E4DFD5' }}>
+        <AlertCircle size={30} style={{ color: '#B8924A' }} />
       </div>
       <div className="text-center">
-        <h2 className="text-xl font-semibold text-gray-900 mb-1">Nenhum dado encontrado</h2>
-        <p className="text-gray-500 text-sm mb-5">Importe os dados para começar. Sugestão de ordem:</p>
+        <h2 className="text-xl font-semibold mb-1" style={{ color: '#1A1820' }}>Nenhum dado encontrado</h2>
+        <p className="text-sm mb-5" style={{ color: '#B8924A', opacity: 0.6 }}>Importe os dados para começar. Sugestão de ordem:</p>
         <div className="flex flex-col gap-2 text-left max-w-xs mx-auto mb-5">
           {[
             ['1', 'Contas Contábeis', '/upload'],
@@ -142,9 +144,10 @@ export default function Dashboard() {
             ['3', 'Lançamentos Budget', '/upload'],
             ['4', 'Lançamentos Razão', '/upload'],
           ].map(([n, l, href]) => (
-            <div key={n} className="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2">
-              <span className="w-5 h-5 bg-gray-100 text-gray-700 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">{n}</span>
-              <span className="text-sm text-gray-700">{l}</span>
+            <div key={n} className="flex items-center gap-3 rounded-lg px-3 py-2" style={{ backgroundColor: '#FBF7EE', border: '0.5px solid #E4DFD5' }}>
+              <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                style={{ backgroundColor: '#1A1820', color: '#B8924A' }}>{n}</span>
+              <span className="text-sm" style={{ color: '#1A1820' }}>{l}</span>
             </div>
           ))}
         </div>
@@ -238,17 +241,28 @@ export default function Dashboard() {
 
   // Shared widget panel (rendered in left column)
   const widgetPanel = showWidgetCfg && (
-    <div className="absolute left-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded-xl shadow-xl p-3 w-56 space-y-1">
-      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1 mb-2">Personalizar</p>
+    <div className="absolute left-0 top-full mt-1 z-30 rounded-xl shadow-xl p-3 w-56 space-y-1"
+      style={{ backgroundColor: '#FFFFFF', border: '0.5px solid #E4DFD5' }}
+    >
+      <p className="px-1 mb-2" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px', letterSpacing: '0.18em', textTransform: 'uppercase', color: '#B8924A', opacity: 0.6 }}>
+        Personalizar
+      </p>
       {sortedWidgets.map((ww, i) => (
-        <div key={ww.id} className="flex items-center gap-2 hover:bg-gray-50 rounded-lg px-2 py-1.5">
+        <div key={ww.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors"
+          style={{ cursor: 'default' }}
+          onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#FBF7EE')}
+          onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+        >
           <button onClick={() => toggleWidget(ww.id)} className="flex-shrink-0">
-            {ww.visible ? <Eye size={13} className="text-gray-600" /> : <EyeOff size={13} className="text-gray-300" />}
+            {ww.visible
+              ? <Eye size={13} style={{ color: '#B8924A' }} />
+              : <EyeOff size={13} style={{ color: '#E4DFD5' }} />
+            }
           </button>
-          <span className={cn('text-xs flex-1', ww.visible ? 'text-gray-700' : 'text-gray-400')}>{ww.label}</span>
+          <span className="text-xs flex-1" style={{ color: ww.visible ? '#1A1820' : '#B8924A', opacity: ww.visible ? 1 : 0.4 }}>{ww.label}</span>
           <div className="flex flex-col gap-0.5 flex-shrink-0">
-            <button onClick={() => moveWidget(ww.id, -1)} disabled={i === 0} className="text-gray-400 hover:text-gray-600 disabled:opacity-20"><ChevronUp size={10} /></button>
-            <button onClick={() => moveWidget(ww.id, 1)} disabled={i === sortedWidgets.length - 1} className="text-gray-400 hover:text-gray-600 disabled:opacity-20"><ChevronDown size={10} /></button>
+            <button onClick={() => moveWidget(ww.id, -1)} disabled={i === 0} style={{ color: '#B8924A', opacity: i === 0 ? 0.2 : 0.6 }}><ChevronUp size={10} /></button>
+            <button onClick={() => moveWidget(ww.id, 1)} disabled={i === sortedWidgets.length - 1} style={{ color: '#B8924A', opacity: i === sortedWidgets.length - 1 ? 0.2 : 0.6 }}><ChevronDown size={10} /></button>
           </div>
         </div>
       ))}
@@ -257,45 +271,60 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      {/* Always-visible top strip: left controls + right (year filter + optional big numbers) */}
-      <div className={cn('flex items-start gap-8', isWidgetVisible('summary') ? 'pb-6 border-b border-gray-100' : '')}>
-        {/* Left: always-visible controls — only Widgets button */}
-        <div className="flex-shrink-0 flex flex-col gap-3 pt-1">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Dashboard</p>
+      {/* Header row — full width */}
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2">
+          <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px', letterSpacing: '0.2em', textTransform: 'uppercase', color: '#B8924A', opacity: 0.5 }}>
+            Dashboard
+          </p>
           <div className="relative">
-            <button onClick={() => setShowWidgetCfg(v => !v)} className="text-[11px] text-gray-400 hover:text-gray-700 flex items-center gap-1.5 transition-colors">
+            <button
+              onClick={() => setShowWidgetCfg(v => !v)}
+              className="flex items-center gap-1.5 transition-colors"
+              style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11px', color: '#B8924A', opacity: 0.5 }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+              onMouseLeave={e => (e.currentTarget.style.opacity = '0.5')}
+            >
               <Settings2 size={11} /> Widgets
             </button>
             {widgetPanel}
           </div>
         </div>
-        {/* Right: year filter top-right + big numbers (when summary visible) */}
-        <div className="flex-1 flex flex-col gap-5">
-          <div className="flex justify-end">
-            <YearFilter periodos={allPeriodos} selYear={selYear} onChange={setSelYear} />
-          </div>
-          {isWidgetVisible('summary') && (
-            <div className="flex flex-wrap items-start justify-around gap-10">
-              <BigNum
+        <YearFilter periodos={allPeriodos} selYear={selYear} onChange={setSelYear} />
+      </div>
+
+      {/* Summary cards — mesma estrutura flex:2 / flex:1 que os gráficos abaixo */}
+      {isWidgetVisible('summary') && (
+        <div className="flex gap-4 pb-5" style={{ borderBottom: '0.5px solid #E4DFD5' }}>
+          {/* 2/3 — dois cards lado a lado */}
+          <div className="flex gap-4" style={{ flex: 2 }}>
+            <div style={{ flex: 1 }}>
+              <SummaryCard
                 title={selYear && hasYtdData ? 'Budget YTD' : 'Budget Total'}
                 value={abbrev(displayBudget)}
                 sub={selYear && hasYtdData ? ytdLabelSub : undefined}
               />
-              <BigNum
-                title={selYear && hasYtdData ? 'Realizado YTD' : 'Realizado Total'}
-                value={abbrev(displayRazao)}
-                sub={selYear && hasYtdData ? ytdLabelSub : undefined}
-              />
-              <BigNum
-                title="Variação"
+            </div>
+            <div style={{ flex: 1 }}>
+              <SummaryCard
+                title="Variação de Performance"
                 value={abbrev(variacao)}
-                sub={formatPct(variacaoPct)}
-                color={variacao >= 0 ? 'text-emerald-600' : 'text-red-500'}
+                pct={formatPct(variacaoPct)}
+                featured
+                color={variacao >= 0 ? '#166534' : '#B91C1C'}
               />
             </div>
-          )}
+          </div>
+          {/* 1/3 — card direito */}
+          <div style={{ flex: 1 }}>
+            <SummaryCard
+              title={selYear && hasYtdData ? 'Realizado YTD' : 'Realizado Total'}
+              value={abbrev(displayRazao)}
+              sub="Verificado"
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Remaining widgets in custom order (summary handled above) */}
       {sortedWidgets.filter(w => w.visible && w.id !== 'summary').map(w => {
@@ -307,34 +336,65 @@ export default function Dashboard() {
         )
         if (w.id === 'dept-table') return (
           <Card key="dept-table">
-            <CardHeader><CardTitle>Resumo por Departamento</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '1.35rem', fontWeight: 700, letterSpacing: '-0.01em' }}>
+                Resumo por Departamento
+              </CardTitle>
+            </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead><tr className="border-b bg-gray-50">
-                    <th className="text-left px-3 md:px-5 py-2.5 font-medium text-gray-500">Departamento</th>
-                    <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500">Budget</th>
-                    <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500">Razão</th>
-                    <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500">Variação</th>
-                    <th className="text-right px-3 md:px-5 py-2.5 font-medium text-gray-500">%</th>
-                  </tr></thead>
+                  <thead>
+                    <tr style={{ borderBottom: '0.5px solid #E4DFD5', backgroundColor: '#F7F6F2' }}>
+                      {['Departamento', 'Budget', 'Razão', 'Variação', '%'].map((h, hi) => (
+                        <th key={h}
+                          className={hi === 0 ? 'text-left px-3 md:px-5 py-2.5' : 'text-right px-3 md:px-5 py-2.5'}
+                          style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#B8924A', opacity: 0.6 }}
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
                   <tbody>
                     {Object.entries(byDept).map(([label, vals], i) => {
                       const variacao = vals.razao - vals.budget
                       const pct     = safePct(variacao, vals.budget)
                       return (
-                        <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                          <td className="px-3 md:px-5 py-2.5 font-medium text-gray-900">
+                        <tr key={i} className="transition-colors"
+                          style={{ borderBottom: '0.5px solid rgba(228,223,213,0.5)' }}
+                          onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#FBF7EE')}
+                          onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                        >
+                          <td className="px-3 md:px-5 py-2.5 font-medium" style={{ color: '#1A1820' }}>
                             {label}
                             {vals.codigo && vals.codigo !== label && (
-                              <span className="ml-2 text-xs text-gray-400 font-normal">{vals.codigo}</span>
+                              <span className="ml-2 text-xs font-normal"
+                                style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#B8924A', opacity: 0.5 }}>
+                                {vals.codigo}
+                              </span>
                             )}
                           </td>
-                          <td className="px-3 md:px-5 py-2.5 text-right text-gray-600">{formatCurrency(vals.budget)}</td>
-                          <td className="px-3 md:px-5 py-2.5 text-right text-gray-600">{formatCurrency(vals.razao)}</td>
-                          <td className={cn('px-3 md:px-5 py-2.5 text-right font-semibold', variacao >= 0 ? 'text-emerald-600' : 'text-red-500')}>{formatCurrency(variacao)}</td>
+                          <td className="px-3 md:px-5 py-2.5 text-right"
+                            style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px', color: '#6B4E18' }}>
+                            {formatCurrency(vals.budget)}
+                          </td>
+                          <td className="px-3 md:px-5 py-2.5 text-right"
+                            style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px', color: '#6B4E18' }}>
+                            {formatCurrency(vals.razao)}
+                          </td>
+                          <td className="px-3 md:px-5 py-2.5 text-right font-semibold"
+                            style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px', color: variacao >= 0 ? '#166534' : '#B91C1C' }}>
+                            {formatCurrency(variacao)}
+                          </td>
                           <td className="px-3 md:px-5 py-2.5 text-right">
-                            <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', variacao >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600')}>
+                            <span className="text-xs px-2 py-0.5 rounded font-medium"
+                              style={{
+                                fontFamily: "'IBM Plex Mono', monospace",
+                                backgroundColor: variacao >= 0 ? 'rgba(22,101,52,0.08)' : 'rgba(185,28,28,0.08)',
+                                color: variacao >= 0 ? '#166534' : '#B91C1C',
+                                border: `0.5px solid ${variacao >= 0 ? 'rgba(22,101,52,0.2)' : 'rgba(185,28,28,0.2)'}`,
+                              }}>
                               {formatPct(pct)}
                             </span>
                           </td>
@@ -362,14 +422,74 @@ function abbrev(v: number): string {
   return `${sign}R$\u00a0${abs.toFixed(0)}`
 }
 
-function BigNum({ title, value, sub, color }: {
-  title: string; value: string; sub?: string; color?: string
+function SummaryCard({ title, value, sub, pct, featured = false, color }: {
+  title: string; value: string; sub?: string; pct?: string; featured?: boolean; color?: string
 }) {
+  const valueColor = color ?? '#1A1820'
   return (
-    <div className="flex flex-col items-center gap-0.5">
-      <p className={cn('text-[4rem] font-black tracking-tight leading-none', color ?? 'text-gray-900')}>{value}</p>
-      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mt-1.5 text-center">{title}</p>
-      {sub && <p className="text-xs text-gray-400 text-center">{sub}</p>}
+    <div
+      className="flex flex-col items-center justify-center px-8 py-7"
+      style={{
+        borderRadius: '8px',
+        backgroundColor: featured ? '#FDFBF6' : '#FFFFFF',
+        border: featured ? '1px solid rgba(184,146,74,0.35)' : '0.5px solid #E4DFD5',
+        boxShadow: featured
+          ? '0 2px 12px rgba(184,146,74,0.08)'
+          : '0 2px 6px rgba(26,24,32,0.03)',
+        minHeight: '160px',
+      }}
+    >
+      <p style={{
+        fontFamily: "'Big Shoulders Display', sans-serif",
+        fontSize: '10px',
+        fontWeight: 900,
+        letterSpacing: '0.4em',
+        textTransform: 'uppercase',
+        color: featured ? '#6B4E18' : '#B8924A',
+        marginBottom: '16px',
+        textAlign: 'center',
+      }}>
+        {title}
+      </p>
+      <p style={{
+        fontFamily: "'Big Shoulders Display', sans-serif",
+        fontWeight: 900,
+        fontSize: 'clamp(2rem, 3.2vw, 3.2rem)',
+        letterSpacing: '-0.02em',
+        lineHeight: 1,
+        color: valueColor,
+        textAlign: 'center',
+      }}>
+        {value}
+      </p>
+      {pct && (
+        <p style={{
+          fontFamily: "'Big Shoulders Display', sans-serif",
+          fontWeight: 900,
+          fontSize: '1.1rem',
+          letterSpacing: '-0.01em',
+          color: valueColor,
+          opacity: 0.55,
+          textAlign: 'center',
+          marginTop: '6px',
+        }}>
+          ({pct})
+        </p>
+      )}
+      {sub && (
+        <p style={{
+          fontFamily: "'IBM Plex Mono', monospace",
+          fontSize: '9px',
+          color: '#B8924A',
+          opacity: 0.45,
+          textAlign: 'center',
+          marginTop: '12px',
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+        }}>
+          {sub}
+        </p>
+      )}
     </div>
   )
 }
