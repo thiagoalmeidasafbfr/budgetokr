@@ -1,8 +1,9 @@
 'use client'
 import React from 'react'
 import {
-  ComposedChart, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend, Cell, TooltipProps,
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend, TooltipProps,
+  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatCurrency } from '@/lib/utils'
@@ -14,44 +15,40 @@ interface PeriodData {
 interface DeptData { dept: string; variacao: number }
 
 const C = {
-  budget: '#cbd5e1',
-  razao:  '#334155',
-  line:   '#d97706',
-  pos:    '#059669',
-  neg:    '#dc2626',
-  grid:   '#f1f5f9',
+  budget: '#D9D4CC',
+  razao:  '#1A1820',
+  line:   '#B8924A',
 }
+
+const tickStyle = { fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }
 
 function PeriodTooltip({ active, payload, label }: TooltipProps<number, string>) {
   if (!active || !payload?.length) return null
   return (
-    <div style={{ background:'#0f172a', borderRadius:12, padding:'10px 14px', minWidth:190, border:'1px solid rgba(255,255,255,0.1)', fontSize:12 }}>
-      <p style={{ color:'#94a3b8', fontWeight:600, marginBottom:8 }}>{label}</p>
+    <div style={{ background: '#1A1820', borderRadius: 4, padding: '10px 14px', minWidth: 180, border: '0.5px solid rgba(184,146,74,0.2)' }}>
+      <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: '#B8924A', opacity: 0.7, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>{label}</p>
       {payload.map((entry, i) => (
-        <div key={i} style={{ display:'flex', justifyContent:'space-between', gap:16, padding:'2px 0' }}>
-          <span style={{ display:'flex', alignItems:'center', gap:6, color:'#94a3b8' }}>
-            <span style={{ width:8, height:8, borderRadius:'50%', background:entry.color as string, flexShrink:0 }} />
+        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '2px 0' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: 'rgba(255,255,255,0.45)' }}>
+            <span style={{ width: 6, height: 6, background: entry.color as string, flexShrink: 0 }} />
             {entry.name}
           </span>
-          <span style={{ fontWeight:600, color:'#fff', fontVariantNumeric:'tabular-nums' }}>{formatCurrency(Number(entry.value))}</span>
+          <span style={{ fontFamily: "'Big Shoulders Display', sans-serif", fontWeight: 900, fontSize: 14, color: '#fff', letterSpacing: '-0.01em' }}>
+            {formatCurrency(Number(entry.value))}
+          </span>
         </div>
       ))}
     </div>
   )
 }
 
-function DeptTooltip({ active, payload, label }: TooltipProps<number, string>) {
+function RadarTooltip({ active, payload }: TooltipProps<number, string>) {
   if (!active || !payload?.length) return null
-  const val = Number(payload[0]?.payload?.variacao ?? payload[0]?.value ?? 0)
+  const d = payload[0].payload
   return (
-    <div style={{ background:'#0f172a', borderRadius:12, padding:'10px 14px', border:'1px solid rgba(255,255,255,0.1)', fontSize:12 }}>
-      <p style={{ color:'#94a3b8', fontWeight:600, marginBottom:6, maxWidth:220 }}>{label}</p>
-      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-        <span style={{ width:8, height:8, borderRadius:'50%', background: val >= 0 ? C.pos : C.neg, flexShrink:0 }} />
-        <span style={{ fontWeight:700, color: val >= 0 ? '#34d399' : '#f87171', fontVariantNumeric:'tabular-nums' }}>
-          {formatCurrency(val)}
-        </span>
-      </div>
+    <div style={{ background: '#1A1820', borderRadius: 4, padding: '8px 12px', border: '0.5px solid rgba(184,146,74,0.2)' }}>
+      <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: '#B8924A', opacity: 0.7, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>{d.dept}</p>
+      <p style={{ fontFamily: "'Big Shoulders Display', sans-serif", fontWeight: 900, fontSize: 16, color: '#fff', letterSpacing: '-0.01em' }}>{formatCurrency(d.raw)}</p>
     </div>
   )
 }
@@ -63,55 +60,6 @@ const tickFmt = (v: number) => {
   return String(v)
 }
 
-const TOP_N = 5
-
-function DeptMiniChart({
-  data, color, xDomain,
-}: {
-  data: DeptData[]
-  color: string
-  xDomain?: [number | string, number | string]
-}) {
-  if (data.length === 0) {
-    return (
-      <div className="h-20 flex items-center justify-center text-xs text-gray-400">
-        Nenhum departamento nesta categoria
-      </div>
-    )
-  }
-  const h = Math.max(data.length * 36 + 16, 100)
-  return (
-    <ResponsiveContainer width="100%" height={h}>
-      <BarChart data={data} layout="vertical" margin={{ top: 0, right: 44, left: 0, bottom: 0 }}>
-        <CartesianGrid horizontal={false} stroke={C.grid} />
-        <XAxis
-          type="number"
-          domain={xDomain ?? ['auto', 'auto']}
-          tickFormatter={tickFmt}
-          tick={{ fontSize: 9, fill: '#94a3b8' }}
-          axisLine={false} tickLine={false}
-        />
-        <YAxis
-          type="category" dataKey="dept" width={84}
-          tick={{ fontSize: 9, fill: '#475569' }} axisLine={false} tickLine={false}
-          tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 11) + '…' : v}
-        />
-        <Tooltip content={<DeptTooltip />} cursor={{ fill: '#f8fafc' }} />
-        <Bar
-          dataKey="variacao" name="Variação"
-          radius={color === C.pos ? [0, 3, 3, 0] : [3, 0, 0, 3]}
-          maxBarSize={16}
-          label={{ formatter: (v: number) => tickFmt(v), fontSize: 9, fill: '#64748b', position: 'right' }}
-        >
-          {data.map((_, i) => (
-            <Cell key={i} fill={color} opacity={Math.max(0.55, 0.92 - i * 0.08)} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
-  )
-}
-
 export default function DashboardCharts({ periodChartData, deptVariance }: {
   periodChartData: PeriodData[]
   deptVariance: DeptData[]
@@ -119,80 +67,94 @@ export default function DashboardCharts({ periodChartData, deptVariance }: {
   const positives = deptVariance
     .filter(d => d.variacao > 0)
     .sort((a, b) => b.variacao - a.variacao)
-    .slice(0, TOP_N)
+    .slice(0, 8)
 
-  const negatives = deptVariance
-    .filter(d => d.variacao < 0)
-    .sort((a, b) => a.variacao - b.variacao)
-    .slice(0, TOP_N)
+  const maxVar = positives.length > 0 ? positives[0].variacao : 1
+  const radarData = positives.map(d => ({
+    dept: d.dept.length > 13 ? d.dept.slice(0, 12) + '…' : d.dept,
+    value: Math.round((d.variacao / maxVar) * 100),
+    raw: d.variacao,
+  }))
 
   return (
-    <div className="flex gap-3 items-stretch">
-      {/* Budget vs Realizado — 40% */}
-      <div className="w-[40%] flex-shrink-0">
+    <div className="flex gap-4 items-stretch">
+
+      {/* Period chart — 2/3 */}
+      <div style={{ width: '66%', flexShrink: 0 }}>
         <Card className="overflow-hidden h-full">
-          <CardHeader className="pb-1 border-b border-gray-100">
-            <CardTitle>Budget vs Realizado por Período</CardTitle>
-            <p className="font-mono text-[10px] text-gray-400 mt-0.5 tracking-wide">Linha: variação acumulada YTD</p>
+          <CardHeader className="pb-2" style={{ borderBottom: '0.5px solid #E4DFD5' }}>
+            <CardTitle>Variação YTD por Período</CardTitle>
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#B8924A', opacity: 0.55, marginTop: 6 }}>
+              Budget vs Realizado · Linha: acumulado YTD
+            </p>
           </CardHeader>
-          <CardContent className="pt-4 pb-2">
-            <ResponsiveContainer width="100%" height={260}>
-              <ComposedChart data={periodChartData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }} barGap={2}>
-                <CartesianGrid vertical={false} stroke={C.grid} />
-                <XAxis dataKey="periodo" tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} />
-                <YAxis yAxisId="bars" tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} width={40} />
-                <YAxis yAxisId="line" orientation="right" tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#d97706', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} width={40} />
-                <Tooltip content={<PeriodTooltip />} cursor={{ fill: '#f8fafc' }} />
-                <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 10, paddingTop: 8, color: '#64748b' }} />
-                <Bar yAxisId="bars" dataKey="budget" name="Budget"    fill={C.budget} radius={[3,3,0,0]} maxBarSize={22} />
-                <Bar yAxisId="bars" dataKey="razao"  name="Realizado" fill={C.razao}  radius={[3,3,0,0]} maxBarSize={22} />
+          <CardContent className="pt-4 pb-3">
+            <ResponsiveContainer width="100%" height={270}>
+              <ComposedChart data={periodChartData} margin={{ top: 6, right: 14, left: -8, bottom: 0 }} barGap={3}>
+                <CartesianGrid vertical={false} stroke="#F0EDE8" strokeWidth={0.5} />
+                <XAxis dataKey="periodo" tick={tickStyle} axisLine={false} tickLine={false} />
+                <YAxis yAxisId="bars" tickFormatter={tickFmt} tick={tickStyle} axisLine={false} tickLine={false} width={40} />
+                <YAxis yAxisId="line" orientation="right" tickFormatter={tickFmt}
+                  tick={{ ...tickStyle, fill: '#B8924A' }} axisLine={false} tickLine={false} width={40} />
+                <Tooltip content={<PeriodTooltip />} cursor={{ fill: 'rgba(184,146,74,0.04)' }} />
+                <Legend
+                  iconType="square" iconSize={7}
+                  wrapperStyle={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, paddingTop: 10, color: '#94a3b8' }}
+                />
+                <Bar yAxisId="bars" dataKey="budget"     name="Budget"       fill={C.budget} radius={[2,2,0,0]} maxBarSize={22} />
+                <Bar yAxisId="bars" dataKey="razao"      name="Realizado"    fill={C.razao}  radius={[2,2,0,0]} maxBarSize={22} />
                 <Line yAxisId="line" type="monotone" dataKey="variacaoYtd" name="Variação YTD"
-                  stroke={C.line} strokeWidth={2}
-                  dot={{ r: 2.5, fill: C.line, stroke: '#fff', strokeWidth: 1.5 }}
-                  activeDot={{ r: 4, stroke: '#fff', strokeWidth: 2 }} />
+                  stroke={C.line} strokeWidth={2.5}
+                  dot={{ r: 3, fill: C.line, stroke: '#fff', strokeWidth: 2 }}
+                  activeDot={{ r: 5, stroke: '#fff', strokeWidth: 2 }} />
               </ComposedChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
 
-      {/* Top Variação Positiva — 25% */}
+      {/* Radar chart — 1/3 */}
       <div className="flex-1">
         <Card className="overflow-hidden h-full">
-          <CardHeader className="pb-1 border-b border-gray-100">
-            <CardTitle className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block flex-shrink-0" />
-              Top Variação Positiva
-            </CardTitle>
-            <p className="font-mono text-[10px] text-gray-400 mt-0.5 tracking-wide">
-              Acima do budget · Top {TOP_N}
-              {positives.length === 0 && ' · nenhum'}
+          <CardHeader className="pb-2" style={{ borderBottom: '0.5px solid #E4DFD5' }}>
+            <CardTitle>Departamentos em Alta</CardTitle>
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#B8924A', opacity: 0.55, marginTop: 6 }}>
+              Variação positiva · Quanto maior, melhor
             </p>
           </CardHeader>
-          <CardContent className="pt-3 pb-2">
-            <DeptMiniChart data={positives} color={C.pos} xDomain={[0, 'auto']} />
+          <CardContent className="pt-2 pb-3">
+            {radarData.length === 0 ? (
+              <div className="h-[270px] flex items-center justify-center">
+                <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: '#B8924A', opacity: 0.35, letterSpacing: '0.15em', textTransform: 'uppercase' }}>
+                  Sem variações positivas
+                </p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={290}>
+                <RadarChart data={radarData} margin={{ top: 12, right: 24, bottom: 12, left: 24 }}>
+                  <PolarGrid stroke="#E4DFD5" strokeWidth={0.5} />
+                  <PolarAngleAxis
+                    dataKey="dept"
+                    tick={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 8, fill: '#475569' }}
+                  />
+                  <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
+                  <Radar
+                    name="Variação"
+                    dataKey="value"
+                    stroke="#1A1820"
+                    strokeWidth={1.5}
+                    fill="#B8924A"
+                    fillOpacity={0.15}
+                    dot={{ r: 3, fill: '#1A1820', stroke: '#fff', strokeWidth: 1.5 }}
+                  />
+                  <Tooltip content={<RadarTooltip />} />
+                </RadarChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Top Variação Negativa — 25% */}
-      <div className="flex-1">
-        <Card className="overflow-hidden h-full">
-          <CardHeader className="pb-1 border-b border-gray-100">
-            <CardTitle className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-red-500 inline-block flex-shrink-0" />
-              Top Variação Negativa
-            </CardTitle>
-            <p className="font-mono text-[10px] text-gray-400 mt-0.5 tracking-wide">
-              Abaixo do budget · Top {TOP_N}
-              {negatives.length === 0 && ' · nenhum'}
-            </p>
-          </CardHeader>
-          <CardContent className="pt-3 pb-2">
-            <DeptMiniChart data={negatives} color={C.neg} xDomain={['auto', 0]} />
-          </CardContent>
-        </Card>
-      </div>
     </div>
   )
 }

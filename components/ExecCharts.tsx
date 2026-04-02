@@ -422,34 +422,21 @@ function ExecChartCard({
                 </PieChart>
               ) : config.chartType === 'bar_h' ? (
                 <BarChart data={absItems} layout="vertical" margin={{ top: 0, right: 52, left: 0, bottom: 0 }}>
-                  <defs>
-                    {absItems.map((_, i) => (
-                      <linearGradient key={i} id={`hg-${config.id}-${i}`} x1="0" y1="0" x2="1" y2="0">
-                        <stop offset="0%" stopColor={palette[i % palette.length]} stopOpacity={0.55} />
-                        <stop offset="100%" stopColor={palette[i % palette.length]} stopOpacity={1} />
-                      </linearGradient>
-                    ))}
-                  </defs>
                   <XAxis type="number" tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} />
                   <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 9, fill: '#475569', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false}
                     tickFormatter={(v: string) => v.length > 17 ? v.slice(0, 16) + '…' : v} />
                   <Tooltip content={tooltip} cursor={{ fill: 'rgba(184,146,74,0.04)' }} />
-                  <Bar dataKey="absValue" name={fieldLabel} radius={[0,5,5,0]} maxBarSize={16}
+                  <Bar dataKey="absValue" name={fieldLabel} radius={[0,2,2,0]} maxBarSize={16}
                     label={barLabel ? { ...barLabel, position: 'right', fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, fill: '#94a3b8' } : false}>
                     {absItems.map((_, i) => (
-                      <Cell key={i} fill={`url(#hg-${config.id}-${i})`} />
+                      <Cell key={i} fill={palette[i % palette.length]} />
                     ))}
                   </Bar>
                   {refLineH}
                 </BarChart>
               ) : config.chartType === 'area' ? (
                 <AreaChart data={absItems} margin={{ top: 14, right: 8, left: -10, bottom: 24 }}>
-                  <defs>
-                    <linearGradient id={`ag-${config.id}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor={areaColor} stopOpacity={0.22} />
-                      <stop offset="95%" stopColor={areaColor} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
+                  <CartesianGrid vertical={false} stroke="#F0EDE8" strokeWidth={0.5} />
                   <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0}
                     tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 11) + '…' : v} />
                   <YAxis tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} />
@@ -460,7 +447,8 @@ function ExecChartCard({
                     name={fieldLabel}
                     stroke={areaColor}
                     strokeWidth={2}
-                    fill={`url(#ag-${config.id})`}
+                    fill={areaColor}
+                    fillOpacity={0.08}
                     dot={{ fill: areaColor, r: 3.5, strokeWidth: 2, stroke: '#fff' }}
                     activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff', fill: areaColor }}
                     label={barLabel ? { ...barLabel, position: 'top', fontFamily: "'IBM Plex Mono', monospace" } : false}
@@ -516,22 +504,15 @@ function ExecChartCard({
                 </Treemap>
               ) : (
                 <BarChart data={absItems} margin={{ top: 14, right: 8, left: -10, bottom: 24 }}>
-                  <defs>
-                    {absItems.map((_, i) => (
-                      <linearGradient key={i} id={`vg-${config.id}-${i}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%"   stopColor={palette[i % palette.length]} stopOpacity={1} />
-                        <stop offset="100%" stopColor={palette[i % palette.length]} stopOpacity={0.65} />
-                      </linearGradient>
-                    ))}
-                  </defs>
+                  <CartesianGrid vertical={false} stroke="#F0EDE8" strokeWidth={0.5} />
                   <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0}
                     tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 11) + '…' : v} />
                   <YAxis tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} />
                   <Tooltip content={tooltip} cursor={{ fill: 'rgba(184,146,74,0.04)' }} />
-                  <Bar dataKey="absValue" name={fieldLabel} radius={[4,4,0,0]} maxBarSize={28}
+                  <Bar dataKey="absValue" name={fieldLabel} radius={[2,2,0,0]} maxBarSize={28}
                     label={barLabel ? { ...barLabel, position: 'top', fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, fill: '#94a3b8' } : false}>
                     {absItems.map((_, i) => (
-                      <Cell key={i} fill={`url(#vg-${config.id}-${i})`} />
+                      <Cell key={i} fill={palette[i % palette.length]} />
                     ))}
                   </Bar>
                   {refLine}

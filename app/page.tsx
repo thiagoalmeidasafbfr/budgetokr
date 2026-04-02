@@ -306,8 +306,8 @@ export default function Dashboard() {
           />
           <SummaryCard
             title="Variação de Performance"
-            value={formatPct(variacaoPct)}
-            badge={variacao >= 0 ? 'Dentro da Margem' : 'Fora da Margem'}
+            value={abbrev(variacao)}
+            pct={formatPct(variacaoPct)}
             featured
             color={variacao >= 0 ? '#166534' : '#B91C1C'}
           />
@@ -415,8 +415,8 @@ function abbrev(v: number): string {
   return `${sign}R$\u00a0${abs.toFixed(0)}`
 }
 
-function SummaryCard({ title, value, sub, badge, featured = false, color }: {
-  title: string; value: string; sub?: string; badge?: string; featured?: boolean; color?: string
+function SummaryCard({ title, value, sub, pct, featured = false, color }: {
+  title: string; value: string; sub?: string; pct?: string; featured?: boolean; color?: string
 }) {
   const valueColor = color ?? '#1A1820'
   return (
@@ -433,13 +433,13 @@ function SummaryCard({ title, value, sub, badge, featured = false, color }: {
       }}
     >
       <p style={{
-        fontFamily: "'Big Shoulders Display', sans-serif",
-        fontSize: '10px',
-        fontWeight: 900,
-        letterSpacing: '0.38em',
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontSize: '9px',
+        fontWeight: 500,
+        letterSpacing: '0.22em',
         textTransform: 'uppercase',
         color: featured ? '#6B4E18' : '#B8924A',
-        marginBottom: '18px',
+        marginBottom: '16px',
         textAlign: 'center',
       }}>
         {title}
@@ -455,31 +455,28 @@ function SummaryCard({ title, value, sub, badge, featured = false, color }: {
       }}>
         {value}
       </p>
-      {badge && (
-        <div style={{ marginTop: '18px' }}>
-          <span style={{
-            fontFamily: "'IBM Plex Mono', monospace",
-            fontSize: '9px',
-            letterSpacing: '0.18em',
-            textTransform: 'uppercase',
-            color: '#6B4E18',
-            backgroundColor: '#FFFFFF',
-            border: '0.5px solid #E2C98A',
-            padding: '3px 10px',
-            borderRadius: '2px',
-          }}>
-            {badge}
-          </span>
-        </div>
+      {pct && (
+        <p style={{
+          fontFamily: "'Big Shoulders Display', sans-serif",
+          fontWeight: 900,
+          fontSize: '1.1rem',
+          letterSpacing: '-0.01em',
+          color: valueColor,
+          opacity: 0.55,
+          textAlign: 'center',
+          marginTop: '6px',
+        }}>
+          ({pct})
+        </p>
       )}
-      {sub && !badge && (
+      {sub && (
         <p style={{
           fontFamily: "'IBM Plex Mono', monospace",
-          fontSize: '10px',
+          fontSize: '9px',
           color: '#B8924A',
           opacity: 0.45,
           textAlign: 'center',
-          marginTop: '14px',
+          marginTop: '12px',
           letterSpacing: '0.06em',
           textTransform: 'uppercase',
         }}>
