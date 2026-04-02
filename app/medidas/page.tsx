@@ -171,7 +171,7 @@ export default function MedidasPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="page-title text-2xl md:text-3xl">Medidas</h1>
-          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#B8924A", opacity: 0.55, letterSpacing: "0.04em" }}>Defina KPIs como SG&A, COGS, Headcount usando filtros no star schema</p>
+          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#9B6E20", letterSpacing: "0.04em" }}>Defina KPIs como SG&A, COGS, Headcount usando filtros no star schema</p>
         </div>
         {editing === null && <Button onClick={() => { setForm(emptyForm()); setEditing(-1); setError(null) }}><Plus size={15} /> Nova Medida</Button>}
       </div>

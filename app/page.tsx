@@ -122,7 +122,7 @@ export default function Dashboard() {
     <div className="flex items-center justify-center h-[70vh]">
       <div className="flex flex-col items-center gap-3">
         <div className="w-7 h-7 rounded-full animate-spin" style={{ border: '2px solid rgba(184,146,74,0.2)', borderTopColor: '#B8924A' }} />
-        <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11px', color: '#B8924A', opacity: 0.5, letterSpacing: '0.1em' }}>
+        <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11px', color: '#9B6E20', letterSpacing: '0.1em' }}>
           Carregando…
         </p>
       </div>
@@ -142,7 +142,7 @@ export default function Dashboard() {
             ['1', 'Contas Contábeis', '/upload'],
             ['2', 'Centros de Custo', '/upload'],
             ['3', 'Lançamentos Budget', '/upload'],
-            ['4', 'Lançamentos Razão', '/upload'],
+            ['4', 'Lançamentos Realizado', '/upload'],
           ].map(([n, l, href]) => (
             <div key={n} className="flex items-center gap-3 rounded-lg px-3 py-2" style={{ backgroundColor: '#FBF7EE', border: '0.5px solid #E4DFD5' }}>
               <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
@@ -274,16 +274,16 @@ export default function Dashboard() {
       {/* Header row — full width */}
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-2">
-          <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px', letterSpacing: '0.2em', textTransform: 'uppercase', color: '#B8924A', opacity: 0.5 }}>
+          <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px', letterSpacing: '0.2em', textTransform: 'uppercase', color: '#9B6E20' }}>
             Dashboard
           </p>
           <div className="relative">
             <button
               onClick={() => setShowWidgetCfg(v => !v)}
               className="flex items-center gap-1.5 transition-colors"
-              style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11px', color: '#B8924A', opacity: 0.5 }}
+              style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11px', color: '#9B6E20', opacity: 0.6 }}
               onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-              onMouseLeave={e => (e.currentTarget.style.opacity = '0.5')}
+              onMouseLeave={e => (e.currentTarget.style.opacity = '0.6')}
             >
               <Settings2 size={11} /> Widgets
             </button>
@@ -346,10 +346,10 @@ export default function Dashboard() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr style={{ borderBottom: '0.5px solid #E4DFD5', backgroundColor: '#F7F6F2' }}>
-                      {['Departamento', 'Budget', 'Razão', 'Variação', '%'].map((h, hi) => (
+                      {['Departamento', 'Budget', 'Realizado', 'Variação', '%'].map((h, hi) => (
                         <th key={h}
                           className={hi === 0 ? 'text-left px-3 md:px-5 py-2.5' : 'text-right px-3 md:px-5 py-2.5'}
-                          style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#B8924A', opacity: 0.6 }}
+                          style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#9B6E20' }}
                         >
                           {h}
                         </th>
@@ -370,7 +370,7 @@ export default function Dashboard() {
                             {label}
                             {vals.codigo && vals.codigo !== label && (
                               <span className="ml-2 text-xs font-normal"
-                                style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#B8924A', opacity: 0.5 }}>
+                                style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#9B6E20' }}>
                                 {vals.codigo}
                               </span>
                             )}

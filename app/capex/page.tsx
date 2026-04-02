@@ -144,7 +144,7 @@ export default function CapexPage() {
   const exportXLSX = async () => {
     const colLabel = groupBy === 'projeto' ? 'Projeto' : groupBy === 'departamento' ? 'Departamento' : groupBy === 'centro_custo' ? 'Projeto → Centro de Custo' : 'Período'
     const rows = [
-      [colLabel, 'Budget', 'Razão', 'Variação', '%'],
+      [colLabel, 'Budget', 'Realizado', 'Variação', '%'],
       ...tableRows.map(r => [r.key, r.budget, r.razao, r.variacao, r.variacao_pct.toFixed(2)]),
     ]
     const XLSX = await import('xlsx')
@@ -159,7 +159,7 @@ export default function CapexPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div className="min-w-0">
           <h1 className="page-title text-2xl md:text-3xl">CAPEX — Investimentos</h1>
-          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#B8924A", opacity: 0.55, letterSpacing: "0.04em" }}>Budget vs Realizado por projeto · {data.length.toLocaleString()} registros</p>
+          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#9B6E20", letterSpacing: "0.04em" }}>Budget vs Realizado por projeto · {data.length.toLocaleString()} registros</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
           <YearFilter periodos={periodos} selYear={selYear} onChange={y => setSelYear(y)} />
@@ -279,7 +279,7 @@ export default function CapexPage() {
                       {groupBy === 'projeto' ? 'Projeto' : groupBy === 'departamento' ? 'Departamento' : groupBy === 'centro_custo' ? 'Projeto → Centro de Custo' : 'Período'}
                     </th>
                     <th className="text-right px-5 py-3 font-medium text-gray-500">Budget</th>
-                    <th className="text-right px-5 py-3 font-medium text-gray-500">Razão</th>
+                    <th className="text-right px-5 py-3 font-medium text-gray-500">Realizado</th>
                     <th className="text-right px-5 py-3 font-medium text-gray-500">Variação</th>
                     <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>
                   </tr></thead>

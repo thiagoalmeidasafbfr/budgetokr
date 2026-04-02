@@ -511,8 +511,8 @@ export default function DREPage() {
 
   const exportXLSX = async () => {
     const header = viewMode === 'total'
-      ? ['Linha DRE', 'Budget', 'Razão', 'Variação', '%']
-      : ['Linha DRE', ...dataPeriods.flatMap(p => [`Budget ${formatPeriodo(p)}`, `Razão ${formatPeriodo(p)}`])]
+      ? ['Linha DRE', 'Budget', 'Realizado', 'Variação', '%']
+      : ['Linha DRE', ...dataPeriods.flatMap(p => [`Budget ${formatPeriodo(p)}`, `Realizado ${formatPeriodo(p)}`])]
     const rows = flatRows.map(r => {
       if (viewMode === 'total') {
         return [
@@ -667,7 +667,7 @@ export default function DREPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div className="min-w-0">
           <h1 className="page-title text-2xl md:text-3xl">DRE — Demonstrativo de Resultados</h1>
-          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#B8924A', opacity: 0.55, letterSpacing: '0.04em' }}>P&L por linha contábil · Budget vs Razão</p>
+          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#9B6E20', letterSpacing: '0.04em' }}>P&L por linha contábil · Budget vs Realizado</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
           <YearFilter periodos={periodos} selYear={selYear} onChange={handleYearChange} />

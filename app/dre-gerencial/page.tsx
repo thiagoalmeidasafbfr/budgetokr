@@ -722,8 +722,8 @@ export default function DreGerencialPage() {
   // ── Export CSV ──────────────────────────────────────────────────────────────
   const exportXLSX = async () => {
     const header = viewMode === 'total'
-      ? ['Linha DRE', 'Budget', 'Razão', 'Variação', '%']
-      : ['Linha DRE', ...dataPeriods.flatMap(p => [`Budget ${formatPeriodo(p)}`, `Razão ${formatPeriodo(p)}`])]
+      ? ['Linha DRE', 'Budget', 'Realizado', 'Variação', '%']
+      : ['Linha DRE', ...dataPeriods.flatMap(p => [`Budget ${formatPeriodo(p)}`, `Realizado ${formatPeriodo(p)}`])]
     const rows = flatRows.map(r => {
       if (viewMode === 'total') return ['  '.repeat(r.depth) + r.name, r.budget, r.razao, r.variacao, r.variacao_pct.toFixed(2)]
       return ['  '.repeat(r.depth) + r.name, ...dataPeriods.flatMap(p => [r.byPeriod[p]?.budget ?? 0, r.byPeriod[p]?.razao ?? 0])]
@@ -994,13 +994,13 @@ export default function DreGerencialPage() {
   }
 
   return (
-    <div className="flex flex-col h-full min-h-screen bg-gray-50">
+    <div className="flex flex-col h-full min-h-screen">
 
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-3 md:px-6 py-3 md:py-4 flex items-center gap-4 flex-wrap">
+      <div className="px-3 md:px-6 py-3 md:py-4 flex items-center gap-4 flex-wrap">
         <div className="flex-1 min-w-0">
           <h1 className="page-title text-2xl md:text-3xl">DRE Gerencial</h1>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#9B6E20", letterSpacing: "0.04em" }}>
             Visão personalizada — exclua linhas, agrupamentos ou contas do cálculo
           </p>
         </div>
@@ -1336,17 +1336,32 @@ export default function DreGerencialPage() {
                           row.isCalculated && !row.isAnalise && 'border-l-2 border-[#B8924A] bg-[#FBF7EE]/40',
                           row.isAnalise && 'border-l-2 border-[#6B4E18] bg-[#FBF7EE]/60',
                           isDragTarget && 'ring-2 ring-inset ring-[#B8924A] bg-[#FBF7EE]',
+                          row.isCalculated && 'italic',
                         )}>
-                        <td className="px-1 py-2 text-center w-7">
-                          {row.depth === 0 && (
-                            <span
-                              draggable
-                              onDragStart={() => handleDragStart(row.name)}
-                              className="text-gray-300 cursor-grab active:cursor-grabbing inline-flex"
-                            >
-                              <GripVertical size={13} />
-                            </span>
-                          )}
+                        <td className="px-1 py-2 w-16">
+                          <div className="flex items-center gap-0.5 justify-center">
+                            {row.depth === 0 && (
+                              <span
+                                draggable
+                                onDragStart={() => handleDragStart(row.name)}
+                                className="text-gray-300 cursor-grab active:cursor-grabbing inline-flex"
+                              >
+                                <GripVertical size={13} />
+                              </span>
+                            )}
+                            {row.isCalculated && calcLinha && ((calcLinha.id ?? 0) < 0 || isMaster) && (
+                              <>
+                                <button onClick={e => { e.stopPropagation(); openEditModal(calcLinha) }}
+                                  className="text-gray-300 hover:text-[#B8924A] transition-colors" title="Editar linha">
+                                  <Pencil size={11} />
+                                </button>
+                                <button onClick={e => { e.stopPropagation(); deleteCalculatedLine(calcLinha.id) }}
+                                  className="text-gray-300 hover:text-red-400 transition-colors" title="Remover linha">
+                                  <Trash2 size={11} />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </td>
                         <td className={cn('px-5 py-2.5', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : row.isAccount ? 'text-gray-500 text-xs' : 'text-gray-700')}
                           style={{ paddingLeft: `${20 + row.depth * 24}px` }}>
@@ -1358,19 +1373,7 @@ export default function DreGerencialPage() {
                             ) : <span className="w-5" />}
                             {row.isCalculated && !row.isAnalise && <Calculator size={12} className="flex-shrink-0" style={{ color: '#B8924A' }} />}
                             {row.isAnalise && <Calculator size={12} className="flex-shrink-0" style={{ color: '#6B4E18' }} />}
-                            <span className={row.isAnalise ? 'italic text-[#6B4E18]' : ''}>{row.name}</span>
-                            {row.isCalculated && calcLinha && ((calcLinha.id ?? 0) < 0 || isMaster) && (
-                              <span className="ml-auto flex items-center gap-1 flex-shrink-0">
-                                <button onClick={e => { e.stopPropagation(); openEditModal(calcLinha) }}
-                                  className="text-gray-300 hover:text-[#B8924A] transition-colors" title="Editar linha">
-                                  <Pencil size={11} />
-                                </button>
-                                <button onClick={e => { e.stopPropagation(); deleteCalculatedLine(calcLinha.id) }}
-                                  className="text-gray-300 hover:text-red-400 transition-colors" title="Remover linha">
-                                  <Trash2 size={11} />
-                                </button>
-                              </span>
-                            )}
+                            <span className={row.isAnalise ? 'text-[#6B4E18]' : ''}>{row.name}</span>
                           </div>
                         </td>
                         <td className={cn('px-5 py-2.5 text-right', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : 'text-gray-600', (row.isAnalise ? 'text-[#6B4E18]' : ''))}>{fmtVal(row.budget)}</td>
@@ -1710,7 +1713,7 @@ export default function DreGerencialPage() {
                     Análise (só exibição)
                   </button>
                 </div>
-                {newLineIsAnalise && <p className="text-[11px] mt-0.5" style={{ color: '#B8924A', opacity: 0.7 }}>Não afeta subtotais. Ideal para margens e índices.</p>}
+                {newLineIsAnalise && <p className="text-[11px] mt-0.5" style={{ color: '#9B6E20' }}>Não afeta subtotais. Ideal para margens e índices.</p>}
               </div>
 
               {/* Tipo de fórmula */}

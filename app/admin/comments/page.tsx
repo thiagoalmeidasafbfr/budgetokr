@@ -448,7 +448,7 @@ export default function CommentsLogPage() {
           <h1 className="page-title text-2xl md:text-3xl flex items-center gap-2">
             <MessageSquare size={22} className="text-gray-600" /> Tickets de Comentários
           </h1>
-          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#B8924A", opacity: 0.55, letterSpacing: "0.04em" }}>Comentários dos departamentos · gerenciamento de tickets</p>
+          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#9B6E20", letterSpacing: "0.04em" }}>Comentários dos departamentos · gerenciamento de tickets</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={load} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-colors" title="Atualizar">

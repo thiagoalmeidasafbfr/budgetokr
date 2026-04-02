@@ -48,7 +48,7 @@ export default function AnaliseCharts({ chartData }: { chartData: ChartRow[] }) 
             </BarChart>
           </ResponsiveContainer>
           <div className="flex items-center gap-4 mt-2 justify-center">
-            {[{ color: '#cbd5e1', label: 'Budget' }, { color: '#334155', label: 'Razão' }].map(l => (
+            {[{ color: '#cbd5e1', label: 'Budget' }, { color: '#334155', label: 'Realizado' }].map(l => (
               <div key={l.label} className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-sm inline-block" style={{ background: l.color }} />
                 <span className="font-mono text-[10px] text-gray-500">{l.label}</span>
