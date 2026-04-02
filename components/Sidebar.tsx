@@ -257,12 +257,12 @@ export function Sidebar() {
         <div className="px-5 py-5 flex-shrink-0 flex items-center justify-between"
           style={{ borderBottom: '0.5px solid rgba(228,223,213,0.1)' }}
         >
-          <div className="flex items-center gap-2.5">
-            <span style={{ color: '#B8924A', fontSize: '1.4rem', lineHeight: 1 }}>✦</span>
+          <div className="flex items-center gap-3">
+            <span style={{ color: '#B8924A', fontSize: '1.9rem', lineHeight: 1 }}>✦</span>
             <div className="flex flex-col leading-none">
               <span
                 className="font-display tracking-tight text-white"
-                style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '1.35rem', fontWeight: 700 }}
+                style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '1.75rem', fontWeight: 700 }}
               >
                 Glorioso
               </span>
@@ -270,10 +270,10 @@ export function Sidebar() {
                 className="font-heading"
                 style={{
                   fontFamily: "'Big Shoulders Display', sans-serif",
-                  fontSize: '0.55rem',
-                  letterSpacing: '0.35em',
+                  fontSize: '0.65rem',
+                  letterSpacing: '0.42em',
                   color: '#B8924A',
-                  marginTop: '-2px',
+                  marginTop: '1px',
                   marginLeft: '2px',
                   fontWeight: 900,
                 }}

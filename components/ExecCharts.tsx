@@ -384,8 +384,8 @@ function ExecChartCard({
               ) : config.chartType === 'bar_h' ? (
                 <BarChart data={absItems} layout="vertical" margin={{ top: 0, right: 55, left: 0, bottom: 0 }}>
                   <CartesianGrid horizontal={false} stroke="#f1f5f9" />
-                  <XAxis type="number" tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 9, fill: '#475569' }} axisLine={false} tickLine={false}
+                  <XAxis type="number" tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 9, fill: '#475569', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false}
                     tickFormatter={(v: string) => v.length > 17 ? v.slice(0, 16) + '…' : v} />
                   <Tooltip content={tooltip} cursor={{ fill: '#f8fafc' }} />
                   <Bar dataKey="absValue" name={fieldLabel} radius={[0,3,3,0]} maxBarSize={14}
@@ -399,9 +399,9 @@ function ExecChartCard({
               ) : config.chartType === 'area' ? (
                 <AreaChart data={absItems} margin={{ top: 14, right: 8, left: -10, bottom: 24 }}>
                   <CartesianGrid vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0}
+                  <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0}
                     tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 11) + '…' : v} />
-                  <YAxis tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <YAxis tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} />
                   <Tooltip content={tooltip} cursor={{ stroke: areaColor, strokeWidth: 1 }} />
                   <Area
                     type="monotone"
@@ -467,9 +467,9 @@ function ExecChartCard({
               ) : (
                 <BarChart data={absItems} margin={{ top: 14, right: 8, left: -10, bottom: 24 }}>
                   <CartesianGrid vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0}
+                  <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0}
                     tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 11) + '…' : v} />
-                  <YAxis tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <YAxis tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} />
                   <Tooltip content={tooltip} cursor={{ fill: '#f8fafc' }} />
                   <Bar dataKey="absValue" name={fieldLabel} radius={[3,3,0,0]} maxBarSize={30}
                     label={barLabel ? { ...barLabel, position: 'top' } : false}>
