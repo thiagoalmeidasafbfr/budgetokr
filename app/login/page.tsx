@@ -48,7 +48,7 @@ export default function LoginPage() {
 
         {/* ── Logo / Wordmark ─────────────────────────────────────────────── */}
         <div className="flex flex-col items-center mb-10">
-          <Image src="/logo2.png" alt="Logo" width={360} height={120} style={{ objectFit: 'contain' }} priority />
+          <Image src="/logo2.png" alt="Logo" width={180} height={60} style={{ objectFit: 'contain' }} priority />
         </div>
 
         {/* ── Card ────────────────────────────────────────────────────────── */}
