@@ -279,7 +279,7 @@ export function Sidebar() {
             <div className="space-y-2 px-3 py-2">
               {[1,2,3,4].map(i => (
                 <div key={i} className="h-8 rounded-lg animate-pulse"
-                  style={{ backgroundColor: 'rgba(184,146,74,0.06)' }} />
+                  style={{ backgroundColor: 'rgba(190,140,74,0.06)' }} />
               ))}
             </div>
           )}
@@ -305,14 +305,14 @@ export function Sidebar() {
                       fontWeight: 500,
                       letterSpacing: '0.18em',
                       textTransform: 'uppercase',
-                      color: 'rgba(184,146,74,0.5)',
+                      color: 'rgba(190,140,74,0.5)',
                     }}
                   >
                     {item.label}
                   </p>
                   {isCollapsed
-                    ? <ChevronRight size={10} style={{ color: 'rgba(184,146,74,0.25)' }} />
-                    : <ChevronDown  size={10} style={{ color: 'rgba(184,146,74,0.25)' }} />
+                    ? <ChevronRight size={10} style={{ color: 'rgba(190,140,74,0.25)' }} />
+                    : <ChevronDown  size={10} style={{ color: 'rgba(190,140,74,0.25)' }} />
                   }
                 </button>
               )
@@ -327,13 +327,13 @@ export function Sidebar() {
               return (
                 <div key={item.label}>
                   <div className={cn('flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-default')}
-                    style={{ color: anyActive ? '#B8924A' : 'rgba(255,255,255,0.25)' }}
+                    style={{ color: anyActive ? '#be8c4a' : 'rgba(255,255,255,0.25)' }}
                   >
-                    <Icon size={13} style={{ color: anyActive ? '#B8924A' : 'rgba(255,255,255,0.2)' }} />
+                    <Icon size={13} style={{ color: anyActive ? '#be8c4a' : 'rgba(255,255,255,0.2)' }} />
                     <span>{item.label}</span>
                   </div>
                   <div className="ml-4 pl-1 space-y-0.5"
-                    style={{ borderLeft: '0.5px solid rgba(184,146,74,0.15)' }}
+                    style={{ borderLeft: '0.5px solid rgba(190,140,74,0.15)' }}
                   >
                     {item.children.map(child => {
                       const active = isActive(child.href)
@@ -342,13 +342,13 @@ export function Sidebar() {
                         <Link key={child.href} href={child.href} onClick={closeMobile}
                           className="flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-lg text-sm transition-colors"
                           style={{
-                            backgroundColor: active ? 'rgba(184,146,74,0.12)' : 'transparent',
-                            color: active ? '#B8924A' : 'rgba(255,255,255,0.4)',
+                            backgroundColor: active ? 'rgba(190,140,74,0.12)' : 'transparent',
+                            color: active ? '#be8c4a' : 'rgba(255,255,255,0.4)',
                           }}
                         >
-                          {CIcon && <CIcon size={12} style={{ color: active ? '#B8924A' : 'rgba(255,255,255,0.25)' }} />}
+                          {CIcon && <CIcon size={12} style={{ color: active ? '#be8c4a' : 'rgba(255,255,255,0.25)' }} />}
                           <span className="text-xs">{child.label}</span>
-                          {active && <ChevronRight size={10} className="ml-auto" style={{ color: '#B8924A' }} />}
+                          {active && <ChevronRight size={10} className="ml-auto" style={{ color: '#be8c4a' }} />}
                         </Link>
                       )
                     })}
@@ -364,28 +364,28 @@ export function Sidebar() {
               <Link key={item.href} href={item.href} onClick={closeMobile}
                 className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all group"
                 style={{
-                  backgroundColor: active ? 'rgba(184,146,74,0.12)' : 'transparent',
-                  color: active ? '#B8924A' : 'rgba(255,255,255,0.5)',
+                  backgroundColor: active ? 'rgba(190,140,74,0.12)' : 'transparent',
+                  color: active ? '#be8c4a' : 'rgba(255,255,255,0.5)',
                 }}
               >
                 <div className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 transition-colors"
                   style={{
                     backgroundColor: active
-                      ? 'rgba(184,146,74,0.18)'
+                      ? 'rgba(190,140,74,0.18)'
                       : 'rgba(255,255,255,0.03)',
                   }}
                 >
-                  <Icon size={14} style={{ color: active ? '#B8924A' : 'rgba(255,255,255,0.3)' }} />
+                  <Icon size={14} style={{ color: active ? '#be8c4a' : 'rgba(255,255,255,0.3)' }} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium leading-tight"
-                    style={{ color: active ? '#B8924A' : 'rgba(255,255,255,0.65)' }}
+                    style={{ color: active ? '#be8c4a' : 'rgba(255,255,255,0.65)' }}
                   >
                     {item.label}
                   </p>
                   {item.sublabel && (
                     <p className="text-[11px] leading-tight mt-0.5 truncate"
-                      style={{ color: active ? 'rgba(184,146,74,0.5)' : 'rgba(255,255,255,0.22)' }}
+                      style={{ color: active ? 'rgba(190,140,74,0.5)' : 'rgba(255,255,255,0.22)' }}
                     >
                       {item.sublabel}
                     </p>
@@ -393,7 +393,7 @@ export function Sidebar() {
                 </div>
                 {active && (
                   <div className="w-0.5 h-4 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: '#B8924A' }} />
+                    style={{ backgroundColor: '#be8c4a' }} />
                 )}
               </Link>
             )
@@ -410,7 +410,7 @@ export function Sidebar() {
           >
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
-                style={{ background: 'linear-gradient(135deg, #B8924A, #6B4E18)', border: '1px solid rgba(255,255,255,0.1)' }}
+                style={{ background: 'linear-gradient(135deg, #be8c4a, #6B4E18)', border: '1px solid rgba(255,255,255,0.1)' }}
               >
                 <User size={11} style={{ color: 'rgba(255,255,255,0.8)' }} />
               </div>
@@ -419,7 +419,7 @@ export function Sidebar() {
                   {user.userId}
                 </p>
                 <p className="text-[10px] truncate uppercase"
-                  style={{ color: '#B8924A', fontFamily: "'IBM Plex Mono', monospace", letterSpacing: '0.05em', opacity: 0.7 }}
+                  style={{ color: '#be8c4a', fontFamily: "'IBM Plex Mono', monospace", letterSpacing: '0.05em', opacity: 0.7 }}
                 >
                   {user.role === 'master' ? 'Administrador' : (user.department || 'Departamento')}
                 </p>

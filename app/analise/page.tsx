@@ -556,7 +556,7 @@ export default function AnalisePage() {
                   </div>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-2xl font-bold text-gray-900">
+                  <p className="text-2xl font-bold text-gray-900" style={{ fontFamily: "'Big Shoulders Display', sans-serif" }}>
                     {isRatioMedida ? formatPct(medidaTotals.razao) : formatCurrency(medidaTotals.razao)}
                   </p>
                   <p className="text-xs text-gray-500">{isRatioMedida ? 'Ratio Razão' : 'Razão Total'}</p>
