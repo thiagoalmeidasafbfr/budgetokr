@@ -1234,10 +1234,10 @@ export default function DreGerencialPage() {
 
         {/* Exclusion Panel */}
         {panelOpen && (
-          <aside className="w-72 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="text-sm font-medium text-gray-700">Configurar Exclusões</h2>
-              <button onClick={() => setPanelOpen(false)} className="text-gray-400 hover:text-gray-600">
+          <aside className="w-72 flex-shrink-0 bg-white border border-[#E2C98A] rounded-xl flex flex-col overflow-hidden m-2 shadow-sm">
+            <div className="px-4 py-3 border-b border-[#E2C98A]/40 flex items-center justify-between">
+              <h2 className="text-sm font-medium text-[#B8924A]">Configurar Exclusões</h2>
+              <button onClick={() => setPanelOpen(false)} className="text-[#B8924A]/50 hover:text-[#B8924A]">
                 <X size={14} />
               </button>
             </div>

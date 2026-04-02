@@ -1818,7 +1818,7 @@ export default function DeptDashboardPage() {
       </div>
       <div className="flex flex-col md:flex-row gap-0 flex-1 border-t border-gray-100">
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
-      <div className="w-full md:w-52 flex-shrink-0 border-b md:border-b-0 md:border-r border-gray-100 flex flex-col bg-white">
+      <div className="w-full md:w-52 flex-shrink-0 border-b md:border-b-0 md:border border-gray-100 md:border-[#E2C98A] flex flex-col bg-white md:rounded-xl md:m-2 md:overflow-hidden">
         {/* Mobile toggle */}
         <button
           onClick={() => setSidebarMobileExpanded(v => !v)}
