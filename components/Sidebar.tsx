@@ -259,7 +259,7 @@ export function Sidebar() {
           style={{ borderBottom: '0.5px solid rgba(228,223,213,0.1)' }}
         >
           <div className="flex items-center">
-            <Image src="/logo1.png" alt="Logo" width={140} height={48} style={{ objectFit: 'contain' }} priority />
+            <Image src="/logo1.png" alt="Logo" width={280} height={96} style={{ objectFit: 'contain' }} priority />
           </div>
 
           {/* Close button — mobile only */}
