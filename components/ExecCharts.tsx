@@ -340,9 +340,9 @@ function ExecChartCard({
         <div className="flex items-center gap-0.5 flex-shrink-0 ml-3">
           <button onClick={load}
             className="p-1.5 rounded transition-colors"
-            style={{ color: '#B8924A', opacity: 0.4 }}
+            style={{ color: '#9B6E20', opacity: 0.7 }}
             onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-            onMouseLeave={e => (e.currentTarget.style.opacity = '0.4')}
+            onMouseLeave={e => (e.currentTarget.style.opacity = '0.7')}
             title="Atualizar">
             <RefreshCw size={11} />
           </button>

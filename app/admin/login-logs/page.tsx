@@ -81,7 +81,7 @@ export default function LoginLogsPage() {
             <Shield size={22} className="text-gray-600" />
             Log de Acessos
           </h1>
-          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#B8924A", opacity: 0.55, letterSpacing: "0.04em" }}>
+          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#9B6E20", letterSpacing: "0.04em" }}>
             {data?.total.toLocaleString() ?? '—'} tentativas registradas
           </p>
         </div>

@@ -274,7 +274,7 @@ export default function DeptCommentsPage() {
           <h1 className="page-title text-2xl md:text-3xl flex items-center gap-2">
             <MessageSquare size={22} className="text-gray-600" /> Meus Comentários
           </h1>
-          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#B8924A", opacity: 0.55, letterSpacing: "0.04em" }}>Seus comentários na DRE e respostas do master</p>
+          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#9B6E20", letterSpacing: "0.04em" }}>Seus comentários na DRE e respostas do master</p>
         </div>
         <button
           onClick={load}

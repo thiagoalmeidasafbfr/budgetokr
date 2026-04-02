@@ -184,7 +184,7 @@ export default function PlanoContasPage() {
   // CSV export
   const exportXLSX = async () => {
     if (!data) return
-    const header = ['Nível', 'Número', 'Nome', 'Agrupamento', 'DRE', 'Budget', 'Razão', 'Variação', '%']
+    const header = ['Nível', 'Número', 'Nome', 'Agrupamento', 'DRE', 'Budget', 'Realizado', 'Variação', '%']
     const allRows = flattenTree(data.tree)
     const csvRows = allRows.map(r => [
       r.nivel, r.numero, r.nome, r.agrupamento, r.dre,
@@ -283,7 +283,7 @@ export default function PlanoContasPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <h1 className="page-title text-2xl md:text-3xl">Plano de Contas</h1>
-          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#B8924A", opacity: 0.55, letterSpacing: "0.04em" }}>
+          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#9B6E20", letterSpacing: "0.04em" }}>
             Análise hierárquica por nível do plano de contas · Budget vs Razão
             {data && <span className="ml-2 text-gray-400">· {data.totalContas} contas · {data.maxLevel} níveis</span>}
           </p>
@@ -391,7 +391,7 @@ export default function PlanoContasPage() {
                       <tr className="border-b bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
                         <th className="text-left px-4 py-2.5 font-medium" style={{ minWidth: 400 }}>Conta</th>
                         <th className="text-right px-4 py-2.5 font-medium w-32">Budget</th>
-                        <th className="text-right px-4 py-2.5 font-medium w-32">Razão</th>
+                        <th className="text-right px-4 py-2.5 font-medium w-32">Realizado</th>
                         <th className="text-right px-4 py-2.5 font-medium w-32">Variação</th>
                         <th className="text-right px-4 py-2.5 font-medium w-20">%</th>
                       </tr>

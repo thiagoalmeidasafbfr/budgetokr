@@ -722,8 +722,8 @@ export default function DreGerencialPage() {
   // ── Export CSV ──────────────────────────────────────────────────────────────
   const exportXLSX = async () => {
     const header = viewMode === 'total'
-      ? ['Linha DRE', 'Budget', 'Razão', 'Variação', '%']
-      : ['Linha DRE', ...dataPeriods.flatMap(p => [`Budget ${formatPeriodo(p)}`, `Razão ${formatPeriodo(p)}`])]
+      ? ['Linha DRE', 'Budget', 'Realizado', 'Variação', '%']
+      : ['Linha DRE', ...dataPeriods.flatMap(p => [`Budget ${formatPeriodo(p)}`, `Realizado ${formatPeriodo(p)}`])]
     const rows = flatRows.map(r => {
       if (viewMode === 'total') return ['  '.repeat(r.depth) + r.name, r.budget, r.razao, r.variacao, r.variacao_pct.toFixed(2)]
       return ['  '.repeat(r.depth) + r.name, ...dataPeriods.flatMap(p => [r.byPeriod[p]?.budget ?? 0, r.byPeriod[p]?.razao ?? 0])]
@@ -1710,7 +1710,7 @@ export default function DreGerencialPage() {
                     Análise (só exibição)
                   </button>
                 </div>
-                {newLineIsAnalise && <p className="text-[11px] mt-0.5" style={{ color: '#B8924A', opacity: 0.7 }}>Não afeta subtotais. Ideal para margens e índices.</p>}
+                {newLineIsAnalise && <p className="text-[11px] mt-0.5" style={{ color: '#9B6E20' }}>Não afeta subtotais. Ideal para margens e índices.</p>}
               </div>
 
               {/* Tipo de fórmula */}

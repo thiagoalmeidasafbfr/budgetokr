@@ -1976,7 +1976,7 @@ export default function DeptDashboardPage() {
                 <h1 className="page-title text-2xl md:text-3xl truncate">
                   {combineDepts ? forcedDepts.join(' + ') : selDept}
                 </h1>
-                <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#B8924A", opacity: 0.55, letterSpacing: "0.04em" }}>
+                <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#9B6E20", letterSpacing: "0.04em" }}>
                   {combineDepts && <span className="text-gray-700 font-medium mr-1">[Combinado]</span>}
                   {selPeriods.length > 0
                     ? `${selPeriods.length} período(s) selecionado(s)`

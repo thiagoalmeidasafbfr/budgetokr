@@ -22,8 +22,8 @@ export function YearFilter({ periodos, selYear, onChange, className }: YearFilte
 
   return (
     <div className={cn('flex items-center gap-1.5', className)}>
-      <Calendar size={13} className="flex-shrink-0 hidden sm:block" style={{ color: '#B8924A', opacity: 0.5 }} />
-      <span className="flex-shrink-0 hidden sm:inline" style={{ ...monoStyle, color: '#B8924A', opacity: 0.5 }}>Ano:</span>
+      <Calendar size={13} className="flex-shrink-0 hidden sm:block" style={{ color: '#9B6E20' }} />
+      <span className="flex-shrink-0 hidden sm:inline" style={{ ...monoStyle, color: '#9B6E20' }}>Ano:</span>
       <div className="flex gap-1 flex-wrap">
         <button
           onClick={() => onChange(null)}

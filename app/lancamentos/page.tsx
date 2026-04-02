@@ -127,7 +127,7 @@ export default function LancamentosPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <h1 className="page-title text-2xl md:text-3xl">Lançamentos</h1>
-          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#B8924A", opacity: 0.55, letterSpacing: "0.04em" }}>
+          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#9B6E20", letterSpacing: "0.04em" }}>
             {data?.total.toLocaleString() ?? '—'} registros · Edite clicando em qualquer célula
           </p>
         </div>
@@ -145,7 +145,7 @@ export default function LancamentosPage() {
             <button key={t} onClick={() => { setTipo(t); setPage(1) }}
               className={cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
                 tipo === t ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50')}>
-              {t === 'budget' ? 'Budget' : 'Razão'}
+              {t === 'budget' ? 'Budget' : 'Realizado'}
             </button>
           ))}
         </div>

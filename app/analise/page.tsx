@@ -217,11 +217,11 @@ export default function AnalisePage() {
     if (groupBy === 'departamento') {
       key = (row.nome_departamento && row.nome_departamento.trim())
         ? row.nome_departamento.trim()
-        : (row.departamento || '—')
+        : (row.departamento || 'Sem Centro de Custo Definido')
     } else if (groupBy === 'centro_custo') {
       key = (row.nome_centro_custo && row.nome_centro_custo.trim())
         ? row.nome_centro_custo.trim()
-        : (row.centro_custo || '—')
+        : (row.centro_custo || 'Sem Centro de Custo Definido')
     } else {
       key = row.periodo
     }
@@ -254,8 +254,8 @@ export default function AnalisePage() {
 
   // Label helper for medida rows
   const medidaRowLabel = (r: MedidaResult) => {
-    if (medidaGroupBy === 'departamento') return r.nome_departamento?.trim() || r.departamento || '—'
-    if (medidaGroupBy === 'centro_custo') return r.nome_centro_custo?.trim() || r.centro_custo || '—'
+    if (medidaGroupBy === 'departamento') return r.nome_departamento?.trim() || r.departamento || 'Sem Centro de Custo Definido'
+    if (medidaGroupBy === 'centro_custo') return r.nome_centro_custo?.trim() || r.centro_custo || 'Sem Centro de Custo Definido'
     return r.periodo || '—'
   }
 
@@ -373,8 +373,8 @@ export default function AnalisePage() {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div className="min-w-0">
-          <h1 className="page-title text-2xl md:text-3xl">Análise Budget vs Razão</h1>
-          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#B8924A", opacity: 0.55, letterSpacing: "0.04em" }}>{data.length.toLocaleString()} registros</p>
+          <h1 className="page-title text-2xl md:text-3xl">Análise Budget vs Realizado</h1>
+          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#9B6E20", letterSpacing: "0.04em" }}>{data.length.toLocaleString()} registros</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
           <YearFilter periodos={periodos} selYear={selYear} onChange={y => { setSelYear(y) }} />
@@ -497,7 +497,7 @@ export default function AnalisePage() {
                     </th>
                     {groupBy === 'centro_custo' && <th className="text-left px-5 py-3 font-medium text-gray-400 text-xs">Departamento</th>}
                     <th className="text-right px-5 py-3 font-medium text-gray-500">Budget</th>
-                    <th className="text-right px-5 py-3 font-medium text-gray-500">Razão</th>
+                    <th className="text-right px-5 py-3 font-medium text-gray-500">Realizado</th>
                     <th className="text-right px-5 py-3 font-medium text-gray-500">Variação</th>
                     <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>
                   </tr></thead>
@@ -559,7 +559,7 @@ export default function AnalisePage() {
                   <p className="text-2xl font-bold text-gray-900" style={{ fontFamily: "'Big Shoulders Display', sans-serif" }}>
                     {isRatioMedida ? formatPct(medidaTotals.razao) : formatCurrency(medidaTotals.razao)}
                   </p>
-                  <p className="text-xs text-gray-500">{isRatioMedida ? 'Ratio Razão' : 'Razão Total'}</p>
+                  <p className="text-xs text-gray-500">{isRatioMedida ? 'Ratio Realizado' : 'Realizado Total'}</p>
                   <p className="text-xs text-gray-400">
                     Budget: {isRatioMedida ? formatPct(medidaTotals.budget) : formatCurrency(medidaTotals.budget)}
                   </p>
@@ -656,7 +656,7 @@ export default function AnalisePage() {
                             : 'Período'}
                         </th>
                         <th className="text-right px-5 py-3 font-medium text-gray-500">{isRatioMedida ? 'Budget %' : 'Budget'}</th>
-                        <th className="text-right px-5 py-3 font-medium text-gray-500">{isRatioMedida ? 'Razão %' : 'Razão'}</th>
+                        <th className="text-right px-5 py-3 font-medium text-gray-500">{isRatioMedida ? 'Realizado %' : 'Realizado'}</th>
                         <th className="text-right px-5 py-3 font-medium text-gray-500">{isRatioMedida ? 'Δ pp' : 'Variação'}</th>
                         {!isRatioMedida && <th className="text-right px-5 py-3 font-medium text-gray-500">%</th>}
                       </tr></thead>
@@ -919,9 +919,9 @@ function MedidaAcumuladoTable({
               <th className="text-center px-2 py-1 font-medium text-gray-600 text-xs border-b border-gray-100 border-l bg-gray-50/40" colSpan={3}>Acumulado YTD</th>
             </tr>
             <tr className="border-b bg-gray-50">
-              <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs">Razão</th>
+              <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs">Realizado</th>
               <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs">Budget</th>
-              <th className="text-right px-3 py-2 font-medium text-gray-700 text-xs border-l border-gray-100">Razão Acum.</th>
+              <th className="text-right px-3 py-2 font-medium text-gray-700 text-xs border-l border-gray-100">Realizado Acum.</th>
               <th className="text-right px-3 py-2 font-medium text-gray-500 text-xs">Budget Acum.</th>
               <th className="text-right px-3 py-2 font-medium text-gray-500 text-xs">Δ Acum.</th>
             </tr>
