@@ -1,4 +1,5 @@
 'use client'
+import Image from 'next/image'
 import { useState, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2, AlertCircle } from 'lucide-react'
@@ -47,48 +48,7 @@ export default function LoginPage() {
 
         {/* ── Logo / Wordmark ─────────────────────────────────────────────── */}
         <div className="flex flex-col items-center mb-10">
-          <div className="flex items-center gap-3 mb-4">
-            <span style={{ color: '#B8924A', fontSize: '2rem', lineHeight: 1 }}>✦</span>
-            <div className="flex flex-col leading-none">
-              <span
-                style={{
-                  fontFamily: "'Cormorant Garamond', serif",
-                  fontSize: '2.2rem',
-                  fontWeight: 700,
-                  color: '#1A1820',
-                  letterSpacing: '-0.02em',
-                  lineHeight: 1,
-                }}
-              >
-                Glorioso
-              </span>
-              <span
-                style={{
-                  fontFamily: "'Big Shoulders Display', sans-serif",
-                  fontSize: '0.65rem',
-                  fontWeight: 900,
-                  letterSpacing: '0.45em',
-                  color: '#B8924A',
-                  marginTop: '-1px',
-                  marginLeft: '3px',
-                }}
-              >
-                FINANCE
-              </span>
-            </div>
-          </div>
-          <p
-            style={{
-              fontFamily: "'IBM Plex Mono', monospace",
-              fontSize: '10px',
-              letterSpacing: '0.12em',
-              color: '#B8924A',
-              opacity: 0.6,
-              textTransform: 'uppercase',
-            }}
-          >
-            Plataforma de Gestão Financeira
-          </p>
+          <Image src="/logo2.png" alt="Logo" width={180} height={60} style={{ objectFit: 'contain' }} priority />
         </div>
 
         {/* ── Card ────────────────────────────────────────────────────────── */}
