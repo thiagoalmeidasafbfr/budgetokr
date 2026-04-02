@@ -293,29 +293,36 @@ export default function Dashboard() {
         <YearFilter periodos={allPeriodos} selYear={selYear} onChange={setSelYear} />
       </div>
 
-      {/* Summary cards — full width, aligned with charts */}
+      {/* Summary cards — mesma estrutura flex:2 / flex:1 que os gráficos abaixo */}
       {isWidgetVisible('summary') && (
-        <div
-          className="grid grid-cols-1 md:grid-cols-3 gap-4 pb-5"
-          style={{ borderBottom: '0.5px solid #E4DFD5' }}
-        >
-          <SummaryCard
-            title={selYear && hasYtdData ? 'Budget YTD' : 'Budget Total'}
-            value={abbrev(displayBudget)}
-            sub={selYear && hasYtdData ? ytdLabelSub : undefined}
-          />
-          <SummaryCard
-            title="Variação de Performance"
-            value={abbrev(variacao)}
-            pct={formatPct(variacaoPct)}
-            featured
-            color={variacao >= 0 ? '#166534' : '#B91C1C'}
-          />
-          <SummaryCard
-            title={selYear && hasYtdData ? 'Realizado YTD' : 'Realizado Total'}
-            value={abbrev(displayRazao)}
-            sub="Verificado"
-          />
+        <div className="flex gap-4 pb-5" style={{ borderBottom: '0.5px solid #E4DFD5' }}>
+          {/* 2/3 — dois cards lado a lado */}
+          <div className="flex gap-4" style={{ flex: 2 }}>
+            <div style={{ flex: 1 }}>
+              <SummaryCard
+                title={selYear && hasYtdData ? 'Budget YTD' : 'Budget Total'}
+                value={abbrev(displayBudget)}
+                sub={selYear && hasYtdData ? ytdLabelSub : undefined}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <SummaryCard
+                title="Variação de Performance"
+                value={abbrev(variacao)}
+                pct={formatPct(variacaoPct)}
+                featured
+                color={variacao >= 0 ? '#166534' : '#B91C1C'}
+              />
+            </div>
+          </div>
+          {/* 1/3 — card direito */}
+          <div style={{ flex: 1 }}>
+            <SummaryCard
+              title={selYear && hasYtdData ? 'Realizado YTD' : 'Realizado Total'}
+              value={abbrev(displayRazao)}
+              sub="Verificado"
+            />
+          </div>
         </div>
       )}
 
@@ -433,10 +440,10 @@ function SummaryCard({ title, value, sub, pct, featured = false, color }: {
       }}
     >
       <p style={{
-        fontFamily: "'IBM Plex Mono', monospace",
-        fontSize: '9px',
-        fontWeight: 500,
-        letterSpacing: '0.22em',
+        fontFamily: "'Big Shoulders Display', sans-serif",
+        fontSize: '10px',
+        fontWeight: 900,
+        letterSpacing: '0.4em',
         textTransform: 'uppercase',
         color: featured ? '#6B4E18' : '#B8924A',
         marginBottom: '16px',

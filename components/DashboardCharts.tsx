@@ -1,7 +1,7 @@
 'use client'
 import React from 'react'
 import {
-  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, ReferenceLine,
   Tooltip, ResponsiveContainer, Legend, TooltipProps,
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
 } from 'recharts'
@@ -72,7 +72,8 @@ export default function DashboardCharts({ periodChartData, deptVariance }: {
   const maxVar = positives.length > 0 ? positives[0].variacao : 1
   const radarData = positives.map(d => ({
     dept: d.dept.length > 13 ? d.dept.slice(0, 12) + '…' : d.dept,
-    value: Math.round((d.variacao / maxVar) * 100),
+    // raiz quadrada para distribuir melhor valores muito dispersos
+    value: Math.round(Math.sqrt(d.variacao / maxVar) * 100),
     raw: d.variacao,
   }))
 
@@ -80,7 +81,7 @@ export default function DashboardCharts({ periodChartData, deptVariance }: {
     <div className="flex gap-4 items-stretch">
 
       {/* Period chart — 2/3 */}
-      <div style={{ width: '66%', flexShrink: 0 }}>
+      <div style={{ flex: 2 }}>
         <Card className="overflow-hidden h-full">
           <CardHeader className="pb-2" style={{ borderBottom: '0.5px solid #E4DFD5' }}>
             <CardTitle>Variação YTD por Período</CardTitle>
@@ -101,6 +102,7 @@ export default function DashboardCharts({ periodChartData, deptVariance }: {
                   iconType="square" iconSize={7}
                   wrapperStyle={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, paddingTop: 10, color: '#94a3b8' }}
                 />
+                <ReferenceLine yAxisId="bars" y={0} stroke="#1A1820" strokeWidth={1.5} strokeOpacity={0.25} />
                 <Bar yAxisId="bars" dataKey="budget"     name="Budget"       fill={C.budget} radius={[2,2,0,0]} maxBarSize={22} />
                 <Bar yAxisId="bars" dataKey="razao"      name="Realizado"    fill={C.razao}  radius={[2,2,0,0]} maxBarSize={22} />
                 <Line yAxisId="line" type="monotone" dataKey="variacaoYtd" name="Variação YTD"
