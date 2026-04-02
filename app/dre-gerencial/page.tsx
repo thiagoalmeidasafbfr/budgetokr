@@ -997,8 +997,8 @@ export default function DreGerencialPage() {
     <div className="flex flex-col h-full min-h-screen">
 
       {/* Header */}
-      <div className="py-3 md:py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 flex-wrap">
-        <div className="flex-1 min-w-0">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+        <div className="min-w-0">
           <h1 className="page-title text-2xl md:text-3xl">DRE Gerencial</h1>
           <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#9B6E20", letterSpacing: "0.04em" }}>
             Visão personalizada — exclua linhas, agrupamentos ou contas do cálculo
@@ -1087,7 +1087,7 @@ export default function DreGerencialPage() {
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row flex-1 md:min-h-0 md:overflow-hidden">
+      <div className="flex flex-col md:flex-row flex-1 md:min-h-0 md:overflow-hidden gap-4">
 
         {/* Filter Sidebar */}
         <aside className="w-full md:w-52 flex-shrink-0 md:overflow-y-auto space-y-3">
@@ -1106,7 +1106,7 @@ export default function DreGerencialPage() {
             </span>
             <ChevronDown size={14} className={cn('text-gray-400 transition-transform', filterMobileExpanded && 'rotate-180')} />
           </button>
-          <div className={cn(filterMobileExpanded ? 'block' : 'hidden', 'md:block p-3 space-y-3')}>
+          <div className={cn(filterMobileExpanded ? 'block' : 'hidden', 'md:block space-y-3')}>
           <Card>
             <CardContent className="p-3 space-y-3">
               <p className="hidden md:flex text-xs font-semibold text-gray-500 uppercase tracking-wide items-center gap-1">
@@ -1234,8 +1234,9 @@ export default function DreGerencialPage() {
 
         {/* Exclusion Panel */}
         {panelOpen && (
-          <aside className="w-72 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <aside className="w-72 flex-shrink-0 bg-white rounded-xl flex flex-col overflow-hidden"
+            style={{ border: '0.5px solid #E4DFD5', boxShadow: '0 2px 4px rgba(26,24,32,0.03)' }}>
+            <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: '#E4DFD5' }}>
               <h2 className="text-sm font-medium text-gray-700">Configurar Exclusões</h2>
               <button onClick={() => setPanelOpen(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={14} />

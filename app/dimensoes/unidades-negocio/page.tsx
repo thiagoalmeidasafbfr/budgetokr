@@ -47,9 +47,9 @@ export default function UnidadesNegocioPage() {
   const startNew  = () => { setEditing('new'); setForm({}) }
 
   return (
-    <div className="space-y-4 max-w-5xl">
-      <div className="flex items-center justify-between">
-        <div>
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="min-w-0">
           <h1 className="page-title text-2xl md:text-3xl">Unidades de Negócio</h1>
           <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#9B6E20", letterSpacing: "0.04em" }}>{rows.length} registros · Ligação via ID CC- CC</p>
         </div>

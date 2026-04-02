@@ -194,10 +194,12 @@ export default function UploadPage() {
   const tipoInfo = TIPO_OPTIONS.find(t => t.value === tipo)
 
   return (
-    <div className="max-w-3xl mx-auto space-y-5">
-      <div>
-        <h1 className="page-title text-2xl md:text-3xl">Importar Dados</h1>
-        <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#9B6E20", letterSpacing: "0.04em" }}>Importe cada tabela separadamente via Excel</p>
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="page-title text-2xl md:text-3xl">Importar Dados</h1>
+          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#9B6E20", letterSpacing: "0.04em" }}>Importe cada tabela separadamente via Excel</p>
+        </div>
       </div>
 
       {/* Stepper */}

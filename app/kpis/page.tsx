@@ -104,10 +104,10 @@ export default function KpisPage() {
   const allDepts = [...new Set(kpis.map(k => k.departamento))].sort()
 
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="min-w-0">
           <h1 className="page-title text-2xl md:text-3xl">KPIs Manuais</h1>
           <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#9B6E20", letterSpacing: "0.04em" }}>
             Configure os KPIs que aparecem nos dashboards de departamento · {kpis.length} KPI{kpis.length !== 1 ? 's' : ''} cadastrados

@@ -1812,13 +1812,13 @@ export default function DeptDashboardPage() {
   return (
     <div className="flex flex-col min-h-screen">
       {/* Page Header */}
-      <div className="px-4 md:px-6 py-4 flex-shrink-0">
+      <div className="flex-shrink-0 pb-4">
         <h1 className="page-title text-2xl md:text-3xl">Dashboard do Departamento</h1>
         <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#9B6E20", letterSpacing: "0.04em" }}>KPIs e DRE por área</p>
       </div>
-      <div className="flex flex-col md:flex-row gap-0 flex-1 border-t border-gray-100">
+      <div className="flex flex-col md:flex-row gap-4 flex-1">
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
-      <div className="w-full md:w-52 flex-shrink-0 border-b md:border-b-0 md:border-r border-gray-100 flex flex-col bg-white">
+      <div className="w-full md:w-52 flex-shrink-0 border-b md:border-b-0 flex flex-col bg-white md:rounded-xl md:overflow-hidden" style={{ border: '0.5px solid #E4DFD5', boxShadow: '0 2px 4px rgba(26,24,32,0.03)' }}>
         {/* Mobile toggle */}
         <button
           onClick={() => setSidebarMobileExpanded(v => !v)}

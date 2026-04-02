@@ -167,9 +167,9 @@ export default function MedidasPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="min-w-0">
           <h1 className="page-title text-2xl md:text-3xl">Medidas</h1>
           <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#9B6E20", letterSpacing: "0.04em" }}>Defina KPIs como SG&A, COGS, Headcount usando filtros no star schema</p>
         </div>
