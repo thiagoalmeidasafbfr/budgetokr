@@ -1087,7 +1087,7 @@ export default function DreGerencialPage() {
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row flex-1 md:min-h-0 md:overflow-hidden">
+      <div className="flex flex-col md:flex-row flex-1 md:min-h-0 md:overflow-hidden gap-4">
 
         {/* Filter Sidebar */}
         <aside className="w-full md:w-52 flex-shrink-0 md:overflow-y-auto space-y-3">
@@ -1106,7 +1106,7 @@ export default function DreGerencialPage() {
             </span>
             <ChevronDown size={14} className={cn('text-gray-400 transition-transform', filterMobileExpanded && 'rotate-180')} />
           </button>
-          <div className={cn(filterMobileExpanded ? 'block' : 'hidden', 'md:block p-3 space-y-3')}>
+          <div className={cn(filterMobileExpanded ? 'block' : 'hidden', 'md:block space-y-3')}>
           <Card>
             <CardContent className="p-3 space-y-3">
               <p className="hidden md:flex text-xs font-semibold text-gray-500 uppercase tracking-wide items-center gap-1">
@@ -1234,10 +1234,11 @@ export default function DreGerencialPage() {
 
         {/* Exclusion Panel */}
         {panelOpen && (
-          <aside className="w-72 flex-shrink-0 bg-white border border-[#E2C98A] rounded-xl flex flex-col overflow-hidden m-2 shadow-sm">
-            <div className="px-4 py-3 border-b border-[#E2C98A]/40 flex items-center justify-between">
-              <h2 className="text-sm font-medium text-[#B8924A]">Configurar Exclusões</h2>
-              <button onClick={() => setPanelOpen(false)} className="text-[#B8924A]/50 hover:text-[#B8924A]">
+          <aside className="w-72 flex-shrink-0 bg-white rounded-xl flex flex-col overflow-hidden"
+            style={{ border: '0.5px solid #E4DFD5', boxShadow: '0 2px 4px rgba(26,24,32,0.03)' }}>
+            <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: '#E4DFD5' }}>
+              <h2 className="text-sm font-medium text-gray-700">Configurar Exclusões</h2>
+              <button onClick={() => setPanelOpen(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={14} />
               </button>
             </div>
