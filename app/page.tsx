@@ -299,22 +299,23 @@ export default function Dashboard() {
             <YearFilter periodos={allPeriodos} selYear={selYear} onChange={setSelYear} />
           </div>
           {isWidgetVisible('summary') && (
-            <div className="flex flex-wrap items-start justify-around gap-10">
-              <BigNum
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <SummaryCard
                 title={selYear && hasYtdData ? 'Budget YTD' : 'Budget Total'}
                 value={abbrev(displayBudget)}
                 sub={selYear && hasYtdData ? ytdLabelSub : undefined}
               />
-              <BigNum
+              <SummaryCard
+                title="Variação de Performance"
+                value={`${variacaoPct >= 0 ? '+' : ''}${formatPct(variacaoPct)}`}
+                badge={variacao >= 0 ? 'Dentro da Margem' : 'Fora da Margem'}
+                featured
+                color={variacao >= 0 ? '#166534' : '#B91C1C'}
+              />
+              <SummaryCard
                 title={selYear && hasYtdData ? 'Realizado YTD' : 'Realizado Total'}
                 value={abbrev(displayRazao)}
-                sub={selYear && hasYtdData ? ytdLabelSub : undefined}
-              />
-              <BigNum
-                title="Variação"
-                value={abbrev(variacao)}
-                sub={formatPct(variacaoPct)}
-                color={variacao >= 0 ? 'text-emerald-600' : 'text-red-500'}
+                sub="Verificado"
               />
             </div>
           )}
@@ -417,47 +418,73 @@ function abbrev(v: number): string {
   return `${sign}R$\u00a0${abs.toFixed(0)}`
 }
 
-function BigNum({ title, value, sub, color }: {
-  title: string; value: string; sub?: string; color?: string
+function SummaryCard({ title, value, sub, badge, featured = false, color }: {
+  title: string; value: string; sub?: string; badge?: string; featured?: boolean; color?: string
 }) {
-  // Map Tailwind color class to CSS color value
-  const cssColor = color === 'text-emerald-600'
-    ? '#166534'
-    : color === 'text-red-500'
-    ? '#B91C1C'
-    : '#1A1820'
-
+  const valueColor = color ?? '#1A1820'
   return (
-    <div className="flex flex-col items-center gap-0.5">
-      <p
-        style={{
-          fontFamily: "'Big Shoulders Display', sans-serif",
-          fontWeight: 900,
-          fontSize: 'clamp(2.8rem, 5vw, 4.5rem)',
-          letterSpacing: '-0.02em',
-          lineHeight: 1,
-          color: cssColor,
-        }}
-      >
-        {value}
-      </p>
-      <p
-        style={{
-          fontFamily: "'IBM Plex Mono', monospace",
-          fontSize: '10px',
-          fontWeight: 500,
-          letterSpacing: '0.18em',
-          textTransform: 'uppercase',
-          color: '#B8924A',
-          opacity: 0.7,
-          marginTop: '6px',
-          textAlign: 'center',
-        }}
-      >
+    <div
+      className="flex flex-col items-center justify-center rounded-xl px-8 py-7"
+      style={{
+        backgroundColor: featured ? '#FBF7EE' : '#FFFFFF',
+        border: featured ? '1px solid #E2C98A' : '0.5px solid #E4DFD5',
+        boxShadow: featured
+          ? '0 4px 20px rgba(184,146,74,0.12)'
+          : '0 2px 8px rgba(26,24,32,0.03)',
+        minHeight: '160px',
+      }}
+    >
+      <p style={{
+        fontFamily: "'Big Shoulders Display', sans-serif",
+        fontSize: '10px',
+        fontWeight: 900,
+        letterSpacing: '0.38em',
+        textTransform: 'uppercase',
+        color: featured ? '#6B4E18' : '#B8924A',
+        marginBottom: '18px',
+        textAlign: 'center',
+      }}>
         {title}
       </p>
-      {sub && (
-        <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', color: '#B8924A', opacity: 0.4, textAlign: 'center' }}>
+      <p style={{
+        fontFamily: "'Big Shoulders Display', sans-serif",
+        fontWeight: 900,
+        fontSize: 'clamp(2rem, 3.2vw, 3.2rem)',
+        letterSpacing: '-0.02em',
+        lineHeight: 1,
+        color: valueColor,
+        textAlign: 'center',
+      }}>
+        {value}
+      </p>
+      {badge && (
+        <div style={{ marginTop: '18px' }}>
+          <span style={{
+            fontFamily: "'IBM Plex Mono', monospace",
+            fontSize: '9px',
+            letterSpacing: '0.18em',
+            textTransform: 'uppercase',
+            color: '#6B4E18',
+            backgroundColor: '#FFFFFF',
+            border: '0.5px solid #E2C98A',
+            padding: '3px 10px',
+            borderRadius: '2px',
+          }}>
+            {badge}
+          </span>
+        </div>
+      )}
+      {sub && !badge && (
+        <p style={{
+          fontFamily: "'IBM Plex Mono', monospace",
+          fontSize: '10px',
+          color: '#B8924A',
+          opacity: 0.45,
+          textAlign: 'center',
+          marginTop: '14px',
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+        }}>
           {sub}
         </p>
       )}
