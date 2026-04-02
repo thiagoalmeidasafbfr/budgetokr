@@ -997,7 +997,7 @@ export default function DreGerencialPage() {
     <div className="flex flex-col h-full min-h-screen">
 
       {/* Header */}
-      <div className="px-3 md:px-6 py-3 md:py-4 flex items-center gap-4 flex-wrap">
+      <div className="py-3 md:py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 flex-wrap">
         <div className="flex-1 min-w-0">
           <h1 className="page-title text-2xl md:text-3xl">DRE Gerencial</h1>
           <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#9B6E20", letterSpacing: "0.04em" }}>
@@ -1090,7 +1090,7 @@ export default function DreGerencialPage() {
       <div className="flex flex-col md:flex-row flex-1 md:min-h-0 md:overflow-hidden">
 
         {/* Filter Sidebar */}
-        <aside className="w-full md:w-52 flex-shrink-0 bg-white border-b md:border-b-0 md:border-r border-gray-200 md:overflow-y-auto space-y-3">
+        <aside className="w-full md:w-52 flex-shrink-0 md:overflow-y-auto space-y-3">
           {/* Mobile toggle */}
           <button
             onClick={() => setFilterMobileExpanded(v => !v)}
@@ -1311,7 +1311,8 @@ export default function DreGerencialPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-gray-50">
-                      <th className="w-7 px-1" />
+                      <th className="w-5" />
+                      <th className="w-10" />
                       <th className="text-left px-5 py-3 font-medium text-gray-500">Demonstrativo Gerencial</th>
                       <th className="text-right px-5 py-3 font-medium text-gray-500">Vlr. Orçado</th>
                       <th className="text-right px-5 py-3 font-medium text-gray-500">Vlr. Realizado</th>
@@ -1338,30 +1339,30 @@ export default function DreGerencialPage() {
                           isDragTarget && 'ring-2 ring-inset ring-[#B8924A] bg-[#FBF7EE]',
                           row.isCalculated && 'italic',
                         )}>
-                        <td className="px-1 py-2 w-16">
-                          <div className="flex items-center gap-0.5 justify-center">
-                            {row.depth === 0 && (
-                              <span
-                                draggable
-                                onDragStart={() => handleDragStart(row.name)}
-                                className="text-gray-300 cursor-grab active:cursor-grabbing inline-flex"
-                              >
-                                <GripVertical size={13} />
-                              </span>
-                            )}
-                            {row.isCalculated && calcLinha && ((calcLinha.id ?? 0) < 0 || isMaster) && (
-                              <>
-                                <button onClick={e => { e.stopPropagation(); openEditModal(calcLinha) }}
-                                  className="text-gray-300 hover:text-[#B8924A] transition-colors" title="Editar linha">
-                                  <Pencil size={11} />
-                                </button>
-                                <button onClick={e => { e.stopPropagation(); deleteCalculatedLine(calcLinha.id) }}
-                                  className="text-gray-300 hover:text-red-400 transition-colors" title="Remover linha">
-                                  <Trash2 size={11} />
-                                </button>
-                              </>
-                            )}
-                          </div>
+                        <td className="w-5 py-2 text-center">
+                          {row.depth === 0 && (
+                            <span
+                              draggable
+                              onDragStart={() => handleDragStart(row.name)}
+                              className="text-gray-300 cursor-grab active:cursor-grabbing inline-flex"
+                            >
+                              <GripVertical size={13} />
+                            </span>
+                          )}
+                        </td>
+                        <td className="w-10 py-2">
+                          {row.isCalculated && calcLinha && ((calcLinha.id ?? 0) < 0 || isMaster) && (
+                            <div className="flex items-center gap-0.5">
+                              <button onClick={e => { e.stopPropagation(); openEditModal(calcLinha) }}
+                                className="text-gray-300 hover:text-[#B8924A] transition-colors" title="Editar linha">
+                                <Pencil size={11} />
+                              </button>
+                              <button onClick={e => { e.stopPropagation(); deleteCalculatedLine(calcLinha.id) }}
+                                className="text-gray-300 hover:text-red-400 transition-colors" title="Remover linha">
+                                <Trash2 size={11} />
+                              </button>
+                            </div>
+                          )}
                         </td>
                         <td className={cn('px-5 py-2.5', row.isSubtotal ? 'font-bold text-gray-900' : row.isGroup ? 'font-medium text-gray-800' : row.isAccount ? 'text-gray-500 text-xs' : 'text-gray-700')}
                           style={{ paddingLeft: `${20 + row.depth * 24}px` }}>
