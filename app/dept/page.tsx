@@ -1812,7 +1812,7 @@ export default function DeptDashboardPage() {
   return (
     <div className="flex flex-col min-h-screen">
       {/* Page Header */}
-      <div className="px-4 md:px-6 py-4 flex-shrink-0">
+      <div className="flex-shrink-0 pb-4">
         <h1 className="page-title text-2xl md:text-3xl">Dashboard do Departamento</h1>
         <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#9B6E20", letterSpacing: "0.04em" }}>KPIs e DRE por área</p>
       </div>

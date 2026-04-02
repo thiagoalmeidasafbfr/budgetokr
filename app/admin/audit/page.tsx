@@ -47,11 +47,13 @@ export default function AuditPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="page-title text-2xl md:text-3xl flex items-center gap-2">
-          <History size={22} className="text-gray-600" /> Audit Trail
-        </h1>
-        <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#9B6E20", letterSpacing: "0.04em" }}>Histórico de alterações em lançamentos</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="page-title text-2xl md:text-3xl flex items-center gap-2">
+            <History size={22} className="text-gray-600" /> Audit Trail
+          </h1>
+          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#9B6E20", letterSpacing: "0.04em" }}>Histórico de alterações em lançamentos</p>
+        </div>
       </div>
 
       <Card>

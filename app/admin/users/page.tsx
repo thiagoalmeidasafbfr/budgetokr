@@ -580,13 +580,12 @@ export default function UsersPage() {
   const deptUsers = users.filter(u => u.role === 'dept')
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl mx-auto">
+    <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Users size={20} className="text-gray-600" />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="min-w-0">
           <h1 className="page-title text-2xl md:text-3xl">Gerenciar Usuários</h1>
-          <span className="text-sm text-gray-500 ml-1">({users.length} usuários)</span>
+          <p className="text-sm mt-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#9B6E20", letterSpacing: "0.04em" }}>{users.length} usuário{users.length !== 1 ? 's' : ''} cadastrados</p>
         </div>
         <div className="flex gap-2">
           <button onClick={load} disabled={loading}

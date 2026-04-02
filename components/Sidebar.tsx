@@ -251,12 +251,12 @@ export function Sidebar() {
         "md:translate-x-0",
         mobileOpen ? "translate-x-0" : "-translate-x-full"
       )}
-        style={{ backgroundColor: '#1A1820', borderColor: 'rgba(228,223,213,0.08)' }}
+        style={{ backgroundColor: '#F5F4F0', borderColor: 'rgba(0,0,0,0.07)' }}
       >
 
         {/* ── Logo ────────────────────────────────────────────────────────── */}
         <div className="px-5 py-5 flex-shrink-0 flex items-center justify-between"
-          style={{ borderBottom: '0.5px solid rgba(228,223,213,0.1)' }}
+          style={{ borderBottom: '0.5px solid rgba(0,0,0,0.07)' }}
         >
           <div className="flex items-center">
             <Image src="/logo1.png" alt="Logo" width={140} height={48} style={{ objectFit: 'contain' }} priority />
@@ -266,7 +266,7 @@ export function Sidebar() {
           <button
             onClick={closeMobile}
             className="md:hidden flex-shrink-0 p-1 rounded-md transition-colors"
-            style={{ color: 'rgba(255,255,255,0.3)' }}
+            style={{ color: 'rgba(0,0,0,0.35)' }}
             aria-label="Fechar menu"
           >
             <X size={18} />
@@ -279,7 +279,7 @@ export function Sidebar() {
             <div className="space-y-2 px-3 py-2">
               {[1,2,3,4].map(i => (
                 <div key={i} className="h-8 rounded-lg animate-pulse"
-                  style={{ backgroundColor: 'rgba(190,140,74,0.06)' }} />
+                  style={{ backgroundColor: 'rgba(0,0,0,0.06)' }} />
               ))}
             </div>
           )}
@@ -305,14 +305,14 @@ export function Sidebar() {
                       fontWeight: 500,
                       letterSpacing: '0.18em',
                       textTransform: 'uppercase',
-                      color: 'rgba(190,140,74,0.5)',
+                      color: 'rgba(190,140,74,0.75)',
                     }}
                   >
                     {item.label}
                   </p>
                   {isCollapsed
-                    ? <ChevronRight size={10} style={{ color: 'rgba(190,140,74,0.25)' }} />
-                    : <ChevronDown  size={10} style={{ color: 'rgba(190,140,74,0.25)' }} />
+                    ? <ChevronRight size={10} style={{ color: 'rgba(190,140,74,0.45)' }} />
+                    : <ChevronDown  size={10} style={{ color: 'rgba(190,140,74,0.45)' }} />
                   }
                 </button>
               )
@@ -327,13 +327,13 @@ export function Sidebar() {
               return (
                 <div key={item.label}>
                   <div className={cn('flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-default')}
-                    style={{ color: anyActive ? '#be8c4a' : 'rgba(255,255,255,0.25)' }}
+                    style={{ color: anyActive ? '#be8c4a' : 'rgba(0,0,0,0.35)' }}
                   >
-                    <Icon size={13} style={{ color: anyActive ? '#be8c4a' : 'rgba(255,255,255,0.2)' }} />
+                    <Icon size={13} style={{ color: anyActive ? '#be8c4a' : 'rgba(0,0,0,0.3)' }} />
                     <span>{item.label}</span>
                   </div>
                   <div className="ml-4 pl-1 space-y-0.5"
-                    style={{ borderLeft: '0.5px solid rgba(190,140,74,0.15)' }}
+                    style={{ borderLeft: '0.5px solid rgba(190,140,74,0.25)' }}
                   >
                     {item.children.map(child => {
                       const active = isActive(child.href)
@@ -343,10 +343,10 @@ export function Sidebar() {
                           className="flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-lg text-sm transition-colors"
                           style={{
                             backgroundColor: active ? 'rgba(190,140,74,0.12)' : 'transparent',
-                            color: active ? '#be8c4a' : 'rgba(255,255,255,0.4)',
+                            color: active ? '#be8c4a' : 'rgba(0,0,0,0.55)',
                           }}
                         >
-                          {CIcon && <CIcon size={12} style={{ color: active ? '#be8c4a' : 'rgba(255,255,255,0.25)' }} />}
+                          {CIcon && <CIcon size={12} style={{ color: active ? '#be8c4a' : 'rgba(0,0,0,0.35)' }} />}
                           <span className="text-xs">{child.label}</span>
                           {active && <ChevronRight size={10} className="ml-auto" style={{ color: '#be8c4a' }} />}
                         </Link>
@@ -365,27 +365,27 @@ export function Sidebar() {
                 className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all group"
                 style={{
                   backgroundColor: active ? 'rgba(190,140,74,0.12)' : 'transparent',
-                  color: active ? '#be8c4a' : 'rgba(255,255,255,0.5)',
+                  color: active ? '#be8c4a' : 'rgba(0,0,0,0.6)',
                 }}
               >
                 <div className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 transition-colors"
                   style={{
                     backgroundColor: active
                       ? 'rgba(190,140,74,0.18)'
-                      : 'rgba(255,255,255,0.03)',
+                      : 'rgba(0,0,0,0.04)',
                   }}
                 >
-                  <Icon size={14} style={{ color: active ? '#be8c4a' : 'rgba(255,255,255,0.3)' }} />
+                  <Icon size={14} style={{ color: active ? '#be8c4a' : 'rgba(0,0,0,0.4)' }} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium leading-tight"
-                    style={{ color: active ? '#be8c4a' : 'rgba(255,255,255,0.65)' }}
+                    style={{ color: active ? '#be8c4a' : 'rgba(0,0,0,0.65)' }}
                   >
                     {item.label}
                   </p>
                   {item.sublabel && (
                     <p className="text-[11px] leading-tight mt-0.5 truncate"
-                      style={{ color: active ? 'rgba(190,140,74,0.5)' : 'rgba(255,255,255,0.22)' }}
+                      style={{ color: active ? 'rgba(190,140,74,0.7)' : 'rgba(0,0,0,0.38)' }}
                     >
                       {item.sublabel}
                     </p>
@@ -404,8 +404,8 @@ export function Sidebar() {
         {user && (
           <div className="flex-shrink-0 px-3 py-2"
             style={{
-              borderTop: '0.5px solid rgba(228,223,213,0.08)',
-              backgroundColor: 'rgba(0,0,0,0.2)',
+              borderTop: '0.5px solid rgba(0,0,0,0.07)',
+              backgroundColor: 'rgba(0,0,0,0.04)',
             }}
           >
             <div className="flex items-center gap-2">
@@ -415,7 +415,7 @@ export function Sidebar() {
                 <User size={11} style={{ color: 'rgba(255,255,255,0.8)' }} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium truncate" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                <p className="text-xs font-medium truncate" style={{ color: 'rgba(0,0,0,0.65)' }}>
                   {user.userId}
                 </p>
                 <p className="text-[10px] truncate uppercase"
@@ -428,7 +428,7 @@ export function Sidebar() {
                 onClick={toggleTheme}
                 title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
                 className="flex items-center gap-1 px-2 py-1 rounded-md transition-colors flex-shrink-0"
-                style={{ color: 'rgba(255,255,255,0.25)' }}
+                style={{ color: 'rgba(0,0,0,0.35)' }}
               >
                 {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
               </button>
@@ -436,7 +436,7 @@ export function Sidebar() {
                 onClick={handleLogout}
                 title="Sair"
                 className="flex items-center gap-1 px-2 py-1 rounded-md transition-colors flex-shrink-0 text-[10px] font-medium"
-                style={{ color: 'rgba(255,255,255,0.25)' }}
+                style={{ color: 'rgba(0,0,0,0.35)' }}
               >
                 <LogOut size={11} />
               </button>

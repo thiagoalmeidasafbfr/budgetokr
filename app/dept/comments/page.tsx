@@ -267,10 +267,10 @@ export default function DeptCommentsPage() {
   }
 
   return (
-    <div className="space-y-5 max-w-2xl">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <div>
+        <div className="min-w-0">
           <h1 className="page-title text-2xl md:text-3xl flex items-center gap-2">
             <MessageSquare size={22} className="text-gray-600" /> Meus Comentários
           </h1>
