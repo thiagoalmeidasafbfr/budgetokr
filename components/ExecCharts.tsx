@@ -238,10 +238,11 @@ function ExecChartCard({
   // Inside labels only — clean, no connector lines
   // Threshold: 8% for inside (enough room to read), 5% for outside (text only, no lines)
   const renderPieLabel = ({
-    cx, cy, midAngle, innerRadius, outerRadius, percent, value,
-  }: { cx: number; cy: number; midAngle: number; innerRadius: number; outerRadius: number; percent: number; value: number }) => {
+    cx, cy, midAngle, innerRadius, outerRadius, percent, value, name,
+  }: { cx: number; cy: number; midAngle: number; innerRadius: number; outerRadius: number; percent: number; value: number; name: string }) => {
     if (lp === 'none') return null
     const RADIAN = Math.PI / 180
+    const shortName = name.length > 14 ? `${name.slice(0, 13)}…` : name
     const label  = vf === 'percent' ? `${(percent * 100).toFixed(0)}%` : tickFmt(value)
 
     if (lp !== 'outside') {
@@ -267,7 +268,7 @@ function ExecChartCard({
     return (
       <text x={x} y={y} fill="#475569" textAnchor={anchor} dominantBaseline="central"
         fontSize={9} fontWeight={600} style={{ pointerEvents: 'none' }}>
-        {label}
+        {`${shortName} ${label}`}
       </text>
     )
   }
@@ -329,8 +330,8 @@ function ExecChartCard({
       <div className="flex items-start justify-between px-5 py-4" style={{ borderBottom: '0.5px solid #E4DFD5' }}>
         <div className="min-w-0">
           <p className="truncate leading-none" style={{
-            fontFamily: "'Big Shoulders Display', sans-serif", fontWeight: 900,
-            fontSize: '13px', letterSpacing: '-0.01em', textTransform: 'uppercase', color: '#1A1820',
+            fontFamily: "'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", fontWeight: 600,
+            fontSize: '15px', letterSpacing: '-0.01em', color: '#0f172a',
           }}>{config.title}</p>
           <p className="mt-1.5" style={{
             fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px',
@@ -416,7 +417,9 @@ function ExecChartCard({
                     cx="50%" cy="50%"
                     innerRadius={config.chartType === 'donut' ? '54%' : 0}
                     outerRadius={lp === 'outside' ? '60%' : '78%'}
-                    labelLine={false}
+                    cornerRadius={8}
+                    paddingAngle={1.5}
+                    labelLine={lp === 'outside' ? { stroke: '#94a3b8', strokeWidth: 1, strokeOpacity: 0.7 } : false}
                     label={lp !== 'none' ? renderPieLabel : false}
                     strokeWidth={2}
                     stroke="#fff"
@@ -891,7 +894,7 @@ function buildStarterPack(deptName: string): ExecChartConfig[] {
       dreGroup: '',
       palette: 'blue',
       valueFormat: 'percent',
-      labelPosition: 'inside',
+      labelPosition: 'outside',
       groupBy: isMain ? 'dre' : 'centro_custo',
     },
   ]
