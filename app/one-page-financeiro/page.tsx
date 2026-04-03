@@ -1,537 +1,256 @@
 'use client'
-
-import { useEffect, useMemo, useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { formatCurrency, formatPct, safePct } from '@/lib/utils'
-import { Trash2, ChevronUp, ChevronDown, Sparkles, Plus, Settings2, X } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Plus, Save, LayoutGrid } from 'lucide-react'
 import { YearFilter } from '@/components/YearFilter'
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line,
-  Area,
-  AreaChart,
-} from 'recharts'
+import { OnePageCanvas } from '@/components/OnePageCanvas'
+import { OnePageAddWidgetModal } from '@/components/OnePageAddWidgetModal'
+import { OnePageConfigPanel } from '@/components/OnePageConfigPanel'
+import type { WidgetConfig } from '@/lib/one-page-types'
 
-type TopNChart = 'bar' | 'donut' | 'pie'
-type TrendChart = 'line' | 'area'
-type GroupBy = 'dre' | 'conta_contabil' | 'centro_custo' | 'departamento' | 'unidade_negocio'
-type Field = 'budget' | 'razao' | 'variacao'
-type WidgetSpan = 1 | 2 | 3
-type FontSize = 'sm' | 'md' | 'lg'
-type CardHeight = 'compact' | 'normal' | 'tall'
-type ViewName = 'dashboard' | 'analise' | 'dre' | 'dept' | 'unidades'
+export default function OnePageFinanceiro() {
+  const [widgets, setWidgets] = useState<WidgetConfig[]>([])
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [editingWidget, setEditingWidget] = useState<WidgetConfig | null>(null)
+  const [allPeriodos, setAllPeriodos] = useState<string[]>([])
+  const [selYear, setSelYear] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isLoaded, setIsLoaded] = useState(false)
 
-type BaseWidget = {
-  id: string
-  title: string
-  view: ViewName
-  span: WidgetSpan
-  fontSize: FontSize
-  height: CardHeight
-}
+  // Carregar períodos disponíveis
+  useEffect(() => {
+    fetch('/api/analise?type=distinct&col=data_lancamento', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(dates => {
+        const periodos = [
+          ...new Set(
+            (Array.isArray(dates) ? dates : [])
+              .map((d: string) => d?.substring(0, 7))
+              .filter(Boolean)
+          ),
+        ].sort() as string[]
+        setAllPeriodos(periodos)
+      })
+      .catch(() => {})
+  }, [])
 
-type Widget =
-  | (BaseWidget & { type: 'kpi'; metric: Field })
-  | (BaseWidget & { type: 'trend'; field: Field; chart: TrendChart })
-  | (BaseWidget & { type: 'topn'; field: Field; groupBy: GroupBy; topN: number; sortOrder: 'asc' | 'desc'; chart: TopNChart })
+  // Carregar layout salvo
+  useEffect(() => {
+    fetch('/api/one-page-layout', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => {
+        if (data?.widgets && Array.isArray(data.widgets)) {
+          setWidgets(data.widgets as WidgetConfig[])
+        }
+        setIsLoaded(true)
+      })
+      .catch(() => setIsLoaded(true))
+  }, [])
 
-const STORAGE_KEY = 'onepage-financeiro-widgets-v2'
-const COLORS = ['#1D4ED8', '#0F172A', '#0EA5A4', '#6366F1', '#0891B2', '#64748B', '#16A34A', '#EA580C']
+  const filteredPeriodos = selYear
+    ? allPeriodos.filter(p => p.startsWith(selYear))
+    : allPeriodos
 
-const PRESETS: Widget[] = [
-  { id: 'preset-1', type: 'topn', title: 'Top Revenues', field: 'razao', groupBy: 'dre', topN: 6, sortOrder: 'desc', chart: 'bar', span: 2, fontSize: 'md', height: 'normal', view: 'dre' },
-  { id: 'preset-2', type: 'kpi', title: 'Totalizador Realizado', metric: 'razao', span: 1, fontSize: 'lg', height: 'compact', view: 'dashboard' },
-  { id: 'preset-3', type: 'trend', title: 'Variação do Realizado', field: 'variacao', chart: 'line', span: 2, fontSize: 'md', height: 'normal', view: 'analise' },
-]
+  const selectedWidget = widgets.find(w => w.id === selectedId) ?? null
+  const configPanelOpen = selectedWidget !== null
 
-function loadWidgets(): Widget[] {
-  if (typeof window === 'undefined') return []
-  try {
-    const s = localStorage.getItem(STORAGE_KEY)
-    return s ? JSON.parse(s) as Widget[] : []
-  } catch {
-    return []
+  async function saveLayout() {
+    setIsSaving(true)
+    try {
+      await fetch('/api/one-page-layout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ widgets }),
+      })
+    } catch {
+      // silently fail
+    }
+    setIsSaving(false)
   }
-}
 
-function saveWidgets(w: Widget[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(w))
-}
-
-function formatPeriod(p: string) {
-  if (!p) return p
-  const [y, m] = p.split('-')
-  return `${m}/${y}`
-}
-
-function metricLabel(metric: Field) {
-  if (metric === 'razao') return 'Realizado'
-  if (metric === 'budget') return 'Budget'
-  return 'Variação'
-}
-
-function viewLabel(v: ViewName) {
-  return {
-    dashboard: 'Dashboard',
-    analise: 'Análise Macro',
-    dre: 'DRE',
-    dept: 'Departamento',
-    unidades: 'Unidades',
-  }[v]
-}
-
-function spanClass(span: WidgetSpan) {
-  if (span === 3) return 'lg:col-span-3'
-  if (span === 2) return 'lg:col-span-2'
-  return 'lg:col-span-1'
-}
-
-function heightPx(h: CardHeight) {
-  if (h === 'compact') return 170
-  if (h === 'tall') return 300
-  return 230
-}
-
-function titleSize(size: FontSize) {
-  if (size === 'sm') return 15
-  if (size === 'lg') return 20
-  return 17
-}
-
-function valueSize(size: FontSize) {
-  if (size === 'sm') return 28
-  if (size === 'lg') return 44
-  return 36
-}
-
-function defaultWidget(): Widget {
-  return {
-    id: `w-${Date.now()}`,
-    type: 'kpi',
-    title: 'Novo KPI',
-    metric: 'razao',
-    span: 1,
-    fontSize: 'md',
-    height: 'compact',
-    view: 'dashboard',
+  function addWidget(w: WidgetConfig) {
+    setWidgets(prev => [...prev, w])
   }
-}
 
-function WidgetEditor({
-  initial,
-  onCancel,
-  onSave,
-}: {
-  initial: Widget
-  onCancel: () => void
-  onSave: (w: Widget) => void
-}) {
-  const [w, setW] = useState<Widget>(initial)
+  function updateWidget(id: string, updates: Partial<WidgetConfig>) {
+    setWidgets(prev => prev.map(w => w.id === id ? { ...w, ...updates } : w))
+  }
 
-  const setBase = <K extends keyof BaseWidget>(k: K, v: BaseWidget[K]) => setW(prev => ({ ...prev, [k]: v }))
+  function deleteWidget(id: string) {
+    setWidgets(prev => prev.filter(w => w.id !== id))
+    if (selectedId === id) setSelectedId(null)
+  }
+
+  function duplicateWidget(id: string) {
+    const widget = widgets.find(w => w.id === id)
+    if (!widget) return
+    const newWidget: WidgetConfig = {
+      ...widget,
+      id: `w-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      title: `${widget.title} (cópia)`,
+    }
+    setWidgets(prev => [...prev, newWidget])
+  }
+
+  function handleModalClose() {
+    setIsAddModalOpen(false)
+    setEditingWidget(null)
+  }
+
+  function handleModalAdd(w: WidgetConfig) {
+    if (editingWidget) {
+      updateWidget(editingWidget.id, w)
+    } else {
+      addWidget(w)
+    }
+    handleModalClose()
+  }
+
+  function handleChangeSource() {
+    if (selectedWidget) {
+      setEditingWidget(selectedWidget)
+      setIsAddModalOpen(true)
+    }
+  }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/45 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-auto">
-        <div className="flex items-center justify-between px-5 py-4 border-b">
-          <h3 className="font-semibold">Configurar card OnePage</h3>
-          <button onClick={onCancel}><X size={16} /></button>
+    <div className="min-h-screen" style={{ backgroundColor: '#F7F6F2' }}>
+      {/* ── Toolbar ──────────────────────────────────────────────────────────── */}
+      <div
+        className="sticky top-0 z-20 backdrop-blur-sm border-b flex items-center gap-3 flex-wrap px-6 py-3"
+        style={{ backgroundColor: 'rgba(255,255,255,0.95)', borderColor: 'rgba(0,0,0,0.06)' }}
+      >
+        <div className="flex-1 min-w-0">
+          <p
+            style={{
+              fontFamily: "'IBM Plex Mono', monospace",
+              fontSize: 9,
+              color: '#9B6E20',
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+            }}
+          >
+            BI Canvas
+          </p>
+          <h1 className="text-xl font-bold" style={{ color: '#0f172a' }}>
+            One Page Financeiro
+          </h1>
         </div>
 
-        <div className="p-5 space-y-4">
-          <div>
-            <label className="text-xs text-gray-600">Título</label>
-            <input value={w.title} onChange={(e) => setW(prev => ({ ...prev, title: e.target.value }))} className="w-full mt-1 border rounded-lg px-3 py-2 text-sm" />
-          </div>
+        <YearFilter periodos={allPeriodos} selYear={selYear} onChange={setSelYear} />
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-gray-600">Tipo</label>
-              <select
-                value={w.type}
-                onChange={(e) => {
-                  const t = e.target.value as Widget['type']
-                  if (t === 'kpi') setW({ ...w, type: 'kpi', metric: 'razao' })
-                  if (t === 'trend') setW({ ...w, type: 'trend', field: 'variacao', chart: 'line' })
-                  if (t === 'topn') setW({ ...w, type: 'topn', field: 'razao', groupBy: 'dre', topN: 6, sortOrder: 'desc', chart: 'bar' })
-                }}
-                className="w-full mt-1 border rounded-lg px-3 py-2 text-sm"
-              >
-                <option value="kpi">KPI</option>
-                <option value="trend">Trend</option>
-                <option value="topn">TopN</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-gray-600">View origem</label>
-              <select value={w.view} onChange={(e) => setBase('view', e.target.value as ViewName)} className="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
-                <option value="dashboard">Dashboard</option>
-                <option value="analise">Análise</option>
-                <option value="dre">DRE</option>
-                <option value="dept">Departamento</option>
-                <option value="unidades">Unidades</option>
-              </select>
-            </div>
-          </div>
+        <button
+          onClick={() => { setEditingWidget(null); setIsAddModalOpen(true) }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-colors"
+          style={{ backgroundColor: '#be8c4a' }}
+          onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#a87840')}
+          onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#be8c4a')}
+        >
+          <Plus size={13} /> Adicionar Widget
+        </button>
 
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="text-xs text-gray-600">Largura</label>
-              <select value={w.span} onChange={(e) => setBase('span', Number(e.target.value) as WidgetSpan)} className="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
-                <option value={1}>1 coluna</option>
-                <option value={2}>2 colunas</option>
-                <option value={3}>3 colunas</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-gray-600">Fonte</label>
-              <select value={w.fontSize} onChange={(e) => setBase('fontSize', e.target.value as FontSize)} className="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
-                <option value="sm">Pequena</option>
-                <option value="md">Média</option>
-                <option value="lg">Grande</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-gray-600">Altura</label>
-              <select value={w.height} onChange={(e) => setBase('height', e.target.value as CardHeight)} className="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
-                <option value="compact">Compacto</option>
-                <option value="normal">Normal</option>
-                <option value="tall">Alto</option>
-              </select>
-            </div>
-          </div>
-
-          {w.type === 'kpi' && (
-            <div>
-              <label className="text-xs text-gray-600">Métrica</label>
-              <select value={w.metric} onChange={(e) => setW(prev => ({ ...prev, metric: e.target.value as Field }))} className="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
-                <option value="razao">Realizado</option>
-                <option value="budget">Budget</option>
-                <option value="variacao">Variação</option>
-              </select>
-            </div>
+        <button
+          onClick={saveLayout}
+          disabled={isSaving}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50"
+          style={{ borderColor: 'rgba(0,0,0,0.10)', color: '#374151' }}
+        >
+          {isSaving ? (
+            <span
+              className="inline-block animate-spin"
+              style={{ width: 13, height: 13, borderRadius: '50%', border: '2px solid #be8c4a', borderTopColor: 'transparent' }}
+            />
+          ) : (
+            <Save size={13} />
           )}
+          Salvar
+        </button>
+      </div>
 
-          {w.type === 'trend' && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-gray-600">Métrica</label>
-                <select value={w.field} onChange={(e) => setW(prev => ({ ...prev, field: e.target.value as Field }))} className="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
-                  <option value="razao">Realizado</option>
-                  <option value="budget">Budget</option>
-                  <option value="variacao">Variação</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-600">Tipo gráfico</label>
-                <select value={w.chart} onChange={(e) => setW(prev => ({ ...prev, chart: e.target.value as TrendChart }))} className="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
-                  <option value="line">Linha</option>
-                  <option value="area">Área</option>
-                </select>
-              </div>
+      {/* ── Content ──────────────────────────────────────────────────────────── */}
+      <div
+        className="transition-all duration-300"
+        style={{ paddingRight: configPanelOpen ? 288 : 0 }}
+      >
+        <div className="p-6">
+          {!isLoaded ? (
+            <div className="grid grid-cols-12 gap-3">
+              {[4, 4, 4, 8, 4].map((w, i) => (
+                <div
+                  key={i}
+                  className="animate-pulse rounded-xl"
+                  style={{
+                    gridColumn: `span ${w}`,
+                    height: 200,
+                    backgroundColor: 'rgba(0,0,0,0.05)',
+                  }}
+                />
+              ))}
             </div>
+          ) : widgets.length === 0 ? (
+            <EmptyState onAdd={() => { setEditingWidget(null); setIsAddModalOpen(true) }} />
+          ) : (
+            <OnePageCanvas
+              widgets={widgets}
+              selectedId={selectedId}
+              selPeriods={filteredPeriodos}
+              onSelect={id => setSelectedId(prev => prev === id ? null : id)}
+              onReorder={setWidgets}
+              onDelete={deleteWidget}
+              onDuplicate={duplicateWidget}
+            />
           )}
-
-          {w.type === 'topn' && (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-gray-600">Métrica</label>
-                  <select value={w.field} onChange={(e) => setW(prev => ({ ...prev, field: e.target.value as Field }))} className="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
-                    <option value="razao">Realizado</option>
-                    <option value="budget">Budget</option>
-                    <option value="variacao">Variação</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600">Dimensão</label>
-                  <select value={w.groupBy} onChange={(e) => setW(prev => ({ ...prev, groupBy: e.target.value as GroupBy }))} className="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
-                    <option value="dre">DRE</option>
-                    <option value="conta_contabil">Conta Contábil</option>
-                    <option value="centro_custo">Centro de Custo</option>
-                    <option value="departamento">Departamento</option>
-                    <option value="unidade_negocio">Unidade de Negócio</option>
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="text-xs text-gray-600">TopN</label>
-                  <input type="number" min={2} max={20} value={w.topN} onChange={(e) => setW(prev => ({ ...prev, topN: Number(e.target.value) || 6 }))} className="w-full mt-1 border rounded-lg px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600">Ordem</label>
-                  <select value={w.sortOrder} onChange={(e) => setW(prev => ({ ...prev, sortOrder: e.target.value as 'asc' | 'desc' }))} className="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
-                    <option value="desc">Maior</option>
-                    <option value="asc">Menor</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600">Tipo gráfico</label>
-                  <select value={w.chart} onChange={(e) => setW(prev => ({ ...prev, chart: e.target.value as TopNChart }))} className="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
-                    <option value="bar">Barras</option>
-                    <option value="donut">Donut</option>
-                    <option value="pie">Pizza</option>
-                  </select>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className="px-5 py-4 border-t flex justify-end gap-2">
-          <Button variant="outline" onClick={onCancel}>Cancelar</Button>
-          <Button onClick={() => onSave(w)}>Salvar card</Button>
         </div>
       </div>
+
+      {/* ── Config panel ─────────────────────────────────────────────────────── */}
+      <OnePageConfigPanel
+        widget={selectedWidget}
+        onClose={() => setSelectedId(null)}
+        onUpdate={updates => selectedId && updateWidget(selectedId, updates)}
+        onDelete={() => { if (selectedId) deleteWidget(selectedId) }}
+        onDuplicate={() => { if (selectedId) duplicateWidget(selectedId) }}
+        onChangeSource={handleChangeSource}
+      />
+
+      {/* ── Add / Edit modal ─────────────────────────────────────────────────── */}
+      {isAddModalOpen && (
+        <OnePageAddWidgetModal
+          initial={editingWidget}
+          onClose={handleModalClose}
+          onAdd={handleModalAdd}
+        />
+      )}
     </div>
   )
 }
 
-function OneWidget({ w, periodos }: { w: Widget; periodos: string[] }) {
-  const [loading, setLoading] = useState(true)
-  const [data, setData] = useState<any[]>([])
-
-  useEffect(() => {
-    setLoading(true)
-    const periodParam = periodos.length ? `&periodos=${encodeURIComponent(periodos.join(','))}` : ''
-
-    if (w.type === 'topn') {
-      fetch(`/api/exec-chart?groupBy=${w.groupBy}&field=${w.field}&topN=${w.topN}&sortOrder=${w.sortOrder}${periodParam}`, { cache: 'no-store' })
-        .then(r => r.json())
-        .then(d => setData(Array.isArray(d?.items) ? d.items : []))
-        .finally(() => setLoading(false))
-      return
-    }
-
-    fetch('/api/analise', { cache: 'no-store' })
-      .then(r => r.json())
-      .then(rows => {
-        const arr = (Array.isArray(rows) ? rows : []).filter((r) => periodos.length === 0 || periodos.includes(r.periodo))
-        if (w.type === 'kpi') {
-          const total = arr.reduce((s, r) => s + (w.metric === 'razao' ? r.razao : w.metric === 'budget' ? r.budget : (r.razao - r.budget)), 0)
-          const budget = arr.reduce((s, r) => s + r.budget, 0)
-          const pct = w.metric === 'variacao' ? safePct(total, budget) : 0
-          setData([{ total, pct }])
-        } else {
-          const byP: Record<string, { periodo: string; value: number }> = {}
-          for (const r of arr) {
-            if (!byP[r.periodo]) byP[r.periodo] = { periodo: r.periodo, value: 0 }
-            byP[r.periodo].value += w.field === 'razao' ? r.razao : w.field === 'budget' ? r.budget : (r.razao - r.budget)
-          }
-          setData(Object.values(byP).sort((a, b) => a.periodo.localeCompare(b.periodo)).map(x => ({ ...x, label: formatPeriod(x.periodo) })))
-        }
-      })
-      .finally(() => setLoading(false))
-  }, [w, periodos])
-
-  if (loading) return <div className="h-[260px] rounded-xl animate-pulse" style={{ background: '#f3f4f6' }} />
-
+function EmptyState({ onAdd }: { onAdd: () => void }) {
   return (
-    <Card className="h-full">
-      <CardHeader className="pb-2">
-        <CardTitle style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: titleSize(w.fontSize) }}>{w.title}</CardTitle>
-        <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#64748b' }}>{viewLabel(w.view)}</p>
-      </CardHeader>
-      <CardContent>
-        {w.type === 'kpi' && data[0] && (
-          <div className="flex flex-col items-center justify-center" style={{ height: `${heightPx(w.height)}px` }}>
-            <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: valueSize(w.fontSize), fontWeight: 700, color: '#0f172a' }}>{formatCurrency(data[0].total)}</p>
-            {w.metric === 'variacao' && <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: data[0].total >= 0 ? '#166534' : '#b91c1c' }}>{formatPct(data[0].pct)}</p>}
-            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#64748b' }}>{metricLabel(w.metric)}</p>
-          </div>
-        )}
-
-        {w.type === 'trend' && (
-          <ResponsiveContainer width="100%" height={heightPx(w.height)}>
-            {w.chart === 'line' ? (
-              <LineChart data={data}>
-                <CartesianGrid vertical={false} stroke="#eef2f7" />
-                <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(Number(v) / 1000).toFixed(0)}K`} />
-                <Tooltip formatter={(v) => formatCurrency(Number(v))} />
-                <Line type="monotone" dataKey="value" stroke="#1D4ED8" strokeWidth={2.4} dot={{ r: 2.5 }} />
-              </LineChart>
-            ) : (
-              <AreaChart data={data}>
-                <CartesianGrid vertical={false} stroke="#eef2f7" />
-                <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(Number(v) / 1000).toFixed(0)}K`} />
-                <Tooltip formatter={(v) => formatCurrency(Number(v))} />
-                <Area type="monotone" dataKey="value" stroke="#1D4ED8" fill="#1D4ED8" fillOpacity={0.15} strokeWidth={2.2} />
-              </AreaChart>
-            )}
-          </ResponsiveContainer>
-        )}
-
-        {w.type === 'topn' && w.chart === 'bar' && (
-          <ResponsiveContainer width="100%" height={heightPx(w.height)}>
-            <BarChart data={data.map((d) => ({ ...d, label: d.name?.length > 16 ? `${d.name.slice(0, 15)}…` : d.name }))}>
-              <CartesianGrid vertical={false} stroke="#eef2f7" />
-              <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} angle={-20} textAnchor="end" interval={0} />
-              <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(Number(v) / 1000).toFixed(0)}K`} />
-              <Tooltip formatter={(v) => formatCurrency(Number(v))} />
-              <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                {data.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-
-        {w.type === 'topn' && (w.chart === 'donut' || w.chart === 'pie') && (
-          <ResponsiveContainer width="100%" height={heightPx(w.height)}>
-            <PieChart>
-              <Pie
-                data={data.map((d: any, i: number) => ({ ...d, fill: COLORS[i % COLORS.length] }))}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-                innerRadius={w.chart === 'donut' ? '52%' : 0}
-                outerRadius="78%"
-                cornerRadius={10}
-                paddingAngle={1.5}
-                labelLine={{ stroke: '#94a3b8', strokeWidth: 1, strokeOpacity: 0.7 }}
-                label={({ name, percent, x, y, textAnchor }: any) => (
-                  <text x={x} y={y} textAnchor={textAnchor} dominantBaseline="central" fill="#475569" style={{ fontSize: 10, fontFamily: "'IBM Plex Sans', sans-serif" }}>
-                    {`${String(name).slice(0, 12)} ${((percent ?? 0) * 100).toFixed(0)}%`}
-                  </text>
-                )}
-                stroke="#fff"
-                strokeWidth={2}
-              >
-                {data.map((d: any, i: number) => <Cell key={i} fill={d.fill || COLORS[i % COLORS.length]} />)}
-              </Pie>
-              <Tooltip formatter={(v) => formatCurrency(Number(v))} />
-            </PieChart>
-          </ResponsiveContainer>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-export default function OnePageFinanceiro() {
-  const [widgets, setWidgets] = useState<Widget[]>([])
-  const [editing, setEditing] = useState<Widget | null>(null)
-  const [allPeriodos, setAllPeriodos] = useState<string[]>([])
-  const [selYear, setSelYear] = useState<string | null>('2026')
-
-  useEffect(() => setWidgets(loadWidgets()), [])
-
-  useEffect(() => {
-    fetch('/api/analise?type=distinct&col=data_lancamento', { cache: 'no-store' })
-      .then(r => r.json())
-      .then((dates) => {
-        const periodos = [...new Set((Array.isArray(dates) ? dates : []).map((d: string) => d?.substring(0, 7)).filter(Boolean))].sort() as string[]
-        setAllPeriodos(periodos)
-      })
-  }, [])
-
-  const filteredPeriodos = selYear ? allPeriodos.filter(p => p.startsWith(selYear)) : allPeriodos
-
-  const upsert = (nw: Widget) => {
-    const exists = widgets.some(w => w.id === nw.id)
-    const next = exists ? widgets.map(w => w.id === nw.id ? nw : w) : [...widgets, nw]
-    setWidgets(next)
-    saveWidgets(next)
-    setEditing(null)
-  }
-
-  const addPreset = (preset: Widget) => {
-    upsert({ ...preset, id: `${preset.id}-${Date.now()}` })
-  }
-
-  const remove = (id: string) => {
-    const next = widgets.filter(w => w.id !== id)
-    setWidgets(next)
-    saveWidgets(next)
-  }
-
-  const move = (id: string, direction: -1 | 1) => {
-    const i = widgets.findIndex(w => w.id === id)
-    const j = i + direction
-    if (i < 0 || j < 0 || j >= widgets.length) return
-    const next = [...widgets]
-    const tmp = next[i]
-    next[i] = next[j]
-    next[j] = tmp
-    setWidgets(next)
-    saveWidgets(next)
-  }
-
-  const clearAll = () => {
-    setWidgets([])
-    saveWidgets([])
-  }
-
-  const hasWidgets = widgets.length > 0
-
-  return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap gap-3 items-start justify-between">
-        <div>
-          <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#9B6E20', letterSpacing: '0.14em', textTransform: 'uppercase' }}>BI Canvas</p>
-          <h1 style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 28, fontWeight: 700, color: '#0f172a' }}>One Page Financeiro</h1>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 13, color: '#64748b' }}>Escolha exatamente o que ver, como ver e com qual escala visual.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <YearFilter periodos={allPeriodos} selYear={selYear} onChange={setSelYear} />
-          <Button variant="outline" onClick={() => setEditing(defaultWidget())}><Plus size={14} /> Novo card</Button>
-          {hasWidgets && <Button variant="outline" onClick={clearAll}><Trash2 size={14} /> Limpar</Button>}
-        </div>
+    <div className="flex flex-col items-center justify-center gap-4" style={{ minHeight: '60vh' }}>
+      <div
+        className="w-16 h-16 rounded-2xl flex items-center justify-center"
+        style={{ backgroundColor: 'rgba(190,140,74,0.12)' }}
+      >
+        <LayoutGrid size={28} style={{ color: '#be8c4a' }} />
       </div>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 17 }}><Sparkles size={16} className="inline mr-2" />Blocos rápidos</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {PRESETS.map((p) => (
-              <button key={p.id} onClick={() => addPreset(p)} className="text-left rounded-xl px-3 py-3 transition-all hover:shadow-sm"
-                style={{ border: '0.5px solid #E4DFD5', background: '#fff' }}>
-                <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 14, fontWeight: 600, color: '#0f172a' }}>{p.title}</p>
-                <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#9B6E20', marginTop: 4 }}>{viewLabel(p.view)}</p>
-                <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12, color: '#64748b', marginTop: 6 }}>Adicionar ao canvas</p>
-              </button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {!hasWidgets ? (
-        <div className="rounded-xl p-10 text-center" style={{ border: '0.5px dashed #d6d3d1', background: '#fafaf9' }}>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: '#64748b' }}>Seu OnePage está vazio. Crie cards personalizados ou use blocos rápidos.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {widgets.map((w, idx) => (
-            <div key={w.id} className={spanClass(w.span)}>
-              <div className="mb-2 flex justify-end gap-1">
-                <button onClick={() => move(w.id, -1)} disabled={idx === 0} className="p-1 rounded border border-gray-200 disabled:opacity-30"><ChevronUp size={12} /></button>
-                <button onClick={() => move(w.id, 1)} disabled={idx === widgets.length - 1} className="p-1 rounded border border-gray-200 disabled:opacity-30"><ChevronDown size={12} /></button>
-                <button onClick={() => setEditing(w)} className="p-1 rounded border border-amber-200 text-amber-700"><Settings2 size={12} /></button>
-                <button onClick={() => remove(w.id)} className="p-1 rounded border border-red-200 text-red-600"><Trash2 size={12} /></button>
-              </div>
-              <OneWidget w={w} periodos={filteredPeriodos} />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {editing && <WidgetEditor initial={editing} onCancel={() => setEditing(null)} onSave={upsert} />}
+      <div className="text-center">
+        <p className="font-semibold text-lg" style={{ color: '#0f172a' }}>
+          Seu canvas está vazio
+        </p>
+        <p className="text-sm mt-1" style={{ color: 'rgba(0,0,0,0.45)' }}>
+          Clique em &quot;Adicionar Widget&quot; para começar a construir seu dashboard
+        </p>
+      </div>
+      <button
+        onClick={onAdd}
+        className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors"
+        style={{ backgroundColor: '#be8c4a' }}
+        onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#a87840')}
+        onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#be8c4a')}
+      >
+        <Plus size={14} /> Adicionar primeiro widget
+      </button>
     </div>
   )
 }
