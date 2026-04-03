@@ -823,6 +823,56 @@ function ConfigModal({
 
 // ─── Main section ─────────────────────────────────────────────────────────────
 
+function buildStarterPack(deptName: string): ExecChartConfig[] {
+  const isMain = deptName === '__dashboard__'
+  const baseGroup = isMain ? 'departamento' : 'dre'
+  const now = Date.now()
+  return [
+    {
+      id: `starter-${now}-1`,
+      title: isMain ? 'Desvio por Departamento' : 'Desvio por Linha DRE',
+      chartType: 'bar_h',
+      field: 'variacao',
+      topN: 8,
+      sortOrder: 'asc',
+      departamentos: [],
+      dreGroup: '',
+      palette: 'glorioso',
+      valueFormat: 'currency',
+      labelPosition: 'outside',
+      groupBy: baseGroup,
+    },
+    {
+      id: `starter-${now}-2`,
+      title: 'Composição do Realizado',
+      chartType: 'treemap',
+      field: 'razao',
+      topN: 12,
+      sortOrder: 'desc',
+      departamentos: [],
+      dreGroup: '',
+      palette: 'mixed',
+      valueFormat: 'currency',
+      labelPosition: 'inside',
+      groupBy: isMain ? 'unidade_negocio' : 'conta_contabil',
+    },
+    {
+      id: `starter-${now}-3`,
+      title: 'Distribuição de Budget',
+      chartType: 'donut',
+      field: 'budget',
+      topN: 6,
+      sortOrder: 'desc',
+      departamentos: [],
+      dreGroup: '',
+      palette: 'blue',
+      valueFormat: 'percent',
+      labelPosition: 'inside',
+      groupBy: isMain ? 'dre' : 'centro_custo',
+    },
+  ]
+}
+
 export default function ExecCharts({
   selPeriodos,
   allDepts,
@@ -882,6 +932,7 @@ export default function ExecCharts({
 
   const handleDelete = (id: string) => persist(charts.filter(c => c.id !== id))
   const handleEdit   = (c: ExecChartConfig) => { setEditing(c); setShowModal(true) }
+  const applyStarterPack = () => persist(buildStarterPack(deptName))
 
   if (cfgLoading) return (
     <div className="flex items-center gap-2 py-4 text-sm text-gray-400">
@@ -916,11 +967,18 @@ export default function ExecCharts({
       {charts.length === 0 ? (
         <div className="border-2 border-dashed border-gray-200 rounded-xl py-10 flex flex-col items-center gap-3">
           <BarChart2 size={28} className="text-gray-300" />
-          <p className="text-sm text-gray-400">Nenhum gráfico executivo configurado.</p>
+          <p className="text-sm text-gray-500 text-center max-w-sm">
+            Nenhum gráfico executivo configurado. Use um pacote inicial com visão de desvio, composição e distribuição.
+          </p>
           {canEdit && (
-            <Button size="sm" variant="outline" onClick={() => { setEditing(null); setShowModal(true) }}>
-              <Plus size={13} /> Adicionar primeiro gráfico
-            </Button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Button size="sm" onClick={applyStarterPack}>
+                <Plus size={13} /> Aplicar pacote executivo
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => { setEditing(null); setShowModal(true) }}>
+                Personalizar manualmente
+              </Button>
+            </div>
           )}
         </div>
       ) : (
