@@ -13,6 +13,7 @@ export type DataSource =
       sortOrder?: 'asc' | 'desc'
       // Filtros avançados
       filterDepts?: string[]      // → param 'departamentos' na API
+      filterCentros?: string[]    // → param 'centros' na API
       filterDreGroup?: string     // → param 'dreGroup' na API
       filterUnidades?: string[]   // filtro client-side por unidade de negócio
     }
@@ -37,6 +38,8 @@ export interface WidgetConfig {
   showDelta: boolean
   colorScheme: 'default' | 'green' | 'gold' | 'blue' | 'mono'
   borderStyle: 'none' | 'subtle' | 'card'
+  showAxes: boolean
+  showGrid: boolean
 }
 
 export function createDefaultWidget(type: WidgetType): WidgetConfig {
@@ -55,6 +58,8 @@ export function createDefaultWidget(type: WidgetType): WidgetConfig {
     showDelta: type === 'kpi',
     colorScheme: 'default' as const,
     borderStyle: 'card' as const,
+    showAxes: true,
+    showGrid: true,
   }
 
   switch (type) {

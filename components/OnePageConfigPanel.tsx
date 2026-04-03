@@ -386,6 +386,20 @@ export function OnePageConfigPanel({
               onChange={v => onUpdate({ showDelta: v })}
             />
           )}
+          {(widget.type === 'bar' || widget.type === 'line') && (
+            <>
+              <PanelToggle
+                label="Eixos"
+                checked={widget.showAxes !== false}
+                onChange={v => onUpdate({ showAxes: v })}
+              />
+              <PanelToggle
+                label="Linhas de grade"
+                checked={widget.showGrid !== false}
+                onChange={v => onUpdate({ showGrid: v })}
+              />
+            </>
+          )}
         </PanelSection>
 
         {/* Filtros ativos — apenas para exec_chart */}
@@ -431,9 +445,23 @@ export function OnePageConfigPanel({
                   </p>
                 </div>
               ) : null}
+              {widget.dataSource.filterCentros?.length ? (
+                <div className="flex items-start gap-1.5">
+                  <span
+                    className="px-1.5 py-0.5 rounded-full flex-shrink-0 text-[10px] font-medium"
+                    style={{ backgroundColor: 'rgba(20,184,166,0.12)', color: '#0d9488' }}
+                  >
+                    CC
+                  </span>
+                  <p className="text-xs" style={{ color: 'rgba(0,0,0,0.6)' }}>
+                    {widget.dataSource.filterCentros.join(', ')}
+                  </p>
+                </div>
+              ) : null}
               {!widget.dataSource.filterDepts?.length &&
                 !widget.dataSource.filterDreGroup &&
-                !widget.dataSource.filterUnidades?.length && (
+                !widget.dataSource.filterUnidades?.length &&
+                !widget.dataSource.filterCentros?.length && (
                   <p className="text-xs" style={{ color: 'rgba(0,0,0,0.35)' }}>
                     Sem filtros — exibindo todos os dados
                   </p>

@@ -324,9 +324,10 @@ function Step2({
   const [departamentos,    setDepartamentos]    = useState<string[]>([])
   const [dreGroupOptions,  setDreGroupOptions]  = useState<string[]>([])
   const [unidadeOptions,   setUnidadeOptions]   = useState<string[]>([])
+  const [centroOptions,    setCentroOptions]    = useState<{ code: string; nome: string }[]>([])
   const [filtersExpanded,  setFiltersExpanded]  = useState(
     dataSource.kind === 'exec_chart' &&
-    !!(dataSource.filterDepts?.length || dataSource.filterDreGroup || dataSource.filterUnidades?.length)
+    !!(dataSource.filterDepts?.length || dataSource.filterDreGroup || dataSource.filterUnidades?.length || dataSource.filterCentros?.length)
   )
   const [sourceKind, setSourceKind] = useState<SourceKind>(
     (dataSource.kind === 'static' ? 'summary' : dataSource.kind) as SourceKind
@@ -358,6 +359,22 @@ function Step2({
     fetch('/api/exec-chart?groupBy=dre&topN=1', { cache: 'no-store' })
       .then(r => r.json())
       .then(d => setDreGroupOptions(Array.isArray(d?.dreGroups) ? (d.dreGroups as string[]).sort() : []))
+      .catch(() => {})
+
+    fetch('/api/dimensoes?tipo=centros_custo', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d)) {
+          const opts = d
+            .filter((c: { centro_custo?: string; nome_centro_custo?: string }) => c.centro_custo)
+            .map((c: { centro_custo: string; nome_centro_custo?: string }) => ({
+              code: c.centro_custo,
+              nome: c.nome_centro_custo ?? c.centro_custo,
+            }))
+            .sort((a, b) => a.nome.localeCompare(b.nome))
+          setCentroOptions(opts)
+        }
+      })
       .catch(() => {})
   }, [])
 
@@ -469,13 +486,14 @@ function Step2({
             >
               <SlidersHorizontal size={12} />
               Filtros avançados
-              {(dataSource.filterDepts?.length || dataSource.filterDreGroup || dataSource.filterUnidades?.length) ? (
+              {(dataSource.filterDepts?.length || dataSource.filterDreGroup || dataSource.filterUnidades?.length || dataSource.filterCentros?.length) ? (
                 <span
                   className="px-1.5 py-0.5 rounded-full"
                   style={{ backgroundColor: 'rgba(190,140,74,0.15)', color: '#be8c4a', fontSize: 10 }}
                 >
                   {(dataSource.filterDepts?.length ?? 0) +
                     (dataSource.filterUnidades?.length ?? 0) +
+                    (dataSource.filterCentros?.length ?? 0) +
                     (dataSource.filterDreGroup ? 1 : 0)}{' '}
                   ativo(s)
                 </span>
@@ -526,6 +544,27 @@ function Step2({
                   </select>
                 </div>
 
+                {/* Centros de Custo */}
+                <div>
+                  <FieldLabel>Centros de Custo (opcional)</FieldLabel>
+                  <p className="mb-1.5" style={{ fontSize: 11, color: 'rgba(0,0,0,0.4)' }}>
+                    Limita a centros de custo específicos
+                  </p>
+                  <MultiSelectCheckbox
+                    options={centroOptions.map(c => c.nome)}
+                    selected={(dataSource.filterCentros ?? []).map(
+                      code => centroOptions.find(c => c.code === code)?.nome ?? code
+                    )}
+                    onChange={names =>
+                      onChange({
+                        ...dataSource,
+                        filterCentros: names.map(n => centroOptions.find(c => c.nome === n)?.code ?? n),
+                      })
+                    }
+                    placeholder="Todos os centros de custo"
+                  />
+                </div>
+
                 {/* Unidades de Negócio — só quando não estamos agrupando por unidade */}
                 {dataSource.groupBy !== 'unidade_negocio' && (
                   <div>
@@ -543,7 +582,7 @@ function Step2({
                 )}
 
                 {/* Limpar filtros */}
-                {(dataSource.filterDepts?.length || dataSource.filterDreGroup || dataSource.filterUnidades?.length) ? (
+                {(dataSource.filterDepts?.length || dataSource.filterDreGroup || dataSource.filterUnidades?.length || dataSource.filterCentros?.length) ? (
                   <button
                     type="button"
                     onClick={() =>
@@ -552,6 +591,7 @@ function Step2({
                         filterDepts: [],
                         filterDreGroup: undefined,
                         filterUnidades: [],
+                        filterCentros: [],
                       })
                     }
                     className="text-xs"
@@ -742,6 +782,18 @@ function Step3({
             <span className="text-sm" style={{ color: '#374151' }}>Mostrar variação</span>
             <Toggle checked={config.showDelta} onChange={v => onChange({ showDelta: v })} />
           </div>
+        )}
+        {(config.type === 'bar' || config.type === 'line') && (
+          <>
+            <div className="flex items-center justify-between">
+              <span className="text-sm" style={{ color: '#374151' }}>Eixos</span>
+              <Toggle checked={config.showAxes !== false} onChange={v => onChange({ showAxes: v })} />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm" style={{ color: '#374151' }}>Linhas de grade</span>
+              <Toggle checked={config.showGrid !== false} onChange={v => onChange({ showGrid: v })} />
+            </div>
+          </>
         )}
       </div>
     </div>

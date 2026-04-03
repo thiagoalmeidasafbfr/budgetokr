@@ -13,7 +13,7 @@ export default function OnePageFinanceiro() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [editingWidget, setEditingWidget] = useState<WidgetConfig | null>(null)
   const [allPeriodos, setAllPeriodos] = useState<string[]>([])
-  const [selYear, setSelYear] = useState<string | null>(null)
+  const [selYear, setSelYear] = useState<string | null>('2026')
   const [isSaving, setIsSaving] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
 

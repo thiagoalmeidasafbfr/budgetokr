@@ -48,6 +48,7 @@ async function fetchWidgetData(ds: DataSource, periods: string[]): Promise<unkno
     if (ds.sortOrder)               params.set('sortOrder',     ds.sortOrder)
     if (periods.length)             params.set('periodos',      periods.join(','))
     if (ds.filterDepts?.length)     params.set('departamentos', ds.filterDepts.join(','))
+    if (ds.filterCentros?.length)   params.set('centros',       ds.filterCentros.join(','))
     if (ds.filterDreGroup)          params.set('dreGroup',      ds.filterDreGroup)
     const d = await fetch(`/api/exec-chart?${params}`, { cache: 'no-store' }).then(r => r.json())
     let items: { name: string; value: number; budget: number; razao: number }[] =
@@ -292,29 +293,35 @@ function BarWidget({ config, raw }: { config: WidgetConfig; raw: unknown[] }) {
   })()
 
   const chartH = config.h * 80 - 50
+  const showAxes = config.showAxes !== false
+  const showGrid = config.showGrid !== false
 
   return (
     <div className="p-4" style={{ height: config.h * 80 }}>
       <WidgetHeader title={config.title} subtitle={config.subtitle} />
       <ResponsiveContainer width="100%" height={chartH}>
         <BarChart data={chartData} margin={{ top: 0, right: 5, left: 0, bottom: 5 }}>
-          <CartesianGrid vertical={false} stroke="#f1f5f9" />
-          <XAxis
-            dataKey="name"
-            tick={{ fontSize: 9, fill: '#94a3b8' }}
-            axisLine={false}
-            tickLine={false}
-            angle={-20}
-            textAnchor="end"
-            interval={0}
-          />
-          <YAxis
-            tick={{ fontSize: 9, fill: '#94a3b8' }}
-            axisLine={false}
-            tickLine={false}
-            tickFormatter={v => `${(Number(v) / 1000).toFixed(0)}K`}
-            width={38}
-          />
+          {showGrid && <CartesianGrid vertical={false} stroke="#f1f5f9" />}
+          {showAxes && (
+            <XAxis
+              dataKey="name"
+              tick={{ fontSize: 9, fill: '#94a3b8' }}
+              axisLine={false}
+              tickLine={false}
+              angle={-20}
+              textAnchor="end"
+              interval={0}
+            />
+          )}
+          {showAxes && (
+            <YAxis
+              tick={{ fontSize: 9, fill: '#94a3b8' }}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={v => `${(Number(v) / 1000).toFixed(0)}K`}
+              width={38}
+            />
+          )}
           <Tooltip
             formatter={(v: number) => [formatCurrency(v), 'Valor']}
             contentStyle={{ fontSize: 11, border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8 }}
@@ -343,26 +350,32 @@ function LineWidget({ config, raw }: { config: WidgetConfig; raw: unknown[] }) {
   })()
 
   const chartH = config.h * 80 - 50
+  const showAxes = config.showAxes !== false
+  const showGrid = config.showGrid !== false
 
   return (
     <div className="p-4" style={{ height: config.h * 80 }}>
       <WidgetHeader title={config.title} subtitle={config.subtitle} />
       <ResponsiveContainer width="100%" height={chartH}>
         <LineChart data={chartData} margin={{ top: 0, right: 5, left: 0, bottom: 5 }}>
-          <CartesianGrid vertical={false} stroke="#f1f5f9" />
-          <XAxis
-            dataKey="name"
-            tick={{ fontSize: 9, fill: '#94a3b8' }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <YAxis
-            tick={{ fontSize: 9, fill: '#94a3b8' }}
-            axisLine={false}
-            tickLine={false}
-            tickFormatter={v => `${(Number(v) / 1000).toFixed(0)}K`}
-            width={38}
-          />
+          {showGrid && <CartesianGrid vertical={false} stroke="#f1f5f9" />}
+          {showAxes && (
+            <XAxis
+              dataKey="name"
+              tick={{ fontSize: 9, fill: '#94a3b8' }}
+              axisLine={false}
+              tickLine={false}
+            />
+          )}
+          {showAxes && (
+            <YAxis
+              tick={{ fontSize: 9, fill: '#94a3b8' }}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={v => `${(Number(v) / 1000).toFixed(0)}K`}
+              width={38}
+            />
+          )}
           <Tooltip
             formatter={(v: number) => [formatCurrency(v), 'Valor']}
             contentStyle={{ fontSize: 11, border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8 }}
