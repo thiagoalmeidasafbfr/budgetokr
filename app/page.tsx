@@ -293,36 +293,25 @@ export default function Dashboard() {
         <YearFilter periodos={allPeriodos} selYear={selYear} onChange={setSelYear} />
       </div>
 
-      {/* Summary cards — mesma estrutura flex:2 / flex:1 que os gráficos abaixo */}
+      {/* Summary cards */}
       {isWidgetVisible('summary') && (
-        <div className="flex gap-4 pb-5" style={{ borderBottom: '0.5px solid #E4DFD5' }}>
-          {/* 2/3 — dois cards lado a lado */}
-          <div className="flex gap-4" style={{ flex: 2 }}>
-            <div style={{ flex: 1 }}>
-              <SummaryCard
-                title={selYear && hasYtdData ? 'Budget YTD' : 'Budget Total'}
-                value={abbrev(displayBudget)}
-                sub={selYear && hasYtdData ? ytdLabelSub : undefined}
-              />
-            </div>
-            <div style={{ flex: 1 }}>
-              <SummaryCard
-                title="Variação de Performance"
-                value={abbrev(variacao)}
-                pct={formatPct(variacaoPct)}
-                featured
-                color={variacao >= 0 ? '#166534' : '#B91C1C'}
-              />
-            </div>
-          </div>
-          {/* 1/3 — card direito */}
-          <div style={{ flex: 1 }}>
-            <SummaryCard
-              title={selYear && hasYtdData ? 'Realizado YTD' : 'Realizado Total'}
-              value={abbrev(displayRazao)}
-              sub="Verificado"
-            />
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pb-5" style={{ borderBottom: '0.5px solid #E4DFD5' }}>
+          <SummaryCard
+            title={selYear && hasYtdData ? 'Budget YTD' : 'Budget Total'}
+            value={abbrev(displayBudget)}
+            sub={selYear && hasYtdData ? ytdLabelSub : undefined}
+          />
+          <SummaryCard
+            title="Variação de Performance"
+            value={abbrev(variacao)}
+            pct={formatPct(variacaoPct)}
+            color={variacao >= 0 ? '#166534' : '#B91C1C'}
+          />
+          <SummaryCard
+            title={selYear && hasYtdData ? 'Realizado YTD' : 'Realizado Total'}
+            value={abbrev(displayRazao)}
+            sub="Verificado"
+          />
         </div>
       )}
 
@@ -422,21 +411,19 @@ function abbrev(v: number): string {
   return `${sign}R$\u00a0${abs.toFixed(0)}`
 }
 
-function SummaryCard({ title, value, sub, pct, featured = false, color }: {
-  title: string; value: string; sub?: string; pct?: string; featured?: boolean; color?: string
+function SummaryCard({ title, value, sub, pct, color }: {
+  title: string; value: string; sub?: string; pct?: string; color?: string
 }) {
   const valueColor = color ?? '#1A1820'
   return (
     <div
-      className="flex flex-col items-center justify-center px-8 py-7"
+      className="flex flex-col items-center justify-center px-6 py-6"
       style={{
         borderRadius: '8px',
-        backgroundColor: featured ? '#FDFBF6' : '#FFFFFF',
-        border: featured ? '1px solid rgba(184,146,74,0.35)' : '0.5px solid #E4DFD5',
-        boxShadow: featured
-          ? '0 2px 12px rgba(184,146,74,0.08)'
-          : '0 2px 6px rgba(26,24,32,0.03)',
-        minHeight: '160px',
+        backgroundColor: '#FFFFFF',
+        border: '0.5px solid #E4DFD5',
+        boxShadow: '0 2px 6px rgba(26,24,32,0.03)',
+        minHeight: '176px',
       }}
     >
       <p style={{
@@ -445,7 +432,7 @@ function SummaryCard({ title, value, sub, pct, featured = false, color }: {
         fontWeight: 900,
         letterSpacing: '0.4em',
         textTransform: 'uppercase',
-        color: featured ? '#6B4E18' : '#B8924A',
+        color: '#B8924A',
         marginBottom: '16px',
         textAlign: 'center',
       }}>
@@ -462,34 +449,32 @@ function SummaryCard({ title, value, sub, pct, featured = false, color }: {
       }}>
         {value}
       </p>
-      {pct && (
-        <p style={{
-          fontFamily: "'Big Shoulders Display', sans-serif",
-          fontWeight: 900,
-          fontSize: '1.1rem',
-          letterSpacing: '-0.01em',
-          color: valueColor,
-          opacity: 0.55,
-          textAlign: 'center',
-          marginTop: '6px',
-        }}>
-          ({pct})
-        </p>
-      )}
-      {sub && (
-        <p style={{
-          fontFamily: "'IBM Plex Mono', monospace",
-          fontSize: '9px',
-          color: '#B8924A',
-          opacity: 0.45,
-          textAlign: 'center',
-          marginTop: '12px',
-          letterSpacing: '0.06em',
-          textTransform: 'uppercase',
-        }}>
-          {sub}
-        </p>
-      )}
+      <p style={{
+        fontFamily: "'Big Shoulders Display', sans-serif",
+        fontWeight: 900,
+        fontSize: '1.1rem',
+        letterSpacing: '-0.01em',
+        color: valueColor,
+        opacity: pct ? 0.55 : 0,
+        textAlign: 'center',
+        marginTop: '6px',
+        minHeight: '1.4rem',
+      }}>
+        {pct ? `(${pct})` : ''}
+      </p>
+      <p style={{
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontSize: '9px',
+        color: '#B8924A',
+        opacity: sub ? 0.45 : 0,
+        textAlign: 'center',
+        marginTop: '12px',
+        letterSpacing: '0.06em',
+        textTransform: 'uppercase',
+        minHeight: '0.9rem',
+      }}>
+        {sub ?? ''}
+      </p>
     </div>
   )
 }
