@@ -1479,12 +1479,6 @@ export default function DeptDashboardPage() {
     .sort((a, b) => a.periodo.localeCompare(b.periodo))
     .map(r => ({ ...r, label: formatPeriodo(r.periodo), variacaoMes: r.razao - r.budget }))
 
-  let acum = 0
-  for (const row of chartRows) {
-    acum += row.variacaoMes
-    ;(row as Record<string, number>).variacaoAcum = acum
-  }
-
   // DRE with variacao
   const dreRows = dreGrupos.map(g => ({
     ...g,
