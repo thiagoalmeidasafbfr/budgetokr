@@ -1,25 +1,37 @@
 'use client'
-
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  PieChart,
-  Pie,
-  Cell,
-  Label,
+  PieChart, Pie, Cell, Sector, BarChart, Bar,
+  AreaChart, Area,
+  Treemap,
   ReferenceLine,
-  TooltipProps,
+  XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, TooltipProps,
 } from 'recharts'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatCurrency } from '@/lib/utils'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { formatCurrency, cn } from '@/lib/utils'
+import { Plus, X, Settings2, RefreshCw, PieChart as PieIcon, BarChart2, BarChart3, Donut, TrendingUp, LayoutGrid, Download } from 'lucide-react'
 
-interface ExecApiItem {
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface ExecChartConfig {
+  id: string
+  title: string
+  chartType: 'pie' | 'donut' | 'bar_h' | 'bar_v' | 'area' | 'treemap'
+  field: 'razao' | 'budget' | 'variacao'
+  topN: number
+  sortOrder: 'desc' | 'asc'
+  departamentos: string[]
+  dreGroup: string
+  palette: string
+  valueFormat: 'currency' | 'percent'
+  labelPosition: 'inside' | 'outside' | 'none'
+  groupBy: 'agrupamento_arvore' | 'dre' | 'conta_contabil' | 'centro_custo' | 'contrapartida' | 'departamento' | 'unidade_negocio'
+  referenceLine?: { value: number; label: string }
+}
+
+interface ChartItem {
   name: string
   budget: number
   razao: number
@@ -27,172 +39,1012 @@ interface ExecApiItem {
   value: number
 }
 
-interface ExecPayload {
-  items: ExecApiItem[]
+// ─── Palettes ─────────────────────────────────────────────────────────────────
+
+const PALETTES: Record<string, { label: string; colors: string[] }> = {
+  glorioso: {
+    label: 'Glorioso',
+    colors: ['#1A1820','#B8924A','#6B4E18','#334155','#166534','#B91C1C','#475569','#D97706','#064e3b','#7c3aed'],
+  },
+  mixed: {
+    label: 'Variado',
+    colors: ['#334155','#1d4ed8','#059669','#d97706','#e11d48','#7c3aed','#0891b2','#065f46','#92400e','#9f1239'],
+  },
+  slate: {
+    label: 'Cinza',
+    colors: ['#1e293b','#334155','#475569','#64748b','#94a3b8','#cbd5e1','#1e293b','#334155','#475569','#64748b'],
+  },
+  blue: {
+    label: 'Azul',
+    colors: ['#1e3a5f','#1d4ed8','#2563eb','#3b82f6','#60a5fa','#93c5fd','#1e40af','#1d4ed8','#2563eb','#3b82f6'],
+  },
+  emerald: {
+    label: 'Verde',
+    colors: ['#064e3b','#059669','#10b981','#34d399','#6ee7b7','#a7f3d0','#065f46','#059669','#10b981','#34d399'],
+  },
+  amber: {
+    label: 'Âmbar',
+    colors: ['#78350f','#d97706','#f59e0b','#fbbf24','#fde68a','#92400e','#b45309','#d97706','#f59e0b','#fbbf24'],
+  },
+  rose: {
+    label: 'Vermelho',
+    colors: ['#881337','#e11d48','#f43f5e','#fb7185','#fda4af','#9f1239','#be123c','#e11d48','#f43f5e','#fb7185'],
+  },
 }
 
-const COLORS = ['#1D4ED8', '#0F172A', '#0EA5A4', '#6366F1', '#0891B2', '#64748B', '#16A34A', '#EA580C']
+const DEFAULT_PALETTE = 'glorioso'
 
-function moneyShort(v: number) {
-  const a = Math.abs(v)
-  if (a >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`
-  if (a >= 1_000) return `${(v / 1_000).toFixed(0)}K`
-  return `${v.toFixed(0)}`
+function getPalette(key: string): string[] {
+  return (PALETTES[key] ?? PALETTES[DEFAULT_PALETTE]).colors
 }
 
-function ChartTooltip({ active, payload, label }: TooltipProps<number, string>) {
+const FIELD_LABELS: Record<ExecChartConfig['field'], string> = {
+  razao:    'Realizado',
+  budget:   'Budget',
+  variacao: 'Variação',
+}
+
+const CHART_TYPES: { id: ExecChartConfig['chartType']; label: string; icon: React.ElementType }[] = [
+  { id: 'pie',     label: 'Pizza',      icon: PieIcon    },
+  { id: 'donut',   label: 'Rosca',      icon: Donut      },
+  { id: 'bar_h',   label: 'Barras (H)', icon: BarChart2  },
+  { id: 'bar_v',   label: 'Barras (V)', icon: BarChart3  },
+  { id: 'area',    label: 'Área',       icon: TrendingUp },
+  { id: 'treemap', label: 'Mapa',       icon: LayoutGrid },
+]
+
+// ─── Custom tooltip ───────────────────────────────────────────────────────────
+
+function ExecTooltip({
+  active, payload,
+  valueFormat, total,
+}: TooltipProps<number, string> & { valueFormat: 'currency' | 'percent'; total: number }) {
   if (!active || !payload?.length) return null
+  const d = payload[0]
+  const val = Number(d.value)
+  const display = valueFormat === 'percent'
+    ? `${total > 0 ? ((val / total) * 100).toFixed(1) : 0}%`
+    : formatCurrency(val)
   return (
-    <div style={{ background: '#0f172a', border: '1px solid rgba(148,163,184,0.2)', borderRadius: 10, padding: '9px 12px', minWidth: 180 }}>
-      <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#94a3b8', marginBottom: 6 }}>{label}</p>
-      {payload.map((p, i) => (
-        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-          <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11 }}>{p.name}</span>
-          <span style={{ color: '#fff', fontWeight: 700, fontSize: 12 }}>{formatCurrency(Number(p.value))}</span>
-        </div>
-      ))}
+    <div style={{ background: '#1A1820', borderRadius: 6, padding: '10px 14px', border: '0.5px solid rgba(184,146,74,0.25)', minWidth: 160 }}>
+      <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: '#B8924A', opacity: 0.7, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>{d.name}</p>
+      <p style={{ fontFamily: "'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", fontWeight: 600, fontSize: 16, color: '#fff', letterSpacing: '-0.01em' }}>{display}</p>
     </div>
   )
 }
 
+// ─── Single chart card ────────────────────────────────────────────────────────
+
+function ExecChartCard({
+  config, selPeriodos, allDepts, canEdit, contextDept,
+  onEdit, onDelete,
+}: {
+  config: ExecChartConfig
+  selPeriodos: string[]
+  allDepts: string[]
+  canEdit: boolean
+  contextDept: string
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  const [items,       setItems]       = useState<ChartItem[]>([])
+  const [loading,     setLoading]     = useState(true)
+  const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined)
+  const chartRef = useRef<HTMLDivElement>(null)
+
+  const exportPng = useCallback(() => {
+    const container = chartRef.current
+    if (!container) return
+    const svg = container.querySelector('svg')
+    if (!svg) return
+
+    const { width, height } = svg.getBoundingClientRect()
+    const clone = svg.cloneNode(true) as SVGElement
+    // Inline background so PNG isn't transparent
+    clone.setAttribute('style', 'background:#fff')
+    clone.setAttribute('width', String(Math.ceil(width)))
+    clone.setAttribute('height', String(Math.ceil(height)))
+
+    const xml = new XMLSerializer().serializeToString(clone)
+    const blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' })
+    const url  = URL.createObjectURL(blob)
+    const img  = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      const scale  = 2 // retina
+      canvas.width  = Math.ceil(width)  * scale
+      canvas.height = Math.ceil(height) * scale
+      const ctx = canvas.getContext('2d')!
+      ctx.scale(scale, scale)
+      ctx.fillStyle = '#fff'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(img, 0, 0)
+      URL.revokeObjectURL(url)
+      const link = document.createElement('a')
+      link.download = `${config.title.replace(/\s+/g, '_')}.png`
+      link.href = canvas.toDataURL('image/png')
+      link.click()
+    }
+    img.src = url
+  }, [config.title])
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const p = new URLSearchParams({ topN: String(config.topN), field: config.field, sortOrder: config.sortOrder ?? 'desc' })
+      // Always scope to the dept context — if config has explicit depts, use those;
+      // otherwise fall back to the page's dept (so master sees per-dept data too)
+      const depts = config.departamentos.length
+        ? config.departamentos
+        : contextDept !== '__dashboard__' ? [contextDept] : []
+      if (depts.length)       p.set('departamentos', depts.join(','))
+      if (selPeriodos.length) p.set('periodos',      selPeriodos.join(','))
+      if (config.dreGroup)    p.set('dreGroup',      config.dreGroup)
+      if (config.groupBy && config.groupBy !== 'agrupamento_arvore')
+        p.set('groupBy', config.groupBy)
+      const res = await fetch(`/api/exec-chart?${p}`, { cache: 'no-store' })
+      if (res.ok) {
+        const { items: d } = await res.json()
+        setItems(d ?? [])
+      }
+    } catch {
+      // network error — leave items as-is
+    } finally {
+      setLoading(false)
+    }
+  }, [config, selPeriodos, contextDept])
+
+  useEffect(() => { load() }, [load])
+
+  const palette    = getPalette(config.palette ?? DEFAULT_PALETTE)
+  const fieldLabel = FIELD_LABELS[config.field]
+  const vf         = config.valueFormat   ?? 'currency'
+  const lp         = config.labelPosition ?? 'inside'
+
+  const absItems = items.map(it => ({ ...it, absValue: Math.abs(it.value) }))
+  const total    = absItems.reduce((s, it) => s + it.absValue, 0)
+
+  const tickFmt = (v: number) => {
+    if (vf === 'percent') return `${total > 0 ? ((v / total) * 100).toFixed(0) : 0}%`
+    const a = Math.abs(v)
+    if (a >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`
+    if (a >= 1_000)     return `${(v / 1_000).toFixed(0)}K`
+    return String(v)
+  }
+
+  const tooltip = <ExecTooltip valueFormat={vf} total={total} />
+
+  const refLine = config.referenceLine?.value != null ? (
+    <ReferenceLine
+      y={config.referenceLine.value}
+      stroke="#f59e0b"
+      strokeWidth={1.5}
+      strokeDasharray="5 3"
+      label={{ value: config.referenceLine.label || '', position: 'insideTopRight', fontSize: 9, fill: '#f59e0b', fontWeight: 600 }}
+    />
+  ) : null
+
+  // Horizontal bar uses x= for the reference axis
+  const refLineH = config.referenceLine?.value != null ? (
+    <ReferenceLine
+      x={config.referenceLine.value}
+      stroke="#f59e0b"
+      strokeWidth={1.5}
+      strokeDasharray="5 3"
+      label={{ value: config.referenceLine.label || '', position: 'insideTopRight', fontSize: 9, fill: '#f59e0b', fontWeight: 600 }}
+    />
+  ) : null
+
+  // Inside labels only — clean, no connector lines
+  // Threshold: 8% for inside (enough room to read), 5% for outside (text only, no lines)
+  const renderPieLabel = ({
+    cx, cy, midAngle, innerRadius, outerRadius, percent, value, name,
+  }: { cx: number; cy: number; midAngle: number; innerRadius: number; outerRadius: number; percent: number; value: number; name: string }) => {
+    if (lp === 'none') return null
+    const RADIAN = Math.PI / 180
+    const shortName = name.length > 14 ? `${name.slice(0, 13)}…` : name
+    const label  = vf === 'percent' ? `${(percent * 100).toFixed(0)}%` : tickFmt(value)
+
+    if (lp !== 'outside') {
+      // Inside: only show when slice is big enough to fit the text
+      if (percent < 0.08) return null
+      const r = innerRadius + (outerRadius - innerRadius) * 0.55
+      const x = cx + r * Math.cos(-midAngle * RADIAN)
+      const y = cy + r * Math.sin(-midAngle * RADIAN)
+      return (
+        <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central"
+          fontSize={11} fontWeight={700} style={{ pointerEvents: 'none' }}>
+          {label}
+        </text>
+      )
+    }
+
+    // Outside: text-only label at fixed distance, no connector lines
+    if (percent < 0.05) return null
+    const r      = outerRadius + 16
+    const x      = cx + r * Math.cos(-midAngle * RADIAN)
+    const y      = cy + r * Math.sin(-midAngle * RADIAN)
+    const anchor = x > cx ? 'start' : 'end'
+    return (
+      <text x={x} y={y} fill="#475569" textAnchor={anchor} dominantBaseline="central"
+        fontSize={9} fontWeight={600} style={{ pointerEvents: 'none' }}>
+        {`${shortName} ${label}`}
+      </text>
+    )
+  }
+
+  const barLabel = lp !== 'none'
+    ? { formatter: (v: number) => tickFmt(v), fontSize: 9, fill: '#64748b' }
+    : false
+
+
+  // Area chart uses the first palette color
+  const areaColor = palette[0]
+  const showCompanionList = config.chartType === 'pie' || config.chartType === 'donut' || config.chartType === 'treemap'
+  const colorByName = new Map(absItems.map((it, i) => [it.name, palette[i % palette.length]]))
+  const rankedItems = [...absItems]
+    .sort((a, b) => b.absValue - a.absValue)
+    .map((it, i) => ({
+      ...it,
+      rank: i + 1,
+      share: total > 0 ? (it.absValue / total) * 100 : 0,
+      color: colorByName.get(it.name) ?? palette[i % palette.length],
+      shortName: it.name.length > 26 ? `${it.name.slice(0, 25)}…` : it.name,
+    }))
+
+  // ── Active shape (hover effect on pie/donut) ───────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const renderActiveShape = (props: any) => {
+    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, percent, value } = props
+    return (
+      <g>
+        <Sector
+          cx={cx} cy={cy}
+          innerRadius={innerRadius}
+          outerRadius={outerRadius + 5}
+          startAngle={startAngle}
+          endAngle={endAngle}
+          fill={fill}
+          opacity={0.97}
+          stroke="#fff"
+          strokeWidth={1.5}
+        />
+        {innerRadius > 0 && (
+          <>
+            <text x={cx} y={cy - 7} textAnchor="middle" dominantBaseline="central"
+              style={{ fontFamily: "'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", fontWeight: 600, fontSize: 13, fill: '#1A1820', pointerEvents: 'none', letterSpacing: '-0.01em' }}>
+              {tickFmt(value)}
+            </text>
+            <text x={cx} y={cy + 10} textAnchor="middle" dominantBaseline="central"
+              style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 8, fill: '#B8924A', pointerEvents: 'none', letterSpacing: '0.06em' }}>
+              {`${(percent * 100).toFixed(1)}%`}
+            </text>
+          </>
+        )}
+      </g>
+    )
+  }
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex items-start justify-between px-5 py-4" style={{ borderBottom: '0.5px solid #E4DFD5' }}>
+        <div className="min-w-0">
+          <p className="truncate leading-none" style={{
+            fontFamily: "'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", fontWeight: 600,
+            fontSize: '15px', letterSpacing: '-0.01em', color: '#0f172a',
+          }}>{config.title}</p>
+          <p className="mt-1.5" style={{
+            fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px',
+            letterSpacing: '0.1em', color: '#B8924A', opacity: 0.6, textTransform: 'uppercase',
+          }}>
+            {fieldLabel} · Top {config.topN}
+            {config.groupBy && config.groupBy !== 'agrupamento_arvore' && ` · ${{
+              dre:             'DRE',
+              conta_contabil:  'Conta',
+              centro_custo:    'C. Custo',
+              contrapartida:   'Contrapartida',
+              departamento:    'Dept.',
+              unidade_negocio: 'Unidade',
+            }[config.groupBy]}`}
+            {config.dreGroup && ` · ${config.dreGroup}`}
+          </p>
+        </div>
+        <div className="flex items-center gap-0.5 flex-shrink-0 ml-3">
+          <button onClick={load}
+            className="p-1.5 rounded transition-colors"
+            style={{ color: '#9B6E20', opacity: 0.7 }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+            onMouseLeave={e => (e.currentTarget.style.opacity = '0.7')}
+            title="Atualizar">
+            <RefreshCw size={11} />
+          </button>
+          {!loading && items.length > 0 && (
+            <button onClick={exportPng}
+              className="p-1.5 rounded transition-colors"
+              style={{ color: '#B8924A', opacity: 0.4 }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+              onMouseLeave={e => (e.currentTarget.style.opacity = '0.4')}
+              title="Exportar PNG">
+              <Download size={11} />
+            </button>
+          )}
+          {canEdit && (
+            <>
+              <button onClick={onEdit}
+                className="p-1.5 rounded transition-colors"
+                style={{ color: '#B8924A', opacity: 0.4 }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                onMouseLeave={e => (e.currentTarget.style.opacity = '0.4')}>
+                <Settings2 size={11} />
+              </button>
+              <button onClick={onDelete}
+                className="p-1.5 rounded transition-colors"
+                style={{ color: '#B8924A', opacity: 0.4 }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = '0.4')}
+                onMouseLeave={e => (e.currentTarget.style.opacity = '0.4')}>
+                <X size={11} />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <CardContent className="p-4">
+        {loading ? (
+          <div className="h-[220px] flex flex-col justify-end gap-2 pb-3 px-2">
+            {[55, 75, 40, 90, 65].map((h, i) => (
+              <div key={i} className="rounded-sm animate-pulse w-full"
+                style={{ height: `${h * 1.6}px`, maxHeight: 36, background: `rgba(184,146,74,${0.04 + i * 0.025})` }} />
+            ))}
+          </div>
+        ) : items.length === 0 ? (
+          <div className="h-[220px] flex flex-col items-center justify-center gap-3">
+            <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: '#FBF7EE', border: '0.5px solid #E4DFD5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <BarChart2 size={18} style={{ color: '#B8924A', opacity: 0.4 }} />
+            </div>
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px', color: '#B8924A', opacity: 0.35, letterSpacing: '0.15em', textTransform: 'uppercase' }}>Sem dados</p>
+          </div>
+        ) : (
+          <div className={cn('space-y-3', showCompanionList && 'xl:space-y-0')}>
+            <div ref={chartRef} className={cn(showCompanionList && 'xl:grid xl:grid-cols-[minmax(0,1fr)_220px] xl:gap-4 xl:items-stretch')}>
+            <ResponsiveContainer width="100%" height={220}>
+              {(config.chartType === 'pie' || config.chartType === 'donut') ? (
+                <PieChart>
+                  <Pie
+                    data={absItems}
+                    dataKey="absValue"
+                    nameKey="name"
+                    cx="50%" cy="50%"
+                    innerRadius={config.chartType === 'donut' ? '54%' : 0}
+                    outerRadius={lp === 'outside' ? '60%' : '78%'}
+                    cornerRadius={8}
+                    paddingAngle={1.5}
+                    labelLine={lp === 'outside' ? { stroke: '#94a3b8', strokeWidth: 1, strokeOpacity: 0.7 } : false}
+                    label={lp !== 'none' ? renderPieLabel : false}
+                    strokeWidth={2}
+                    stroke="#fff"
+                    activeIndex={activeIndex}
+                    activeShape={renderActiveShape}
+                    onMouseEnter={(_, index) => setActiveIndex(index)}
+                    onMouseLeave={() => setActiveIndex(undefined)}
+                  >
+                    {absItems.map((_, i) => (
+                      <Cell key={i} fill={palette[i % palette.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={tooltip} />
+                </PieChart>
+              ) : config.chartType === 'bar_h' ? (
+                <BarChart data={absItems} layout="vertical" margin={{ top: 0, right: 30, left: 0, bottom: 0 }}>
+                  <XAxis type="number" tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="name" width={132} tick={{ fontSize: 10, fill: '#475569', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false}
+                    tickFormatter={(v: string) => v.length > 17 ? v.slice(0, 16) + '…' : v} />
+                  <Tooltip content={tooltip} cursor={{ fill: 'rgba(184,146,74,0.04)' }} />
+                  <Bar dataKey="absValue" name={fieldLabel} radius={[0,2,2,0]} maxBarSize={18}
+                    label={barLabel ? { ...barLabel, position: 'right', fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, fill: '#94a3b8' } : false}>
+                    {absItems.map((_, i) => (
+                      <Cell key={i} fill={palette[i % palette.length]} />
+                    ))}
+                  </Bar>
+                  {refLineH}
+                </BarChart>
+              ) : config.chartType === 'area' ? (
+                <AreaChart data={absItems} margin={{ top: 14, right: 8, left: -10, bottom: 24 }}>
+                  <CartesianGrid vertical={false} stroke="#F0EDE8" strokeWidth={0.5} />
+                  <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0}
+                    tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 11) + '…' : v} />
+                  <YAxis tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} />
+                  <Tooltip content={tooltip} cursor={{ stroke: areaColor, strokeWidth: 1, strokeDasharray: '4 2' }} />
+                  <Area
+                    type="monotone"
+                    dataKey="absValue"
+                    name={fieldLabel}
+                    stroke={areaColor}
+                    strokeWidth={2}
+                    fill={areaColor}
+                    fillOpacity={0.08}
+                    dot={{ fill: areaColor, r: 3.5, strokeWidth: 2, stroke: '#fff' }}
+                    activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff', fill: areaColor }}
+                    label={barLabel ? { ...barLabel, position: 'top', fontFamily: "'IBM Plex Mono', monospace" } : false}
+                  />
+                  {refLine}
+                </AreaChart>
+              ) : config.chartType === 'treemap' ? (
+                <Treemap
+                  data={absItems.map((it, i) => ({ ...it, fill: palette[i % palette.length] }))}
+                  dataKey="absValue"
+                  nameKey="name"
+                  aspectRatio={16 / 10}
+                  stroke="#fff"
+                  strokeWidth={2}
+                  content={({ x, y, width, height, name, fill: cellFill, absValue }: {
+                    x?: number; y?: number; width?: number; height?: number
+                    name?: string; fill?: string; absValue?: number
+                  }) => {
+                    const px = x ?? 0; const py = y ?? 0
+                    const pw = width ?? 0; const ph = height ?? 0
+                    if (pw < 4 || ph < 4) return <g />
+                    const label = vf === 'percent'
+                      ? `${total > 0 ? (((absValue ?? 0) / total) * 100).toFixed(1) : 0}%`
+                      : tickFmt(absValue ?? 0)
+                    const showLabel = pw > 70 && ph > 36
+                    const showName  = pw > 96 && ph > 46
+                    const charsPerPx = 5.5
+                    const maxChars = Math.floor(pw / charsPerPx)
+                    const truncated = (name ?? '').length > maxChars ? (name ?? '').slice(0, maxChars - 1) + '…' : (name ?? '')
+                    // Semi-transparent bg for text contrast
+                    const textH = (showName && showLabel) ? 34 : 18
+                    const textY = py + ph / 2 - textH / 2
+                    return (
+                      <g>
+                        <rect x={px} y={py} width={pw} height={ph} fill={cellFill} rx={3} ry={3} />
+                        {(showName || showLabel) && (
+                          <rect
+                            x={px + 4}
+                            y={showName ? textY + 2 : textY + 6}
+                            width={Math.max(16, pw - 8)}
+                            height={showName && showLabel ? 28 : 14}
+                            rx={3}
+                            ry={3}
+                            fill="rgba(15,23,42,0.22)"
+                          />
+                        )}
+                        {showName && (
+                          <text x={px + pw / 2} y={textY + 10} textAnchor="middle"
+                            fill="rgba(255,255,255,0.95)" fontSize={11} fontWeight={300}
+                            style={{ pointerEvents: 'none', fontFamily: "'Inter', 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+                            {truncated}
+                          </text>
+                        )}
+                        {showLabel && (
+                          <text x={px + pw / 2} y={showName ? textY + 24 : textY + 10} textAnchor="middle"
+                            fill="rgba(255,255,255,0.84)" fontSize={9} fontWeight={300}
+                            style={{ pointerEvents: 'none', fontFamily: "'Inter', 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+                            {label}
+                          </text>
+                        )}
+                      </g>
+                    )
+                  }}
+                >
+                  <Tooltip content={tooltip} />
+                </Treemap>
+              ) : (
+                <BarChart data={absItems} margin={{ top: 14, right: 8, left: -10, bottom: 24 }}>
+                  <CartesianGrid vertical={false} stroke="#F0EDE8" strokeWidth={0.5} />
+                  <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} angle={-30} textAnchor="end" interval={0}
+                    tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 11) + '…' : v} />
+                  <YAxis tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} />
+                  <Tooltip content={tooltip} cursor={{ fill: 'rgba(184,146,74,0.04)' }} />
+                  <Bar dataKey="absValue" name={fieldLabel} radius={[2,2,0,0]} maxBarSize={28}
+                    label={barLabel ? { ...barLabel, position: 'top', fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, fill: '#94a3b8' } : false}>
+                    {absItems.map((_, i) => (
+                      <Cell key={i} fill={palette[i % palette.length]} />
+                    ))}
+                  </Bar>
+                  {refLine}
+                </BarChart>
+              )}
+            </ResponsiveContainer>
+            {showCompanionList && (
+              <div className="mt-3 xl:mt-0 rounded-lg px-2 py-1.5" style={{ backgroundColor: '#FBF7EE', border: '0.5px solid #E4DFD5' }}>
+                <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, letterSpacing: '0.1em', color: '#9B6E20', opacity: 0.8, textTransform: 'uppercase', marginBottom: 8 }}>
+                  Ranking e participação
+                </p>
+                <div className="space-y-2">
+                  {rankedItems.slice(0, 7).map((it) => (
+                    <div key={it.rank} className="space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: it.color }} />
+                          <span className="truncate" title={it.name}
+                            style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#334155' }}>
+                            {it.shortName}
+                          </span>
+                        </div>
+                        <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#1A1820' }}>
+                          {it.share.toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="h-1 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(184,146,74,0.16)' }}>
+                        <div className="h-full rounded-full" style={{ width: `${Math.max(it.share, 2)}%`, background: it.color }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Config modal ─────────────────────────────────────────────────────────────
+
+function ConfigModal({
+  config, allDepts, onSave, onClose, isMasterContext,
+}: {
+  config: ExecChartConfig | null
+  allDepts: string[]
+  onSave: (c: ExecChartConfig) => void
+  onClose: () => void
+  isMasterContext: boolean
+}) {
+  const [title,         setTitle]         = useState(config?.title         ?? '')
+  const [chartType,     setChartType]     = useState<ExecChartConfig['chartType']>(config?.chartType     ?? 'bar_h')
+  const [field,         setField]         = useState<ExecChartConfig['field']>(config?.field             ?? 'razao')
+  const [topN,          setTopN]          = useState(config?.topN          ?? 5)
+  const [sortOrder,     setSortOrder]     = useState<ExecChartConfig['sortOrder']>(config?.sortOrder     ?? 'desc')
+  const [departamentos, setDepartamentos] = useState<string[]>(config?.departamentos                     ?? [])
+  const [dreGroup,      setDreGroup]      = useState(config?.dreGroup      ?? '')
+  const [palette,       setPalette]       = useState(config?.palette       ?? DEFAULT_PALETTE)
+  const [valueFormat,   setValueFormat]   = useState<ExecChartConfig['valueFormat']>(config?.valueFormat   ?? 'currency')
+  const [labelPosition, setLabelPosition] = useState<ExecChartConfig['labelPosition']>(config?.labelPosition ?? 'inside')
+  const [groupBy,       setGroupBy]       = useState<ExecChartConfig['groupBy']>(config?.groupBy    ?? 'agrupamento_arvore')
+  const [dreGroups,     setDreGroups]     = useState<string[]>([])
+  const [refLineValue,  setRefLineValue]  = useState<string>(config?.referenceLine?.value != null ? String(config.referenceLine.value) : '')
+  const [refLineLabel,  setRefLineLabel]  = useState(config?.referenceLine?.label ?? '')
+
+  useEffect(() => {
+    fetch('/api/exec-chart?topN=1&field=razao')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.dreGroups) setDreGroups(d.dreGroups) })
+  }, [])
+
+  const handleSave = () => {
+    if (!title.trim()) return
+    onSave({
+      id:   config?.id ?? Date.now().toString(),
+      title: title.trim(),
+      chartType, field, topN, sortOrder,
+      departamentos, dreGroup,
+      palette, valueFormat, labelPosition, groupBy,
+      referenceLine: refLineValue.trim() !== '' && !isNaN(Number(refLineValue))
+        ? { value: Number(refLineValue), label: refLineLabel.trim() }
+        : undefined,
+    })
+  }
+
+  const isPieOrDonut = chartType === 'pie' || chartType === 'donut'
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0">
+          <h2 className="font-bold text-gray-900">{config ? 'Editar gráfico' : 'Novo gráfico executivo'}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-4 space-y-4 overflow-y-auto flex-1">
+
+          {/* Title */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Título *</label>
+            <input value={title} onChange={e => setTitle(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
+              placeholder="Ex: Top Receitas Marketing" />
+          </div>
+
+          {/* Chart type */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">Tipo de gráfico</label>
+            <div className="grid grid-cols-3 gap-2">
+              {CHART_TYPES.map(ct => {
+                const Icon = ct.icon
+                return (
+                  <button key={ct.id} onClick={() => setChartType(ct.id)}
+                    className={cn('flex flex-col items-center gap-1.5 p-2.5 rounded-xl border text-xs font-medium transition-colors',
+                      chartType === ct.id
+                        ? 'border-gray-800 bg-gray-800 text-white'
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-50')}>
+                    <Icon size={18} />
+                    {ct.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* GroupBy */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Dimensão de análise</label>
+            <select value={groupBy} onChange={e => setGroupBy(e.target.value as ExecChartConfig['groupBy'])}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300">
+              <option value="agrupamento_arvore">Agrupamento DRE</option>
+              <option value="dre">Categoria DRE</option>
+              <option value="conta_contabil">Conta Contábil</option>
+              <option value="centro_custo">Centro de Custo</option>
+              <option value="contrapartida">Contrapartida</option>
+              <option value="unidade_negocio">Unidade de Negócio</option>
+              {isMasterContext && (
+                <option value="departamento">Departamento</option>
+              )}
+            </select>
+          </div>
+
+          {/* Field + TopN */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Métrica</label>
+              <select value={field} onChange={e => setField(e.target.value as ExecChartConfig['field'])}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300">
+                <option value="razao">Realizado</option>
+                <option value="budget">Budget</option>
+                <option value="variacao">Variação</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Top N itens</label>
+              <input type="number" min={1} max={20} value={topN}
+                onChange={e => setTopN(Math.min(20, Math.max(1, parseInt(e.target.value) || 5)))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300" />
+            </div>
+          </div>
+
+          {/* Sort order */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Ordenação</label>
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+              {([
+                ['desc', '↓ Maior primeiro', 'Receitas, maiores valores positivos'],
+                ['asc',  '↑ Menor primeiro', 'Despesas, maiores valores negativos'],
+              ] as const).map(([v, lbl, hint]) => (
+                <button key={v} onClick={() => setSortOrder(v)}
+                  title={hint}
+                  className={cn('flex-1 py-2 font-medium transition-colors',
+                    sortOrder === v ? 'bg-gray-800 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Value format + Label position */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Exibir valores</label>
+              <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+                {(['currency', 'percent'] as const).map(v => (
+                  <button key={v} onClick={() => setValueFormat(v)}
+                    className={cn('flex-1 py-2 font-medium transition-colors',
+                      valueFormat === v ? 'bg-gray-800 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+                    {v === 'currency' ? 'R$' : '%'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Rótulos</label>
+              <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+                {([
+                  ['inside',  'Dentro'],
+                  ['outside', isPieOrDonut ? 'Fora' : 'Topo'],
+                  ['none',    'Off'],
+                ] as const).map(([v, lbl]) => (
+                  <button key={v} onClick={() => setLabelPosition(v)}
+                    className={cn('flex-1 py-2 font-medium transition-colors',
+                      labelPosition === v ? 'bg-gray-800 text-white' : 'text-gray-600 hover:bg-gray-50')}>
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Palette */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">Paleta de cores</label>
+            <div className="grid grid-cols-3 gap-2">
+              {Object.entries(PALETTES).map(([key, pal]) => (
+                <button key={key} onClick={() => setPalette(key)}
+                  className={cn(
+                    'flex items-center gap-2 px-2.5 py-2 rounded-lg border text-xs transition-colors',
+                    palette === key
+                      ? 'border-gray-800 bg-gray-50 font-semibold text-gray-800'
+                      : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  )}>
+                  <div className="flex gap-0.5 flex-shrink-0">
+                    {pal.colors.slice(0, 4).map((c, i) => (
+                      <span key={i} className="w-3 h-3 rounded-sm" style={{ background: c }} />
+                    ))}
+                  </div>
+                  <span className="truncate">{pal.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Reference Line — only for bar/area charts */}
+          {(chartType === 'bar_h' || chartType === 'bar_v' || chartType === 'area') && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Linha de referência <span className="text-gray-400 font-normal">(opcional)</span>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="number"
+                  value={refLineValue}
+                  onChange={e => setRefLineValue(e.target.value)}
+                  placeholder="Valor (ex: 500000)"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+                <input
+                  value={refLineLabel}
+                  onChange={e => setRefLineLabel(e.target.value)}
+                  placeholder="Rótulo (ex: Meta)"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+              </div>
+              {refLineValue.trim() !== '' && (
+                <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
+                  <span>━━</span> Linha âmbar tracejada será exibida no gráfico
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* DRE Group filter */}
+          {dreGroups.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Filtrar por grupo DRE <span className="text-gray-400 font-normal">(opcional)</span>
+              </label>
+              <select value={dreGroup} onChange={e => setDreGroup(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300">
+                <option value="">Todos os grupos</option>
+                {dreGroups.map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* Departments */}
+          {allDepts.length > 1 && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Departamentos <span className="text-gray-400 font-normal">(vazio = todos)</span>
+              </label>
+              <div className="max-h-28 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1">
+                {allDepts.map(d => (
+                  <label key={d} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                    <input type="checkbox" checked={departamentos.includes(d)}
+                      onChange={e => setDepartamentos(prev =>
+                        e.target.checked ? [...prev, d] : prev.filter(x => x !== d)
+                      )}
+                      className="w-3 h-3 accent-gray-700" />
+                    <span className="text-xs text-gray-700">{d}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-end gap-2 px-6 py-4 border-t bg-gray-50 rounded-b-2xl flex-shrink-0">
+          <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
+          <Button size="sm" onClick={handleSave} disabled={!title.trim()}>
+            {config ? 'Salvar' : 'Adicionar'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main section ─────────────────────────────────────────────────────────────
+
+function buildStarterPack(deptName: string): ExecChartConfig[] {
+  const isMain = deptName === '__dashboard__'
+  const baseGroup = isMain ? 'departamento' : 'dre'
+  const now = Date.now()
+  return [
+    {
+      id: `starter-${now}-1`,
+      title: isMain ? 'Desvio por Departamento' : 'Desvio por Linha DRE',
+      chartType: 'bar_h',
+      field: 'variacao',
+      topN: 8,
+      sortOrder: 'asc',
+      departamentos: [],
+      dreGroup: '',
+      palette: 'glorioso',
+      valueFormat: 'currency',
+      labelPosition: 'outside',
+      groupBy: baseGroup,
+    },
+    {
+      id: `starter-${now}-2`,
+      title: 'Top Composição do Realizado',
+      chartType: 'bar_v',
+      field: 'razao',
+      topN: 10,
+      sortOrder: 'desc',
+      departamentos: [],
+      dreGroup: '',
+      palette: 'mixed',
+      valueFormat: 'currency',
+      labelPosition: 'outside',
+      groupBy: isMain ? 'unidade_negocio' : 'conta_contabil',
+    },
+    {
+      id: `starter-${now}-3`,
+      title: 'Distribuição de Budget',
+      chartType: 'donut',
+      field: 'budget',
+      topN: 6,
+      sortOrder: 'desc',
+      departamentos: [],
+      dreGroup: '',
+      palette: 'blue',
+      valueFormat: 'percent',
+      labelPosition: 'outside',
+      groupBy: isMain ? 'dre' : 'centro_custo',
+    },
+  ]
+}
+
 export default function ExecCharts({
   selPeriodos,
-  deptName = '__dashboard__',
+  allDepts,
+  deptName   = '__dashboard__',
+  canEdit    = true,
 }: {
   selPeriodos: string[]
   allDepts: string[]
   deptName?: string
   canEdit?: boolean
 }) {
-  const [loading, setLoading] = useState(true)
-  const [drivers, setDrivers] = useState<ExecApiItem[]>([])
-  const [composition, setComposition] = useState<ExecApiItem[]>([])
-  const [distribution, setDistribution] = useState<ExecApiItem[]>([])
+  const [charts,      setCharts]      = useState<ExecChartConfig[]>([])
+  const [cfgLoading,  setCfgLoading]  = useState(true)
+  const [showModal,   setShowModal]   = useState(false)
+  const [editing,     setEditing]     = useState<ExecChartConfig | null>(null)
+  const [saveError,   setSaveError]   = useState<string | null>(null)
 
+  // Load configs from server
   useEffect(() => {
-    const p = selPeriodos.length ? `&periodos=${encodeURIComponent(selPeriodos.join(','))}` : ''
-    const deptParam = deptName !== '__dashboard__' ? `&departamentos=${encodeURIComponent(deptName)}` : ''
+    setCfgLoading(true)
+    fetch(`/api/exec-chart-config?dept_name=${encodeURIComponent(deptName)}`, { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : { configs: [] })
+      .then(({ configs }) => setCharts(Array.isArray(configs) ? configs : []))
+      .catch(() => setCharts([]))
+      .finally(() => setCfgLoading(false))
+  }, [deptName])
 
-    setLoading(true)
-    Promise.all([
-      fetch(`/api/exec-chart?groupBy=dre&field=variacao&topN=8&sortOrder=asc${p}${deptParam}`, { cache: 'no-store' }).then(r => r.json() as Promise<ExecPayload>),
-      fetch(`/api/exec-chart?groupBy=conta_contabil&field=razao&topN=10&sortOrder=desc${p}${deptParam}`, { cache: 'no-store' }).then(r => r.json() as Promise<ExecPayload>),
-      fetch(`/api/exec-chart?groupBy=${deptName === '__dashboard__' ? 'dre' : 'centro_custo'}&field=budget&topN=6&sortOrder=desc${p}${deptParam}`, { cache: 'no-store' }).then(r => r.json() as Promise<ExecPayload>),
-    ]).then(([a, b, c]) => {
-      setDrivers(a?.items ?? [])
-      setComposition(b?.items ?? [])
-      setDistribution(c?.items ?? [])
-    }).finally(() => setLoading(false))
-  }, [selPeriodos, deptName])
-
-  const pieData = useMemo(() => distribution.map((d, i) => ({ ...d, fill: COLORS[i % COLORS.length], share: 0 })), [distribution])
-  const pieTotal = pieData.reduce((s, d) => s + Math.abs(d.value), 0)
-  const pieDataWithShare = pieData.map((d) => ({ ...d, share: pieTotal > 0 ? (Math.abs(d.value) / pieTotal) * 100 : 0 }))
-
-  if (loading) {
-    return (
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        {[1, 2, 3].map(i => <div key={i} className="h-[320px] rounded-xl animate-pulse" style={{ background: '#f3f4f6' }} />)}
-      </div>
-    )
+  const persist = async (next: ExecChartConfig[]) => {
+    const prev = charts
+    setCharts(next)
+    setSaveError(null)
+    try {
+      const res = await fetch('/api/exec-chart-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dept_name: deptName, configs: next }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        const msg = (body as { error?: string }).error ?? `HTTP ${res.status}`
+        console.error('[ExecCharts] persist failed:', msg)
+        setSaveError(`Erro ao salvar: ${msg}`)
+        setCharts(prev) // revert optimistic update
+      }
+    } catch (e) {
+      console.error('[ExecCharts] persist network error:', e)
+      setSaveError('Erro de conexão ao salvar configuração.')
+      setCharts(prev)
+    }
   }
+
+  const handleSave = (c: ExecChartConfig) => {
+    persist(editing ? charts.map(x => x.id === c.id ? c : x) : [...charts, c])
+    setEditing(null)
+    setShowModal(false)
+  }
+
+  const handleDelete = (id: string) => persist(charts.filter(c => c.id !== id))
+  const handleEdit   = (c: ExecChartConfig) => { setEditing(c); setShowModal(true) }
+  const applyStarterPack = () => persist(buildStarterPack(deptName))
+
+  if (cfgLoading) return (
+    <div className="flex items-center gap-2 py-4 text-sm text-gray-400">
+      <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+      Carregando gráficos…
+    </div>
+  )
+
+  // If read-only and nothing configured, render nothing
+  if (!canEdit && charts.length === 0) return null
 
   return (
     <div>
-      <div className="mb-3">
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Gráficos Executivos</h2>
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Gráficos Executivos</h2>
+        </div>
+        {canEdit && (
+          <Button size="sm" variant="outline" onClick={() => { setEditing(null); setShowModal(true) }}>
+            <Plus size={13} /> Adicionar gráfico
+          </Button>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 16 }}>Drivers de Desvio (DRE)</CardTitle>
-            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#64748b' }}>Quem mais impacta positiva/negativamente</p>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={drivers.map(d => ({ ...d, label: d.name.length > 20 ? `${d.name.slice(0, 19)}…` : d.name }))} layout="vertical" margin={{ top: 0, right: 10, left: 2, bottom: 0 }}>
-                <CartesianGrid horizontal={false} stroke="#eef2f7" />
-                <XAxis type="number" tickFormatter={moneyShort} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="label" width={95} tick={{ fontSize: 10, fill: '#475569' }} axisLine={false} tickLine={false} />
-                <ReferenceLine x={0} stroke="#0f172a" strokeOpacity={0.2} />
-                <Tooltip content={<ChartTooltip />} />
-                <Bar dataKey="value" radius={[3, 3, 3, 3]}>
-                  {drivers.map((d, i) => <Cell key={i} fill={d.value >= 0 ? '#059669' : '#dc2626'} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+      {saveError && (
+        <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 flex items-center justify-between gap-2">
+          <span>{saveError}</span>
+          <button onClick={() => setSaveError(null)} className="text-red-400 hover:text-red-600 font-bold">×</button>
+        </div>
+      )}
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 16 }}>Composição do Realizado</CardTitle>
-            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#64748b' }}>Top contas com maior participação</p>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={composition.map((d) => ({ ...d, label: d.name.length > 16 ? `${d.name.slice(0, 15)}…` : d.name }))} margin={{ top: 8, right: 10, left: -8, bottom: 24 }}>
-                <CartesianGrid vertical={false} stroke="#eef2f7" />
-                <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} angle={-25} textAnchor="end" interval={0} />
-                <YAxis tickFormatter={moneyShort} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <Tooltip content={<ChartTooltip />} />
-                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                  {composition.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+      {charts.length === 0 ? (
+        <div className="border-2 border-dashed border-gray-200 rounded-xl py-10 flex flex-col items-center gap-3">
+          <BarChart2 size={28} className="text-gray-300" />
+          <p className="text-sm text-gray-500 text-center max-w-sm">
+            Nenhum gráfico executivo configurado. Use um pacote inicial com visão de desvio, composição e distribuição.
+          </p>
+          {canEdit && (
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Button size="sm" onClick={applyStarterPack}>
+                <Plus size={13} /> Aplicar pacote executivo
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => { setEditing(null); setShowModal(true) }}>
+                Personalizar manualmente
+              </Button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+          {charts.map(c => (
+            <ExecChartCard
+              key={c.id}
+              config={c}
+              selPeriodos={selPeriodos}
+              allDepts={allDepts}
+              canEdit={canEdit}
+              contextDept={deptName}
+              onEdit={() => handleEdit(c)}
+              onDelete={() => handleDelete(c.id)}
+            />
+          ))}
+        </div>
+      )}
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 16 }}>Distribuição de Budget</CardTitle>
-            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#64748b' }}>Fatia com callout, linhas e cantos arredondados</p>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie
-                  data={pieDataWithShare}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius="52%"
-                  outerRadius="78%"
-                  cornerRadius={10}
-                  paddingAngle={1.5}
-                  labelLine={{ stroke: '#94a3b8', strokeWidth: 1, strokeOpacity: 0.7 }}
-                  label={({ name, percent, x, y, textAnchor }: { name: string; percent?: number; x?: number; y?: number; textAnchor?: string }) => (
-                    <text x={x} y={y} textAnchor={textAnchor} dominantBaseline="central" fill="#475569" style={{ fontSize: 10, fontFamily: "'IBM Plex Sans', sans-serif" }}>
-                      {`${String(name).slice(0, 12)} ${((percent ?? 0) * 100).toFixed(0)}%`}
-                    </text>
-                  )}
-                  stroke="#fff"
-                  strokeWidth={2}
-                >
-                  {pieDataWithShare.map((d, i) => <Cell key={i} fill={d.fill} />)}
-                  <Label
-                    position="center"
-                    content={({ viewBox }: { viewBox?: { cx: number; cy: number } }) => {
-                      if (!viewBox) return null
-                      const { cx, cy } = viewBox
-                      return (
-                        <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central">
-                          <tspan x={cx} dy="-0.2em" style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 11, fill: '#64748b' }}>Total</tspan>
-                          <tspan x={cx} dy="1.2em" style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 13, fontWeight: 700, fill: '#0f172a' }}>{moneyShort(pieTotal)}</tspan>
-                        </text>
-                      )
-                    }}
-                  />
-                </Pie>
-                <Tooltip content={<ChartTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
+      {showModal && (
+        <ConfigModal
+          config={editing}
+          allDepts={allDepts}
+          onSave={handleSave}
+          onClose={() => { setShowModal(false); setEditing(null) }}
+          isMasterContext={deptName === '__dashboard__'}
+        />
+      )}
     </div>
   )
 }
