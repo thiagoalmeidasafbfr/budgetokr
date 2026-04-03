@@ -108,7 +108,7 @@ function ExecTooltip({
   return (
     <div style={{ background: '#1A1820', borderRadius: 6, padding: '10px 14px', border: '0.5px solid rgba(184,146,74,0.25)', minWidth: 160 }}>
       <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: '#B8924A', opacity: 0.7, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>{d.name}</p>
-      <p style={{ fontFamily: "'Big Shoulders Display', sans-serif", fontWeight: 900, fontSize: 18, color: '#fff', letterSpacing: '-0.01em' }}>{display}</p>
+      <p style={{ fontFamily: "'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", fontWeight: 600, fontSize: 16, color: '#fff', letterSpacing: '-0.01em' }}>{display}</p>
     </div>
   )
 }
@@ -238,10 +238,11 @@ function ExecChartCard({
   // Inside labels only — clean, no connector lines
   // Threshold: 8% for inside (enough room to read), 5% for outside (text only, no lines)
   const renderPieLabel = ({
-    cx, cy, midAngle, innerRadius, outerRadius, percent, value,
-  }: { cx: number; cy: number; midAngle: number; innerRadius: number; outerRadius: number; percent: number; value: number }) => {
+    cx, cy, midAngle, innerRadius, outerRadius, percent, value, name,
+  }: { cx: number; cy: number; midAngle: number; innerRadius: number; outerRadius: number; percent: number; value: number; name: string }) => {
     if (lp === 'none') return null
     const RADIAN = Math.PI / 180
+    const shortName = name.length > 14 ? `${name.slice(0, 13)}…` : name
     const label  = vf === 'percent' ? `${(percent * 100).toFixed(0)}%` : tickFmt(value)
 
     if (lp !== 'outside') {
@@ -267,7 +268,7 @@ function ExecChartCard({
     return (
       <text x={x} y={y} fill="#475569" textAnchor={anchor} dominantBaseline="central"
         fontSize={9} fontWeight={600} style={{ pointerEvents: 'none' }}>
-        {label}
+        {`${shortName} ${label}`}
       </text>
     )
   }
@@ -279,6 +280,17 @@ function ExecChartCard({
 
   // Area chart uses the first palette color
   const areaColor = palette[0]
+  const showCompanionList = config.chartType === 'pie' || config.chartType === 'donut' || config.chartType === 'treemap'
+  const colorByName = new Map(absItems.map((it, i) => [it.name, palette[i % palette.length]]))
+  const rankedItems = [...absItems]
+    .sort((a, b) => b.absValue - a.absValue)
+    .map((it, i) => ({
+      ...it,
+      rank: i + 1,
+      share: total > 0 ? (it.absValue / total) * 100 : 0,
+      color: colorByName.get(it.name) ?? palette[i % palette.length],
+      shortName: it.name.length > 26 ? `${it.name.slice(0, 25)}…` : it.name,
+    }))
 
   // ── Active shape (hover effect on pie/donut) ───────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -300,7 +312,7 @@ function ExecChartCard({
         {innerRadius > 0 && (
           <>
             <text x={cx} y={cy - 7} textAnchor="middle" dominantBaseline="central"
-              style={{ fontFamily: "'Big Shoulders Display', sans-serif", fontWeight: 900, fontSize: 15, fill: '#1A1820', pointerEvents: 'none', letterSpacing: '-0.01em' }}>
+              style={{ fontFamily: "'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", fontWeight: 600, fontSize: 13, fill: '#1A1820', pointerEvents: 'none', letterSpacing: '-0.01em' }}>
               {tickFmt(value)}
             </text>
             <text x={cx} y={cy + 10} textAnchor="middle" dominantBaseline="central"
@@ -318,8 +330,8 @@ function ExecChartCard({
       <div className="flex items-start justify-between px-5 py-4" style={{ borderBottom: '0.5px solid #E4DFD5' }}>
         <div className="min-w-0">
           <p className="truncate leading-none" style={{
-            fontFamily: "'Big Shoulders Display', sans-serif", fontWeight: 900,
-            fontSize: '13px', letterSpacing: '-0.01em', textTransform: 'uppercase', color: '#1A1820',
+            fontFamily: "'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", fontWeight: 600,
+            fontSize: '15px', letterSpacing: '-0.01em', color: '#0f172a',
           }}>{config.title}</p>
           <p className="mt-1.5" style={{
             fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px',
@@ -393,9 +405,9 @@ function ExecChartCard({
             <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px', color: '#B8924A', opacity: 0.35, letterSpacing: '0.15em', textTransform: 'uppercase' }}>Sem dados</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            <div ref={chartRef}>
-            <ResponsiveContainer width="100%" height={200}>
+          <div className={cn('space-y-3', showCompanionList && 'xl:space-y-0')}>
+            <div ref={chartRef} className={cn(showCompanionList && 'xl:grid xl:grid-cols-[minmax(0,1fr)_220px] xl:gap-4 xl:items-stretch')}>
+            <ResponsiveContainer width="100%" height={220}>
               {(config.chartType === 'pie' || config.chartType === 'donut') ? (
                 <PieChart>
                   <Pie
@@ -403,9 +415,11 @@ function ExecChartCard({
                     dataKey="absValue"
                     nameKey="name"
                     cx="50%" cy="50%"
-                    innerRadius={config.chartType === 'donut' ? '46%' : 0}
+                    innerRadius={config.chartType === 'donut' ? '54%' : 0}
                     outerRadius={lp === 'outside' ? '60%' : '78%'}
-                    labelLine={false}
+                    cornerRadius={8}
+                    paddingAngle={1.5}
+                    labelLine={lp === 'outside' ? { stroke: '#94a3b8', strokeWidth: 1, strokeOpacity: 0.7 } : false}
                     label={lp !== 'none' ? renderPieLabel : false}
                     strokeWidth={2}
                     stroke="#fff"
@@ -421,12 +435,12 @@ function ExecChartCard({
                   <Tooltip content={tooltip} />
                 </PieChart>
               ) : config.chartType === 'bar_h' ? (
-                <BarChart data={absItems} layout="vertical" margin={{ top: 0, right: 52, left: 0, bottom: 0 }}>
+                <BarChart data={absItems} layout="vertical" margin={{ top: 0, right: 30, left: 0, bottom: 0 }}>
                   <XAxis type="number" tickFormatter={tickFmt} tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 9, fill: '#475569', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false}
+                  <YAxis type="category" dataKey="name" width={132} tick={{ fontSize: 10, fill: '#475569', fontFamily: "'IBM Plex Mono', monospace" }} axisLine={false} tickLine={false}
                     tickFormatter={(v: string) => v.length > 17 ? v.slice(0, 16) + '…' : v} />
                   <Tooltip content={tooltip} cursor={{ fill: 'rgba(184,146,74,0.04)' }} />
-                  <Bar dataKey="absValue" name={fieldLabel} radius={[0,2,2,0]} maxBarSize={16}
+                  <Bar dataKey="absValue" name={fieldLabel} radius={[0,2,2,0]} maxBarSize={18}
                     label={barLabel ? { ...barLabel, position: 'right', fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, fill: '#94a3b8' } : false}>
                     {absItems.map((_, i) => (
                       <Cell key={i} fill={palette[i % palette.length]} />
@@ -460,7 +474,7 @@ function ExecChartCard({
                   data={absItems.map((it, i) => ({ ...it, fill: palette[i % palette.length] }))}
                   dataKey="absValue"
                   nameKey="name"
-                  aspectRatio={4 / 3}
+                  aspectRatio={16 / 10}
                   stroke="#fff"
                   strokeWidth={2}
                   content={({ x, y, width, height, name, fill: cellFill, absValue }: {
@@ -473,26 +487,39 @@ function ExecChartCard({
                     const label = vf === 'percent'
                       ? `${total > 0 ? (((absValue ?? 0) / total) * 100).toFixed(1) : 0}%`
                       : tickFmt(absValue ?? 0)
-                    const showLabel = pw > 36 && ph > 20
-                    const showName  = pw > 52 && ph > 36
+                    const showLabel = pw > 70 && ph > 36
+                    const showName  = pw > 96 && ph > 46
                     const charsPerPx = 5.5
                     const maxChars = Math.floor(pw / charsPerPx)
                     const truncated = (name ?? '').length > maxChars ? (name ?? '').slice(0, maxChars - 1) + '…' : (name ?? '')
                     // Semi-transparent bg for text contrast
-                    const textH = (showName && showLabel) ? 28 : 16
+                    const textH = (showName && showLabel) ? 34 : 18
                     const textY = py + ph / 2 - textH / 2
                     return (
                       <g>
                         <rect x={px} y={py} width={pw} height={ph} fill={cellFill} rx={3} ry={3} />
+                        {(showName || showLabel) && (
+                          <rect
+                            x={px + 4}
+                            y={showName ? textY + 2 : textY + 6}
+                            width={Math.max(16, pw - 8)}
+                            height={showName && showLabel ? 28 : 14}
+                            rx={3}
+                            ry={3}
+                            fill="rgba(15,23,42,0.22)"
+                          />
+                        )}
                         {showName && (
                           <text x={px + pw / 2} y={textY + 10} textAnchor="middle"
-                            fill="rgba(255,255,255,0.9)" fontSize={9} fontWeight="normal" style={{ pointerEvents: 'none', fontFamily: 'inherit' }}>
+                            fill="rgba(255,255,255,0.95)" fontSize={11} fontWeight={300}
+                            style={{ pointerEvents: 'none', fontFamily: "'Inter', 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
                             {truncated}
                           </text>
                         )}
                         {showLabel && (
                           <text x={px + pw / 2} y={showName ? textY + 24 : textY + 10} textAnchor="middle"
-                            fill="rgba(255,255,255,0.75)" fontSize={9} fontWeight="normal" style={{ pointerEvents: 'none', fontFamily: 'inherit' }}>
+                            fill="rgba(255,255,255,0.84)" fontSize={9} fontWeight={300}
+                            style={{ pointerEvents: 'none', fontFamily: "'Inter', 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
                             {label}
                           </text>
                         )}
@@ -519,23 +546,34 @@ function ExecChartCard({
                 </BarChart>
               )}
             </ResponsiveContainer>
-            </div>
-
-            {/* Legend */}
-            <div className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1" style={{ borderTop: '0.5px solid #F0EDE8' }}>
-              {items.map((it, i) => {
-                const pct = total > 0 ? ((Math.abs(it.value) / total) * 100).toFixed(0) : '0'
-                return (
-                  <div key={i} className="flex items-center gap-1.5">
-                    <span className="flex-shrink-0 rounded-sm" style={{ width: 3, height: 14, background: palette[i % palette.length] }} />
-                    <span className="truncate max-w-[90px]" title={it.name}
-                      style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: '#475569' }}>{it.name}</span>
-                    <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: '#B8924A', opacity: 0.6 }}>
-                      {pct}%
-                    </span>
-                  </div>
-                )
-              })}
+            {showCompanionList && (
+              <div className="mt-3 xl:mt-0 rounded-lg px-2 py-1.5" style={{ backgroundColor: '#FBF7EE', border: '0.5px solid #E4DFD5' }}>
+                <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, letterSpacing: '0.1em', color: '#9B6E20', opacity: 0.8, textTransform: 'uppercase', marginBottom: 8 }}>
+                  Ranking e participação
+                </p>
+                <div className="space-y-2">
+                  {rankedItems.slice(0, 7).map((it) => (
+                    <div key={it.rank} className="space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: it.color }} />
+                          <span className="truncate" title={it.name}
+                            style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#334155' }}>
+                            {it.shortName}
+                          </span>
+                        </div>
+                        <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#1A1820' }}>
+                          {it.share.toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="h-1 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(184,146,74,0.16)' }}>
+                        <div className="h-full rounded-full" style={{ width: `${Math.max(it.share, 2)}%`, background: it.color }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             </div>
           </div>
         )}
@@ -823,6 +861,56 @@ function ConfigModal({
 
 // ─── Main section ─────────────────────────────────────────────────────────────
 
+function buildStarterPack(deptName: string): ExecChartConfig[] {
+  const isMain = deptName === '__dashboard__'
+  const baseGroup = isMain ? 'departamento' : 'dre'
+  const now = Date.now()
+  return [
+    {
+      id: `starter-${now}-1`,
+      title: isMain ? 'Desvio por Departamento' : 'Desvio por Linha DRE',
+      chartType: 'bar_h',
+      field: 'variacao',
+      topN: 8,
+      sortOrder: 'asc',
+      departamentos: [],
+      dreGroup: '',
+      palette: 'glorioso',
+      valueFormat: 'currency',
+      labelPosition: 'outside',
+      groupBy: baseGroup,
+    },
+    {
+      id: `starter-${now}-2`,
+      title: 'Top Composição do Realizado',
+      chartType: 'bar_v',
+      field: 'razao',
+      topN: 10,
+      sortOrder: 'desc',
+      departamentos: [],
+      dreGroup: '',
+      palette: 'mixed',
+      valueFormat: 'currency',
+      labelPosition: 'outside',
+      groupBy: isMain ? 'unidade_negocio' : 'conta_contabil',
+    },
+    {
+      id: `starter-${now}-3`,
+      title: 'Distribuição de Budget',
+      chartType: 'donut',
+      field: 'budget',
+      topN: 6,
+      sortOrder: 'desc',
+      departamentos: [],
+      dreGroup: '',
+      palette: 'blue',
+      valueFormat: 'percent',
+      labelPosition: 'outside',
+      groupBy: isMain ? 'dre' : 'centro_custo',
+    },
+  ]
+}
+
 export default function ExecCharts({
   selPeriodos,
   allDepts,
@@ -882,6 +970,7 @@ export default function ExecCharts({
 
   const handleDelete = (id: string) => persist(charts.filter(c => c.id !== id))
   const handleEdit   = (c: ExecChartConfig) => { setEditing(c); setShowModal(true) }
+  const applyStarterPack = () => persist(buildStarterPack(deptName))
 
   if (cfgLoading) return (
     <div className="flex items-center gap-2 py-4 text-sm text-gray-400">
@@ -916,11 +1005,18 @@ export default function ExecCharts({
       {charts.length === 0 ? (
         <div className="border-2 border-dashed border-gray-200 rounded-xl py-10 flex flex-col items-center gap-3">
           <BarChart2 size={28} className="text-gray-300" />
-          <p className="text-sm text-gray-400">Nenhum gráfico executivo configurado.</p>
+          <p className="text-sm text-gray-500 text-center max-w-sm">
+            Nenhum gráfico executivo configurado. Use um pacote inicial com visão de desvio, composição e distribuição.
+          </p>
           {canEdit && (
-            <Button size="sm" variant="outline" onClick={() => { setEditing(null); setShowModal(true) }}>
-              <Plus size={13} /> Adicionar primeiro gráfico
-            </Button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Button size="sm" onClick={applyStarterPack}>
+                <Plus size={13} /> Aplicar pacote executivo
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => { setEditing(null); setShowModal(true) }}>
+                Personalizar manualmente
+              </Button>
+            </div>
           )}
         </div>
       ) : (

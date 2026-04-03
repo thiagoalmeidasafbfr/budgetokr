@@ -220,15 +220,20 @@ export default function Dashboard() {
   for (const row of periodChartData) {
     ytdBudget += row.budget
     ytdRazao += row.razao
+    ;(row as Record<string, unknown>).variacaoMes = row.razao - row.budget
     ;(row as Record<string, unknown>).variacaoYtd = ytdRazao - ytdBudget
     ;(row as Record<string, unknown>).budgetYtd = ytdBudget
     ;(row as Record<string, unknown>).razaoYtd = ytdRazao
   }
 
   const deptVariance = Object.entries(byDept)
-    .map(([dept, vals]) => ({ dept, variacao: vals.razao - vals.budget }))
-    .sort((a, b) => b.variacao - a.variacao)
-    .slice(0, 10)
+    .map(([dept, vals]) => ({
+      dept,
+      variacao: vals.razao - vals.budget,
+      variacaoPct: safePct(vals.razao - vals.budget, vals.budget),
+    }))
+    .sort((a, b) => Math.abs(b.variacao) - Math.abs(a.variacao))
+    .slice(0, 12)
 
   const sortedWidgets = [...widgets].sort((a, b) => a.order - b.order)
   const isWidgetVisible = (id: WidgetId) => widgets.find(w => w.id === id)?.visible ?? true
@@ -295,41 +300,31 @@ export default function Dashboard() {
 
       {/* Summary cards — mesma estrutura flex:2 / flex:1 que os gráficos abaixo */}
       {isWidgetVisible('summary') && (
-        <div className="flex gap-4 pb-5" style={{ borderBottom: '0.5px solid #E4DFD5' }}>
-          {/* 2/3 — dois cards lado a lado */}
-          <div className="flex gap-4" style={{ flex: 2 }}>
-            <div style={{ flex: 1 }}>
-              <SummaryCard
-                title={selYear && hasYtdData ? 'Budget YTD' : 'Budget Total'}
-                value={abbrev(displayBudget)}
-                sub={selYear && hasYtdData ? ytdLabelSub : undefined}
-              />
-            </div>
-            <div style={{ flex: 1 }}>
-              <SummaryCard
-                title="Variação de Performance"
-                value={abbrev(variacao)}
-                pct={formatPct(variacaoPct)}
-                featured
-                color={variacao >= 0 ? '#166534' : '#B91C1C'}
-              />
-            </div>
-          </div>
-          {/* 1/3 — card direito */}
-          <div style={{ flex: 1 }}>
-            <SummaryCard
-              title={selYear && hasYtdData ? 'Realizado YTD' : 'Realizado Total'}
-              value={abbrev(displayRazao)}
-              sub="Verificado"
-            />
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pb-5" style={{ borderBottom: '0.5px solid #E4DFD5' }}>
+          <SummaryCard
+            title={selYear && hasYtdData ? 'Budget YTD' : 'Budget Total'}
+            value={abbrev(displayBudget)}
+            sub={selYear && hasYtdData ? ytdLabelSub : undefined}
+          />
+          <SummaryCard
+            title="Variação de Performance"
+            value={abbrev(variacao)}
+            pct={formatPct(variacaoPct)}
+            featured
+            color={variacao >= 0 ? '#166534' : '#B91C1C'}
+          />
+          <SummaryCard
+            title={selYear && hasYtdData ? 'Realizado YTD' : 'Realizado Total'}
+            value={abbrev(displayRazao)}
+            sub="Verificado"
+          />
         </div>
       )}
 
       {/* Remaining widgets in custom order (summary handled above) */}
       {sortedWidgets.filter(w => w.visible && w.id !== 'summary').map(w => {
         if (w.id === 'charts') return (
-          <div key="charts"><DashboardCharts periodChartData={periodChartData} deptVariance={deptVariance} /></div>
+          <div key="charts"><DashboardCharts periodChartData={periodChartData} deptVariance={deptVariance} totalBudget={displayBudget} totalRealizado={displayRazao} /></div>
         )
         if (w.id === 'exec') return (
           <div key="exec"><ExecCharts selPeriodos={selPeriodos} allDepts={allDepts} /></div>

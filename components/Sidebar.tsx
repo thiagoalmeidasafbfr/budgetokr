@@ -8,6 +8,7 @@ import {
   Target, Layers, FileText, Database, Upload,
   ChevronRight, ChevronDown, Building2, BookOpen, LayoutList, Gauge,
   LogOut, User, ListTree, Shield, Landmark, Moon, Sun, History, MessageSquare, Briefcase, Users, PieChart, X,
+  Sparkles,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/components/ThemeProvider'
@@ -31,6 +32,13 @@ const nav: NavItem[] = [
     icon: LayoutDashboard,
     label: 'Dashboard',
     sublabel: 'Resumo consolidado',
+    masterOnly: true,
+  },
+  {
+    type: 'link', href: '/one-page-financeiro',
+    icon: Sparkles,
+    label: 'One Page Financeiro',
+    sublabel: 'Canvas BI personalizável',
     masterOnly: true,
   },
 

@@ -7,6 +7,7 @@ import { formatCurrency, formatPct, formatPeriodo, colorForVariance, bgColorForV
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, LabelList,
+  ComposedChart, ReferenceLine, Cell,
 } from 'recharts'
 import {
   DndContext, closestCenter, PointerSensor, KeyboardSensor,
@@ -1476,7 +1477,7 @@ export default function DeptDashboardPage() {
     }, {})
   const chartRows = Object.values(chartData)
     .sort((a, b) => a.periodo.localeCompare(b.periodo))
-    .map(r => ({ ...r, label: formatPeriodo(r.periodo) }))
+    .map(r => ({ ...r, label: formatPeriodo(r.periodo), variacaoMes: r.razao - r.budget }))
 
   // DRE with variacao
   const dreRows = dreGrupos.map(g => ({
@@ -1484,6 +1485,15 @@ export default function DeptDashboardPage() {
     variacao:     g.razao - g.budget,
     variacao_pct: safePct(g.razao - g.budget, g.budget),
   }))
+
+  const dreImpactRows = [...dreRows]
+    .sort((a, b) => Math.abs(b.variacao) - Math.abs(a.variacao))
+    .slice(0, 8)
+    .map((r) => ({
+      ...r,
+      label: r.dre.length > 22 ? `${r.dre.slice(0, 21)}…` : r.dre,
+    }))
+    .reverse()
 
   // ── Layout persistence ────────────────────────────────────────────────────
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1745,50 +1755,96 @@ export default function DeptDashboardPage() {
         <SortableDeptSection key="chart" id="chart" editMode={editLayout}>
           {/* Section 5 — Budget vs Realizado por Período */}
           {chartRows.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold text-gray-700">Budget vs Realizado por Período</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={chartRows} margin={{ top: 0, right: 0, left: -10, bottom: 20 }}>
-                    <CartesianGrid vertical={false} stroke="#f1f5f9" />
-                    <XAxis
-                      dataKey="label"
-                      angle={-30}
-                      textAnchor="end"
-                      tick={{ fontSize: 10, fill: '#94a3b8' }}
-                      interval={0}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tickFormatter={v => formatCurrency(Number(v)).replace('R$\u00a0', '')}
-                      tick={{ fontSize: 10, fill: '#94a3b8' }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <Tooltip
-                      contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }}
-                      labelStyle={{ color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}
-                      itemStyle={{ color: '#fff', fontWeight: 700 }}
-                      formatter={(v) => formatCurrency(Number(v))}
-                      cursor={{ fill: '#f8fafc' }}
-                    />
-                    <Bar dataKey="budget" name="Budget"    fill="#cbd5e1" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="razao"  name="Realizado" fill="#334155" radius={[3, 3, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-                <div className="flex items-center gap-4 mt-2 justify-center">
-                  {[{ color: '#cbd5e1', label: 'Budget' }, { color: '#334155', label: 'Realizado' }].map(l => (
-                    <div key={l.label} className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded-sm inline-block" style={{ background: l.color }} />
-                      <span className="text-xs text-gray-500">{l.label}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+              <Card className="xl:col-span-2">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold text-gray-700">Budget, Realizado e Desvio Mensal</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={290}>
+                    <ComposedChart data={chartRows} margin={{ top: 6, right: 16, left: -10, bottom: 10 }} barGap={6}>
+                      <CartesianGrid vertical={false} stroke="#f1f5f9" />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fontSize: 10, fill: '#94a3b8' }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        yAxisId="bars"
+                        tickFormatter={v => formatCurrency(Number(v)).replace('R$\u00a0', '')}
+                        tick={{ fontSize: 10, fill: '#94a3b8' }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        yAxisId="line"
+                        orientation="right"
+                        tickFormatter={v => formatCurrency(Number(v)).replace('R$\u00a0', '')}
+                        tick={{ fontSize: 10, fill: '#b8924a' }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <ReferenceLine yAxisId="bars" y={0} stroke="#1a1820" strokeOpacity={0.25} />
+                      <Tooltip
+                        contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }}
+                        labelStyle={{ color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}
+                        itemStyle={{ color: '#fff', fontWeight: 700 }}
+                        formatter={(v) => formatCurrency(Number(v))}
+                        cursor={{ fill: '#f8fafc' }}
+                      />
+                      <Bar yAxisId="bars" dataKey="budget" name="Budget" fill="#cbd5e1" radius={[3, 3, 0, 0]} maxBarSize={26} />
+                      <Bar yAxisId="bars" dataKey="razao" name="Realizado" fill="#334155" radius={[3, 3, 0, 0]} maxBarSize={26} />
+                      <Line yAxisId="line" type="monotone" dataKey="variacaoMes" name="Desvio Mensal" stroke="#b8924a" strokeWidth={2.2} dot={{ r: 3, fill: '#b8924a' }} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold text-gray-700">Drivers de Desvio (DRE)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={290}>
+                    <BarChart data={dreImpactRows} layout="vertical" margin={{ top: 0, right: 8, left: 0, bottom: 0 }}>
+                      <CartesianGrid horizontal={false} stroke="#f1f5f9" />
+                      <XAxis
+                        type="number"
+                        domain={([dataMin, dataMax]: [number, number]) => {
+                          const maxAbs = Math.max(Math.abs(dataMin ?? 0), Math.abs(dataMax ?? 0))
+                          return [-maxAbs, maxAbs]
+                        }}
+                        tickFormatter={v => formatCurrency(Number(v)).replace('R$\u00a0', '')}
+                        tick={{ fontSize: 10, fill: '#94a3b8' }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="label"
+                        width={96}
+                        tick={{ fontSize: 10, fill: '#64748b' }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <ReferenceLine x={0} stroke="#1a1820" strokeOpacity={0.25} />
+                      <Tooltip
+                        contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }}
+                        labelStyle={{ color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}
+                        itemStyle={{ color: '#fff', fontWeight: 700 }}
+                        formatter={(v) => formatCurrency(Number(v))}
+                      />
+                      <Bar dataKey="variacao" name="Variação" radius={[3, 3, 3, 3]}>
+                        {dreImpactRows.map((r, i) => (
+                          <Cell key={`${r.dre}-${i}`} fill={r.variacao >= 0 ? '#166534' : '#b91c1c'} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
           )}
         </SortableDeptSection>
       )
