@@ -220,15 +220,20 @@ export default function Dashboard() {
   for (const row of periodChartData) {
     ytdBudget += row.budget
     ytdRazao += row.razao
+    ;(row as Record<string, unknown>).variacaoMes = row.razao - row.budget
     ;(row as Record<string, unknown>).variacaoYtd = ytdRazao - ytdBudget
     ;(row as Record<string, unknown>).budgetYtd = ytdBudget
     ;(row as Record<string, unknown>).razaoYtd = ytdRazao
   }
 
   const deptVariance = Object.entries(byDept)
-    .map(([dept, vals]) => ({ dept, variacao: vals.razao - vals.budget }))
-    .sort((a, b) => b.variacao - a.variacao)
-    .slice(0, 10)
+    .map(([dept, vals]) => ({
+      dept,
+      variacao: vals.razao - vals.budget,
+      variacaoPct: safePct(vals.razao - vals.budget, vals.budget),
+    }))
+    .sort((a, b) => Math.abs(b.variacao) - Math.abs(a.variacao))
+    .slice(0, 12)
 
   const sortedWidgets = [...widgets].sort((a, b) => a.order - b.order)
   const isWidgetVisible = (id: WidgetId) => widgets.find(w => w.id === id)?.visible ?? true
