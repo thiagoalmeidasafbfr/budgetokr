@@ -3,7 +3,13 @@
 export type WidgetType = 'kpi' | 'bar' | 'line' | 'donut' | 'table' | 'title'
 
 export type DataSource =
-  | { kind: 'medida'; medidaId: number; medidaNome: string; viewField: 'razao' | 'budget' | 'variacao' | 'variacao_pct' }
+  | {
+      kind: 'medida'
+      medidaId: number
+      medidaNome: string
+      viewField: 'razao' | 'budget' | 'variacao' | 'variacao_pct'
+      medidaGroupBy?: 'periodo' | 'centro_custo' | 'departamento'
+    }
   | { kind: 'analise'; groupBy: 'departamento' | 'periodo'; field: 'razao' | 'budget' | 'variacao'; depts?: string[] }
   | {
       kind: 'exec_chart'
@@ -38,7 +44,8 @@ export interface WidgetConfig {
   showDelta: boolean
   colorScheme: 'default' | 'green' | 'gold' | 'blue' | 'mono'
   borderStyle: 'none' | 'subtle' | 'card'
-  showAxes: boolean
+  showAxisX: boolean
+  showAxisY: boolean
   showGrid: boolean
 }
 
@@ -58,7 +65,8 @@ export function createDefaultWidget(type: WidgetType): WidgetConfig {
     showDelta: type === 'kpi',
     colorScheme: 'default' as const,
     borderStyle: 'card' as const,
-    showAxes: true,
+    showAxisX: true,
+    showAxisY: true,
     showGrid: true,
   }
 

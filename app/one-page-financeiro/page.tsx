@@ -1,10 +1,11 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { Plus, Save, LayoutGrid } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Plus, Save, LayoutGrid, X } from 'lucide-react'
 import { YearFilter } from '@/components/YearFilter'
 import { OnePageCanvas } from '@/components/OnePageCanvas'
 import { OnePageAddWidgetModal } from '@/components/OnePageAddWidgetModal'
 import { OnePageConfigPanel } from '@/components/OnePageConfigPanel'
+import { formatPeriodo } from '@/lib/utils'
 import type { WidgetConfig } from '@/lib/one-page-types'
 
 export default function OnePageFinanceiro() {
@@ -14,8 +15,10 @@ export default function OnePageFinanceiro() {
   const [editingWidget, setEditingWidget] = useState<WidgetConfig | null>(null)
   const [allPeriodos, setAllPeriodos] = useState<string[]>([])
   const [selYear, setSelYear] = useState<string | null>('2026')
+  const [selPeriods, setSelPeriods] = useState<string[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
+  const isFirstLoad = useRef(true)
 
   // Carregar períodos disponíveis
   useEffect(() => {
@@ -30,9 +33,35 @@ export default function OnePageFinanceiro() {
           ),
         ].sort() as string[]
         setAllPeriodos(periodos)
+
+        // Auto-select YTD for the default year on first load
+        if (isFirstLoad.current) {
+          isFirstLoad.current = false
+          const year = '2026'
+          const now = new Date()
+          const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+          const curMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
+          const ytd = periodos.filter(p => p.startsWith(year) && p <= curMonth)
+          setSelPeriods(ytd.length > 0 ? ytd : periodos.filter(p => p.startsWith(year)))
+        }
       })
       .catch(() => {})
   }, [])
+
+  // When year changes, auto-select YTD months
+  useEffect(() => {
+    if (!allPeriodos.length || isFirstLoad.current) return
+    if (selYear) {
+      const now = new Date()
+      const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      const curMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
+      const ytd = allPeriodos.filter(p => p.startsWith(selYear) && p <= curMonth)
+      setSelPeriods(ytd.length > 0 ? ytd : allPeriodos.filter(p => p.startsWith(selYear)))
+    } else {
+      setSelPeriods([])
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selYear])
 
   // Carregar layout salvo
   useEffect(() => {
@@ -47,9 +76,22 @@ export default function OnePageFinanceiro() {
       .catch(() => setIsLoaded(true))
   }, [])
 
-  const filteredPeriodos = selYear
-    ? allPeriodos.filter(p => p.startsWith(selYear))
-    : allPeriodos
+  // Months available for the selected year
+  const yearPeriods = selYear ? allPeriodos.filter(p => p.startsWith(selYear)) : allPeriodos
+
+  function togglePeriod(p: string) {
+    setSelPeriods(prev =>
+      prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p].sort()
+    )
+  }
+
+  function selectAllMonths() {
+    setSelPeriods(yearPeriods)
+  }
+
+  function clearAllMonths() {
+    setSelPeriods([])
+  }
 
   const selectedWidget = widgets.find(w => w.id === selectedId) ?? null
   const configPanelOpen = selectedWidget !== null
@@ -167,6 +209,65 @@ export default function OnePageFinanceiro() {
         </button>
       </div>
 
+      {/* ── Month period selector ────────────────────────────────────────────── */}
+      {yearPeriods.length > 0 && (
+        <div
+          className="border-b px-6 py-2 flex items-center gap-2 flex-wrap"
+          style={{ backgroundColor: 'rgba(255,255,255,0.8)', borderColor: 'rgba(0,0,0,0.04)' }}
+        >
+          <span
+            style={{
+              fontFamily: "'IBM Plex Mono', monospace",
+              fontSize: 9,
+              color: '#9B6E20',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              flexShrink: 0,
+            }}
+          >
+            Períodos
+          </span>
+          <div className="flex items-center gap-1 flex-wrap">
+            {yearPeriods.map(p => {
+              const active = selPeriods.includes(p)
+              const label = formatPeriodo(p)
+              return (
+                <button
+                  key={p}
+                  onClick={() => togglePeriod(p)}
+                  className="px-2 py-0.5 rounded text-xs font-medium transition-all"
+                  style={{
+                    backgroundColor: active ? 'rgba(190,140,74,0.15)' : 'transparent',
+                    color: active ? '#9B6E20' : 'rgba(0,0,0,0.35)',
+                    border: active ? '1px solid rgba(190,140,74,0.3)' : '1px solid transparent',
+                    fontFamily: "'IBM Plex Mono', monospace",
+                    fontSize: 10,
+                  }}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+          <div className="flex gap-1 ml-1">
+            <button
+              onClick={selectAllMonths}
+              className="text-xs px-1.5 py-0.5 rounded"
+              style={{ color: '#9B6E20', fontSize: 9, fontFamily: "'IBM Plex Mono', monospace" }}
+            >
+              Todos
+            </button>
+            <button
+              onClick={clearAllMonths}
+              className="text-xs px-1.5 py-0.5 rounded"
+              style={{ color: 'rgba(0,0,0,0.35)', fontSize: 9, fontFamily: "'IBM Plex Mono', monospace" }}
+            >
+              Limpar
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Content ──────────────────────────────────────────────────────────── */}
       <div
         className="transition-all duration-300"
@@ -193,7 +294,7 @@ export default function OnePageFinanceiro() {
             <OnePageCanvas
               widgets={widgets}
               selectedId={selectedId}
-              selPeriods={filteredPeriodos}
+              selPeriods={selPeriods}
               onSelect={id => setSelectedId(prev => prev === id ? null : id)}
               onReorder={setWidgets}
               onDelete={deleteWidget}
