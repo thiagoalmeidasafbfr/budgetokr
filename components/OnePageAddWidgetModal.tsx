@@ -657,6 +657,18 @@ function Step2({
               options={MEDIDA_VIEW_FIELDS}
             />
           </div>
+          <div>
+            <FieldLabel>Agrupar por</FieldLabel>
+            <SelectInput
+              value={dataSource.medidaGroupBy ?? 'periodo'}
+              onChange={v => onChange({ ...dataSource, medidaGroupBy: v as 'periodo' | 'centro_custo' | 'departamento' })}
+              options={[
+                { value: 'periodo',       label: 'Período (série temporal)' },
+                { value: 'centro_custo',  label: 'Centro de Custo' },
+                { value: 'departamento',  label: 'Departamento' },
+              ]}
+            />
+          </div>
         </div>
       )}
     </div>
@@ -786,8 +798,12 @@ function Step3({
         {(config.type === 'bar' || config.type === 'line') && (
           <>
             <div className="flex items-center justify-between">
-              <span className="text-sm" style={{ color: '#374151' }}>Eixos</span>
-              <Toggle checked={config.showAxes !== false} onChange={v => onChange({ showAxes: v })} />
+              <span className="text-sm" style={{ color: '#374151' }}>Eixo X</span>
+              <Toggle checked={config.showAxisX !== false} onChange={v => onChange({ showAxisX: v })} />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm" style={{ color: '#374151' }}>Eixo Y</span>
+              <Toggle checked={config.showAxisY !== false} onChange={v => onChange({ showAxisY: v })} />
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm" style={{ color: '#374151' }}>Linhas de grade</span>

@@ -95,10 +95,13 @@ async function fetchWidgetData(ds: DataSource, periods: string[]): Promise<unkno
   }
 
   if (ds.kind === 'medida') {
+    const gb = ds.medidaGroupBy ?? 'periodo'
     const params = new URLSearchParams({
-      type:         'medida',
-      medidaId:     String(ds.medidaId),
-      groupByPeriod: 'true',
+      type:                'medida',
+      medidaId:            String(ds.medidaId),
+      groupByPeriod:       gb === 'periodo' ? 'true' : 'false',
+      groupByDept:         gb === 'departamento' ? 'true' : 'false',
+      groupByCentroCusto:  gb === 'centro_custo' ? 'true' : 'false',
     })
     if (periods.length) params.set('periodos', periods.join(','))
     const d = await fetch(`/api/analise?${params}`, { cache: 'no-store' }).then(r => r.json())
@@ -170,6 +173,30 @@ function toMedidaByPeriodo(raw: unknown[], viewField: string): ChartRow[] {
     .map(([periodo, value]) => ({ name: formatPeriodo(periodo), value }))
 }
 
+function toMedidaByCentroCusto(raw: unknown[], viewField: string): ChartRow[] {
+  const acc: Record<string, number> = {}
+  for (const r of raw as Array<Record<string, unknown>>) {
+    const key = String(r.nome_centro_custo ?? r.centro_custo ?? 'N/A')
+    if (!key) continue
+    acc[key] = (acc[key] ?? 0) + Number(r[viewField] ?? 0)
+  }
+  return Object.entries(acc)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
+}
+
+function toMedidaByDept(raw: unknown[], viewField: string): ChartRow[] {
+  const acc: Record<string, number> = {}
+  for (const r of raw as Array<Record<string, unknown>>) {
+    const key = String(r.nome_departamento ?? r.departamento ?? 'N/A')
+    if (!key) continue
+    acc[key] = (acc[key] ?? 0) + Number(r[viewField] ?? 0)
+  }
+  return Object.entries(acc)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
+}
+
 // ─── KPI value ────────────────────────────────────────────────────────────────
 
 function getKPIValue(config: WidgetConfig, raw: unknown[]): { value: number; delta?: number; deltaPct?: number } {
@@ -177,8 +204,15 @@ function getKPIValue(config: WidgetConfig, raw: unknown[]): { value: number; del
 
   if (ds.kind === 'summary') {
     const d = (raw[0] ?? {}) as Record<string, number>
-    const value = d[ds.field] ?? 0
-    return { value, delta: d.variacao, deltaPct: d.variacao_pct }
+    const budget = d.total_budget ?? 0
+    const razao  = d.total_razao  ?? 0
+    const variacao = razao - budget
+    const variacaoPct = budget !== 0 ? (variacao / Math.abs(budget)) * 100 : 0
+    const fieldMap: Record<string, number> = {
+      budget_ytd: budget, razao_ytd: razao,
+      variacao: variacao, variacao_pct: variacaoPct,
+    }
+    return { value: fieldMap[ds.field] ?? 0, delta: variacao, deltaPct: variacaoPct }
   }
 
   if (ds.kind === 'exec_chart') {
@@ -313,12 +347,19 @@ function KPIWidget({ config, raw }: { config: WidgetConfig; raw: unknown[] }) {
 function BarWidget({ config, raw }: { config: WidgetConfig; raw: unknown[] }) {
   const ds = config.dataSource
   const colors = getPalette(config.colorScheme)
-  const showAxes = config.showAxes !== false
+  const showAxisX = config.showAxisX !== false
+  const showAxisY = config.showAxisY !== false
   const showGrid = config.showGrid !== false
 
   const chartData = (() => {
     if (ds.kind === 'exec_chart') return toExecChartRows(raw).slice(0, 12)
     if (ds.kind === 'analise')    return toAnaliseByDept(raw, ds.field).slice(0, 12)
+    if (ds.kind === 'medida') {
+      const gb = ds.medidaGroupBy ?? 'periodo'
+      if (gb === 'centro_custo') return toMedidaByCentroCusto(raw, ds.viewField).slice(0, 12)
+      if (gb === 'departamento') return toMedidaByDept(raw, ds.viewField).slice(0, 12)
+      return toMedidaByPeriodo(raw, ds.viewField).slice(0, 12)
+    }
     return (raw as ChartRow[]).slice(0, 12)
   })()
   // use absolute values for chart display
@@ -336,7 +377,7 @@ function BarWidget({ config, raw }: { config: WidgetConfig; raw: unknown[] }) {
       <ResponsiveContainer width="100%" height={chartH}>
         <BarChart data={absData} margin={{ top: 14, right: 8, left: -10, bottom: 24 }}>
           {showGrid && <CartesianGrid vertical={false} stroke="#F0EDE8" strokeWidth={0.5} />}
-          {showAxes && (
+          {showAxisX && (
             <XAxis
               dataKey="name"
               tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }}
@@ -348,7 +389,7 @@ function BarWidget({ config, raw }: { config: WidgetConfig; raw: unknown[] }) {
               tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 11) + '…' : v}
             />
           )}
-          {showAxes && (
+          {showAxisY && (
             <YAxis
               tickFormatter={tickFmt}
               tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }}
@@ -372,13 +413,19 @@ function BarWidget({ config, raw }: { config: WidgetConfig; raw: unknown[] }) {
 function LineWidget({ config, raw }: { config: WidgetConfig; raw: unknown[] }) {
   const ds = config.dataSource
   const colors = getPalette(config.colorScheme)
-  const showAxes = config.showAxes !== false
+  const showAxisX = config.showAxisX !== false
+  const showAxisY = config.showAxisY !== false
   const showGrid = config.showGrid !== false
   const areaColor = colors[0]
 
   const chartData = (() => {
     if (ds.kind === 'analise') return toAnaliseByPeriodo(raw, ds.field)
-    if (ds.kind === 'medida')  return toMedidaByPeriodo(raw, ds.viewField)
+    if (ds.kind === 'medida') {
+      const gb = ds.medidaGroupBy ?? 'periodo'
+      if (gb === 'centro_custo') return toMedidaByCentroCusto(raw, ds.viewField)
+      if (gb === 'departamento') return toMedidaByDept(raw, ds.viewField)
+      return toMedidaByPeriodo(raw, ds.viewField)
+    }
     if (ds.kind === 'exec_chart') return toExecChartRows(raw)
     return (raw as ChartRow[])
   })()
@@ -395,7 +442,7 @@ function LineWidget({ config, raw }: { config: WidgetConfig; raw: unknown[] }) {
       <ResponsiveContainer width="100%" height={chartH}>
         <AreaChart data={chartData} margin={{ top: 14, right: 8, left: -10, bottom: 24 }}>
           {showGrid && <CartesianGrid vertical={false} stroke="#F0EDE8" strokeWidth={0.5} />}
-          {showAxes && (
+          {showAxisX && (
             <XAxis
               dataKey="name"
               tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }}
@@ -403,7 +450,7 @@ function LineWidget({ config, raw }: { config: WidgetConfig; raw: unknown[] }) {
               tickLine={false}
             />
           )}
-          {showAxes && (
+          {showAxisY && (
             <YAxis
               tickFormatter={tickFmt}
               tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }}
@@ -438,6 +485,12 @@ function DonutWidget({ config, raw }: { config: WidgetConfig; raw: unknown[] }) 
   const chartData = (() => {
     if (ds.kind === 'exec_chart') return toExecChartRows(raw).slice(0, 8)
     if (ds.kind === 'analise')    return toAnaliseByDept(raw, ds.field).slice(0, 8)
+    if (ds.kind === 'medida') {
+      const gb = ds.medidaGroupBy ?? 'periodo'
+      if (gb === 'centro_custo') return toMedidaByCentroCusto(raw, ds.viewField).slice(0, 8)
+      if (gb === 'departamento') return toMedidaByDept(raw, ds.viewField).slice(0, 8)
+      return toMedidaByPeriodo(raw, ds.viewField).slice(0, 8)
+    }
     return (raw as ChartRow[]).slice(0, 8)
   })()
   const absData = chartData.map(r => ({ ...r, absValue: Math.abs(r.value) }))
@@ -507,9 +560,15 @@ function TableWidget({ config, raw }: { config: WidgetConfig; raw: unknown[] }) 
   const ds = config.dataSource
 
   const rows = (() => {
-    if (ds.kind === 'exec_chart') return toExecChartRows(raw).slice(0, 8)
-    if (ds.kind === 'analise')    return toAnaliseByDept(raw, ds.field).slice(0, 8)
-    return (raw as ChartRow[]).slice(0, 8)
+    if (ds.kind === 'exec_chart') return toExecChartRows(raw).slice(0, 20)
+    if (ds.kind === 'analise')    return toAnaliseByDept(raw, ds.field).slice(0, 20)
+    if (ds.kind === 'medida') {
+      const gb = ds.medidaGroupBy ?? 'periodo'
+      if (gb === 'centro_custo') return toMedidaByCentroCusto(raw, ds.viewField).slice(0, 20)
+      if (gb === 'departamento') return toMedidaByDept(raw, ds.viewField).slice(0, 20)
+      return toMedidaByPeriodo(raw, ds.viewField).slice(0, 20)
+    }
+    return (raw as ChartRow[]).slice(0, 20)
   })()
 
   const tableH = config.h * 80 - 50

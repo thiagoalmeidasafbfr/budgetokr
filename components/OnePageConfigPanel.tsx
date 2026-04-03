@@ -389,9 +389,14 @@ export function OnePageConfigPanel({
           {(widget.type === 'bar' || widget.type === 'line') && (
             <>
               <PanelToggle
-                label="Eixos"
-                checked={widget.showAxes !== false}
-                onChange={v => onUpdate({ showAxes: v })}
+                label="Eixo X"
+                checked={widget.showAxisX !== false}
+                onChange={v => onUpdate({ showAxisX: v })}
+              />
+              <PanelToggle
+                label="Eixo Y"
+                checked={widget.showAxisY !== false}
+                onChange={v => onUpdate({ showAxisY: v })}
               />
               <PanelToggle
                 label="Linhas de grade"
