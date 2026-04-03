@@ -32,24 +32,31 @@ const SCHEMES: Record<string, string[]> = {
 // ─── Data helpers ─────────────────────────────────────────────────────────────
 
 async function fetchWidgetData(ds: DataSource, periods: string[]): Promise<unknown[]> {
-  const pp = periods.length ? `&periodos=${encodeURIComponent(periods.join(','))}` : ''
-
   if (ds.kind === 'summary') {
     const d = await fetch('/api/analise?type=summary', { cache: 'no-store' }).then(r => r.json())
     return [d]
   }
 
   if (ds.kind === 'exec_chart') {
+    // When filtering by unidade de negócio, fetch all units and filter client-side
+    const filteringByUnidade = (ds.filterUnidades?.length ?? 0) > 0
     const params = new URLSearchParams({
-      groupBy: ds.groupBy,
+      groupBy: filteringByUnidade ? 'unidade_negocio' : ds.groupBy,
       field:   ds.field,
-      topN:    String(ds.topN),
+      topN:    filteringByUnidade ? '50' : String(ds.topN),
     })
-    if (periods.length)     params.set('periodos', periods.join(','))
-    if (ds.depts?.length)   params.set('depts',    ds.depts.join(','))
-    if (ds.centros?.length) params.set('centros',  ds.centros.join(','))
+    if (ds.sortOrder)               params.set('sortOrder',     ds.sortOrder)
+    if (periods.length)             params.set('periodos',      periods.join(','))
+    if (ds.filterDepts?.length)     params.set('departamentos', ds.filterDepts.join(','))
+    if (ds.filterDreGroup)          params.set('dreGroup',      ds.filterDreGroup)
     const d = await fetch(`/api/exec-chart?${params}`, { cache: 'no-store' }).then(r => r.json())
-    return Array.isArray(d?.items) ? d.items : []
+    let items: { name: string; value: number; budget: number; razao: number }[] =
+      Array.isArray(d?.items) ? d.items : []
+    // Filter by unidade client-side if needed
+    if (filteringByUnidade) {
+      items = items.filter(r => ds.filterUnidades!.includes(r.name))
+    }
+    return items
   }
 
   if (ds.kind === 'analise') {
@@ -67,7 +74,7 @@ async function fetchWidgetData(ds: DataSource, periods: string[]): Promise<unkno
       groupByPeriod: 'true',
     })
     if (periods.length) params.set('periodos', periods.join(','))
-    const d = await fetch(`/api/analise?${params}${pp ? '' : ''}`, { cache: 'no-store' }).then(r => r.json())
+    const d = await fetch(`/api/analise?${params}`, { cache: 'no-store' }).then(r => r.json())
     return Array.isArray(d) ? d : []
   }
 

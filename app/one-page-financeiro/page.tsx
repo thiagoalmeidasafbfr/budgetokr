@@ -211,6 +211,7 @@ export default function OnePageFinanceiro() {
         onDelete={() => { if (selectedId) deleteWidget(selectedId) }}
         onDuplicate={() => { if (selectedId) duplicateWidget(selectedId) }}
         onChangeSource={handleChangeSource}
+        onOpenEditModal={handleChangeSource}
       />
 
       {/* ── Add / Edit modal ─────────────────────────────────────────────────── */}

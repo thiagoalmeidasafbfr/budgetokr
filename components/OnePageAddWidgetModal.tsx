@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { X, BarChart2, TrendingUp, PieChart, Table2, Type, Gauge, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X, BarChart2, TrendingUp, PieChart, Table2, Type, Gauge, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react'
 import type { WidgetConfig, WidgetType, DataSource } from '@/lib/one-page-types'
 import { createDefaultWidget } from '@/lib/one-page-types'
 
@@ -51,6 +51,102 @@ const MEDIDA_VIEW_FIELDS = [
   { value: 'variacao',     label: 'Variação' },
   { value: 'variacao_pct', label: 'Variação %' },
 ]
+
+// ─── MultiSelectCheckbox ─────────────────────────────────────────────────────
+
+function MultiSelectCheckbox({
+  options,
+  selected,
+  onChange,
+  placeholder,
+}: {
+  options: string[]
+  selected: string[]
+  onChange: (v: string[]) => void
+  placeholder: string
+}) {
+  const [search, setSearch] = useState('')
+  const [expanded, setExpanded] = useState(false)
+  const filtered = options.filter(o => o.toLowerCase().includes(search.toLowerCase()))
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setExpanded(prev => !prev)}
+        className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm text-left"
+        style={{
+          border: '1px solid rgba(0,0,0,0.12)',
+          backgroundColor: 'white',
+          color: selected.length ? '#0f172a' : 'rgba(0,0,0,0.35)',
+        }}
+      >
+        <span className="truncate">
+          {selected.length === 0
+            ? placeholder
+            : selected.length === 1
+            ? selected[0]
+            : `${selected.length} selecionados`}
+        </span>
+        <ChevronDown size={12} style={{ flexShrink: 0, color: 'rgba(0,0,0,0.35)' }} />
+      </button>
+
+      {expanded && (
+        <div
+          className="absolute left-0 right-0 mt-1 rounded-xl overflow-hidden shadow-lg z-20"
+          style={{ border: '1px solid rgba(0,0,0,0.1)', backgroundColor: 'white', maxHeight: 200, overflowY: 'auto' }}
+        >
+          <div
+            className="sticky top-0 p-2"
+            style={{ backgroundColor: 'white', borderBottom: '1px solid rgba(0,0,0,0.06)' }}
+          >
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar..."
+              className="w-full px-2 py-1.5 text-xs rounded-lg"
+              style={{ border: '1px solid rgba(0,0,0,0.10)', outline: 'none' }}
+              onClick={e => e.stopPropagation()}
+            />
+          </div>
+          {filtered.map(opt => {
+            const isSel = selected.includes(opt)
+            return (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => onChange(isSel ? selected.filter(s => s !== opt) : [...selected, opt])}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-gray-50"
+                style={{ color: isSel ? '#be8c4a' : '#374151' }}
+              >
+                <div
+                  className="w-3.5 h-3.5 rounded flex items-center justify-center flex-shrink-0"
+                  style={{
+                    border: isSel ? 'none' : '1.5px solid rgba(0,0,0,0.2)',
+                    backgroundColor: isSel ? '#be8c4a' : 'transparent',
+                  }}
+                >
+                  {isSel && (
+                    <svg viewBox="0 0 10 10" fill="none" width="8" height="8">
+                      <path d="M1.5 5L4 7.5L8.5 2.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
+                  )}
+                </div>
+                {opt}
+              </button>
+            )
+          })}
+          {filtered.length === 0 && (
+            <p className="text-xs px-3 py-4 text-center" style={{ color: 'rgba(0,0,0,0.35)' }}>
+              Nenhum resultado
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
 
@@ -224,7 +320,14 @@ function Step2({
   dataSource: DataSource
   onChange: (ds: DataSource) => void
 }) {
-  const [medidas, setMedidas] = useState<MedidaOption[]>([])
+  const [medidas,          setMedidas]          = useState<MedidaOption[]>([])
+  const [departamentos,    setDepartamentos]    = useState<string[]>([])
+  const [dreGroupOptions,  setDreGroupOptions]  = useState<string[]>([])
+  const [unidadeOptions,   setUnidadeOptions]   = useState<string[]>([])
+  const [filtersExpanded,  setFiltersExpanded]  = useState(
+    dataSource.kind === 'exec_chart' &&
+    !!(dataSource.filterDepts?.length || dataSource.filterDreGroup || dataSource.filterUnidades?.length)
+  )
   const [sourceKind, setSourceKind] = useState<SourceKind>(
     (dataSource.kind === 'static' ? 'summary' : dataSource.kind) as SourceKind
   )
@@ -235,6 +338,26 @@ function Step2({
       .then(data => {
         if (Array.isArray(data)) setMedidas(data.map((m: { id: number; nome: string }) => ({ id: m.id, nome: m.nome })))
       })
+      .catch(() => {})
+
+    fetch('/api/analise?type=distinct&col=nome_departamento', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => setDepartamentos(Array.isArray(d) ? d.filter(Boolean).sort() : []))
+      .catch(() => {})
+
+    fetch('/api/dimensoes?type=unidades', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        const units = Array.isArray(d)
+          ? [...new Set(d.map((u: { unidade: string }) => u.unidade).filter(Boolean))].sort()
+          : []
+        setUnidadeOptions(units as string[])
+      })
+      .catch(() => {})
+
+    fetch('/api/exec-chart?groupBy=dre&topN=1', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => setDreGroupOptions(Array.isArray(d?.dreGroups) ? (d.dreGroups as string[]).sort() : []))
       .catch(() => {})
   }, [])
 
@@ -260,7 +383,7 @@ function Step2({
   function applyKind(kind: SourceKind) {
     setSourceKind(kind)
     if (kind === 'summary') onChange({ kind: 'summary', field: 'razao_ytd' })
-    if (kind === 'exec_chart') onChange({ kind: 'exec_chart', groupBy: 'dre', field: 'razao', topN: 8 })
+    if (kind === 'exec_chart') onChange({ kind: 'exec_chart', groupBy: 'dre', field: 'razao', topN: 8, sortOrder: 'desc' })
     if (kind === 'analise') onChange({ kind: 'analise', groupBy: widgetType === 'line' ? 'periodo' : 'departamento', field: 'razao' })
     if (kind === 'medida') {
       const first = medidas[0]
@@ -334,6 +457,111 @@ function Step2({
               <FieldLabel>Top N</FieldLabel>
               <NumberInput value={dataSource.topN} onChange={v => onChange({ ...dataSource, topN: v })} min={2} max={20} />
             </div>
+          </div>
+
+          {/* ── Filtros Avançados ── */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setFiltersExpanded(prev => !prev)}
+              className="flex items-center gap-1.5 text-xs font-medium"
+              style={{ color: filtersExpanded ? '#be8c4a' : 'rgba(0,0,0,0.45)' }}
+            >
+              <SlidersHorizontal size={12} />
+              Filtros avançados
+              {(dataSource.filterDepts?.length || dataSource.filterDreGroup || dataSource.filterUnidades?.length) ? (
+                <span
+                  className="px-1.5 py-0.5 rounded-full"
+                  style={{ backgroundColor: 'rgba(190,140,74,0.15)', color: '#be8c4a', fontSize: 10 }}
+                >
+                  {(dataSource.filterDepts?.length ?? 0) +
+                    (dataSource.filterUnidades?.length ?? 0) +
+                    (dataSource.filterDreGroup ? 1 : 0)}{' '}
+                  ativo(s)
+                </span>
+              ) : null}
+              {filtersExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            </button>
+
+            {filtersExpanded && (
+              <div
+                className="mt-3 space-y-3 p-3 rounded-xl"
+                style={{
+                  backgroundColor: 'rgba(190,140,74,0.04)',
+                  border: '1px solid rgba(190,140,74,0.15)',
+                }}
+              >
+                {/* Departamentos */}
+                <div>
+                  <FieldLabel>Departamentos (opcional)</FieldLabel>
+                  <p className="mb-1.5" style={{ fontSize: 11, color: 'rgba(0,0,0,0.4)' }}>
+                    Limita aos centros de custo desses departamentos
+                  </p>
+                  <MultiSelectCheckbox
+                    options={departamentos}
+                    selected={dataSource.filterDepts ?? []}
+                    onChange={v => onChange({ ...dataSource, filterDepts: v })}
+                    placeholder="Todos os departamentos"
+                  />
+                </div>
+
+                {/* Linha DRE */}
+                <div>
+                  <FieldLabel>Linha DRE (opcional)</FieldLabel>
+                  <p className="mb-1.5" style={{ fontSize: 11, color: 'rgba(0,0,0,0.4)' }}>
+                    Limita às contas contábeis dessa linha DRE
+                  </p>
+                  <select
+                    value={dataSource.filterDreGroup ?? ''}
+                    onChange={e =>
+                      onChange({ ...dataSource, filterDreGroup: e.target.value || undefined })
+                    }
+                    className="w-full rounded-lg px-3 py-2 text-sm"
+                    style={{ border: '1px solid rgba(0,0,0,0.12)', color: '#0f172a', backgroundColor: 'white' }}
+                  >
+                    <option value="">Todas as linhas DRE</option>
+                    {dreGroupOptions.map(g => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Unidades de Negócio — só quando não estamos agrupando por unidade */}
+                {dataSource.groupBy !== 'unidade_negocio' && (
+                  <div>
+                    <FieldLabel>Unidades de Negócio (opcional)</FieldLabel>
+                    <p className="mb-1.5" style={{ fontSize: 11, color: 'rgba(0,0,0,0.4)' }}>
+                      Filtra pelos centros de custo vinculados a essas unidades
+                    </p>
+                    <MultiSelectCheckbox
+                      options={unidadeOptions}
+                      selected={dataSource.filterUnidades ?? []}
+                      onChange={v => onChange({ ...dataSource, filterUnidades: v })}
+                      placeholder="Todas as unidades"
+                    />
+                  </div>
+                )}
+
+                {/* Limpar filtros */}
+                {(dataSource.filterDepts?.length || dataSource.filterDreGroup || dataSource.filterUnidades?.length) ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onChange({
+                        ...dataSource,
+                        filterDepts: [],
+                        filterDreGroup: undefined,
+                        filterUnidades: [],
+                      })
+                    }
+                    className="text-xs"
+                    style={{ color: '#dc2626' }}
+                  >
+                    Limpar todos os filtros
+                  </button>
+                ) : null}
+              </div>
+            )}
           </div>
         </div>
       )}
