@@ -62,17 +62,23 @@ export default function MedidasPage() {
   const [loading,      setLoading]      = useState(false)
   const [error,        setError]        = useState<string | null>(null)
   const [allDepts,     setAllDepts]     = useState<string[]>([])
-  const [dreGroups,    setDreGroups]    = useState<string[]>([])
+  const [dreLinhas,    setDreLinhas]    = useState<{ nome: string; formula_grupos: string }[]>([])
   const [quickNum,     setQuickNum]     = useState('')
   const [quickDen,     setQuickDen]     = useState('')
 
   useEffect(() => { loadMedidas() }, [])
   useEffect(() => {
     fetch('/api/analise?type=distinct&col=nome_departamento').then(r => r.json()).then(d => setAllDepts(Array.isArray(d) ? d : []))
-    fetch('/api/exec-chart?groupBy=dre&topN=1', { cache: 'no-store' })
+    fetch('/api/dre?type=linhas', { cache: 'no-store' })
       .then(r => r.json())
       .then(d => {
-        if (Array.isArray(d?.dreGroups)) setDreGroups((d.dreGroups as string[]).sort())
+        if (Array.isArray(d)) {
+          const subtotals = d.filter((l: { tipo: string }) => l.tipo === 'subtotal')
+          setDreLinhas(subtotals.map((l: { nome: string; formula_grupos: string }) => ({
+            nome: l.nome,
+            formula_grupos: l.formula_grupos,
+          })))
+        }
       })
       .catch(() => {})
   }, [])
@@ -321,7 +327,7 @@ export default function MedidasPage() {
             {form.tipo_medida === 'ratio' && (
               <div className="space-y-4">
                 {/* DRE Quick Setup */}
-                {dreGroups.length > 0 && (
+                {dreLinhas.length > 0 && (
                   <div
                     className="rounded-xl p-3 space-y-2"
                     style={{ backgroundColor: 'rgba(190,140,74,0.06)', border: '1px solid rgba(190,140,74,0.2)' }}
@@ -330,7 +336,7 @@ export default function MedidasPage() {
                       ⚡ Atalho: Margem DRE
                     </p>
                     <p className="text-xs" style={{ color: 'rgba(0,0,0,0.5)' }}>
-                      Selecione dois grupos DRE para gerar os filtros automaticamente (ex: Gross Profit ÷ Net Revenue)
+                      Selecione duas linhas DRE para gerar os filtros automaticamente (ex: Gross Profit ÷ Net Revenue)
                     </p>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
@@ -341,7 +347,7 @@ export default function MedidasPage() {
                           className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none"
                         >
                           <option value="">Selecione…</option>
-                          {dreGroups.map(g => <option key={g} value={g}>{g}</option>)}
+                          {dreLinhas.map(l => <option key={l.nome} value={l.nome}>{l.nome}</option>)}
                         </select>
                       </div>
                       <div>
@@ -352,7 +358,7 @@ export default function MedidasPage() {
                           className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none"
                         >
                           <option value="">Selecione…</option>
-                          {dreGroups.map(g => <option key={g} value={g}>{g}</option>)}
+                          {dreLinhas.map(l => <option key={l.nome} value={l.nome}>{l.nome}</option>)}
                         </select>
                       </div>
                     </div>
@@ -360,10 +366,23 @@ export default function MedidasPage() {
                       type="button"
                       disabled={!quickNum || !quickDen}
                       onClick={() => {
+                        const numLinha = dreLinhas.find(l => l.nome === quickNum)
+                        const denLinha = dreLinhas.find(l => l.nome === quickDen)
+                        const toGroups = (linha: { formula_grupos: string }) => {
+                          try {
+                            const arr = JSON.parse(linha.formula_grupos) as string[]
+                            return arr.filter(Boolean).join(', ')
+                          } catch {
+                            return linha.formula_grupos
+                          }
+                        }
+                        if (!numLinha || !denLinha) return
+                        const numVal = toGroups(numLinha)
+                        const denVal = toGroups(denLinha)
                         setForm(f => ({
                           ...f,
-                          filtros: [{ column: 'dre' as FilterColumn, operator: '=' as FilterOperator, value: quickNum, logic: 'AND' as const }],
-                          denominador_filtros: [{ column: 'dre' as FilterColumn, operator: '=' as FilterOperator, value: quickDen, logic: 'AND' as const }],
+                          filtros: [{ column: 'dre' as FilterColumn, operator: (numVal.includes(',') ? 'in' : '=') as FilterOperator, value: numVal, logic: 'AND' as const }],
+                          denominador_filtros: [{ column: 'dre' as FilterColumn, operator: (denVal.includes(',') ? 'in' : '=') as FilterOperator, value: denVal, logic: 'AND' as const }],
                         }))
                       }}
                       className="px-3 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-40"

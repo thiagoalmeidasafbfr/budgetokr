@@ -398,6 +398,11 @@ export function OnePageConfigPanel({
                 checked={widget.showGrid !== false}
                 onChange={v => onUpdate({ showGrid: v })}
               />
+              <PanelToggle
+                label="Rótulos de dados"
+                checked={widget.showDataLabels}
+                onChange={v => onUpdate({ showDataLabels: v })}
+              />
             </>
           )}
         </PanelSection>

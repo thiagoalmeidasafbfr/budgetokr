@@ -793,6 +793,10 @@ function Step3({
               <span className="text-sm" style={{ color: '#374151' }}>Linhas de grade</span>
               <Toggle checked={config.showGrid !== false} onChange={v => onChange({ showGrid: v })} />
             </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm" style={{ color: '#374151' }}>Rótulos de dados</span>
+              <Toggle checked={config.showDataLabels} onChange={v => onChange({ showDataLabels: v })} />
+            </div>
           </>
         )}
       </div>
