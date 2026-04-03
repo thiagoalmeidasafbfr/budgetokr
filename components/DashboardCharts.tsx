@@ -1,12 +1,24 @@
 'use client'
 import React from 'react'
 import {
-  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, ReferenceLine,
-  Tooltip, ResponsiveContainer, Legend, TooltipProps,
-  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
+  ComposedChart,
+  Bar,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  ReferenceLine,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+  TooltipProps,
+  RadialBarChart,
+  RadialBar,
+  BarChart,
+  Cell,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, formatPct, safePct } from '@/lib/utils'
 
 interface PeriodData {
   raw: string; periodo: string; budget: number; razao: number
@@ -16,8 +28,10 @@ interface DeptData { dept: string; variacao: number }
 
 const C = {
   budget: '#D9D4CC',
-  razao:  '#1A1820',
-  line:   '#B8924A',
+  razao: '#1A1820',
+  line: '#B8924A',
+  pos: '#166534',
+  neg: '#B91C1C',
 }
 
 const tickStyle = { fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }
@@ -42,13 +56,13 @@ function PeriodTooltip({ active, payload, label }: TooltipProps<number, string>)
   )
 }
 
-function RadarTooltip({ active, payload }: TooltipProps<number, string>) {
+function DeptTooltip({ active, payload }: TooltipProps<number, string>) {
   if (!active || !payload?.length) return null
-  const d = payload[0].payload
+  const d = payload[0].payload as { dept: string; variacao: number }
   return (
     <div style={{ background: '#1A1820', borderRadius: 4, padding: '8px 12px', border: '0.5px solid rgba(184,146,74,0.2)' }}>
       <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: '#B8924A', opacity: 0.7, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>{d.dept}</p>
-      <p style={{ fontFamily: "'Big Shoulders Display', sans-serif", fontWeight: 900, fontSize: 16, color: '#fff', letterSpacing: '-0.01em' }}>{formatCurrency(d.raw)}</p>
+      <p style={{ fontFamily: "'Big Shoulders Display', sans-serif", fontWeight: 900, fontSize: 16, color: '#fff', letterSpacing: '-0.01em' }}>{formatCurrency(d.variacao)}</p>
     </div>
   )
 }
@@ -56,32 +70,34 @@ function RadarTooltip({ active, payload }: TooltipProps<number, string>) {
 const tickFmt = (v: number) => {
   const a = Math.abs(v)
   if (a >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`
-  if (a >= 1_000)     return `${(v / 1_000).toFixed(0)}K`
+  if (a >= 1_000) return `${(v / 1_000).toFixed(0)}K`
   return String(v)
 }
 
-export default function DashboardCharts({ periodChartData, deptVariance }: {
+const shortDept = (name: string) => name.length > 20 ? `${name.slice(0, 19)}…` : name
+
+export default function DashboardCharts({ periodChartData, deptVariance, totalBudget, totalRealizado }: {
   periodChartData: PeriodData[]
   deptVariance: DeptData[]
+  totalBudget: number
+  totalRealizado: number
 }) {
-  const positives = deptVariance
-    .filter(d => d.variacao > 0)
-    .sort((a, b) => b.variacao - a.variacao)
-    .slice(0, 8)
+  const execPct = safePct(totalRealizado, totalBudget)
+  const gaugeValue = Math.max(0, Math.min(execPct, 180))
 
-  const maxVar = positives.length > 0 ? positives[0].variacao : 1
-  const radarData = positives.map(d => ({
-    dept: d.dept.length > 13 ? d.dept.slice(0, 12) + '…' : d.dept,
-    // raiz quadrada para distribuir melhor valores muito dispersos
-    value: Math.round(Math.sqrt(d.variacao / maxVar) * 100),
-    raw: d.variacao,
-  }))
+  const rankedVariance = [...deptVariance]
+    .sort((a, b) => Math.abs(b.variacao) - Math.abs(a.variacao))
+    .slice(0, 8)
+    .map((d) => ({
+      ...d,
+      dept: shortDept(d.dept),
+      color: d.variacao >= 0 ? C.pos : C.neg,
+    }))
+    .reverse()
 
   return (
-    <div className="flex gap-4 items-stretch">
-
-      {/* Period chart — 2/3 */}
-      <div style={{ flex: 2 }}>
+    <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-stretch">
+      <div className="xl:col-span-2">
         <Card className="overflow-hidden h-full">
           <CardHeader className="pb-2" style={{ borderBottom: '0.5px solid #E4DFD5' }}>
             <CardTitle>Variação YTD por Período</CardTitle>
@@ -103,8 +119,8 @@ export default function DashboardCharts({ periodChartData, deptVariance }: {
                   wrapperStyle={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, paddingTop: 10, color: '#94a3b8' }}
                 />
                 <ReferenceLine yAxisId="bars" y={0} stroke="#1A1820" strokeWidth={1.5} strokeOpacity={0.25} />
-                <Bar yAxisId="bars" dataKey="budget"     name="Budget"       fill={C.budget} radius={[2,2,0,0]} maxBarSize={22} />
-                <Bar yAxisId="bars" dataKey="razao"      name="Realizado"    fill={C.razao}  radius={[2,2,0,0]} maxBarSize={22} />
+                <Bar yAxisId="bars" dataKey="budget" name="Budget" fill={C.budget} radius={[2, 2, 0, 0]} maxBarSize={22} />
+                <Bar yAxisId="bars" dataKey="razao" name="Realizado" fill={C.razao} radius={[2, 2, 0, 0]} maxBarSize={22} />
                 <Line yAxisId="line" type="monotone" dataKey="variacaoYtd" name="Variação YTD"
                   stroke={C.line} strokeWidth={2.5}
                   dot={{ r: 3, fill: C.line, stroke: '#fff', strokeWidth: 2 }}
@@ -115,48 +131,73 @@ export default function DashboardCharts({ periodChartData, deptVariance }: {
         </Card>
       </div>
 
-      {/* Radar chart — 1/3 */}
-      <div className="flex-1">
+      <div className="xl:col-span-1 grid grid-rows-2 gap-4">
         <Card className="overflow-hidden h-full">
           <CardHeader className="pb-2" style={{ borderBottom: '0.5px solid #E4DFD5' }}>
-            <CardTitle>Departamentos em Alta</CardTitle>
+            <CardTitle>Termômetro de Execução</CardTitle>
             <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#B8924A', opacity: 0.55, marginTop: 6 }}>
-              Variação positiva · Quanto maior, melhor
+              Realizado / Budget no recorte atual
             </p>
           </CardHeader>
-          <CardContent className="pt-2 pb-3">
-            {radarData.length === 0 ? (
-              <div className="h-[270px] flex items-center justify-center">
+          <CardContent className="pt-3 pb-2">
+            <div className="h-[190px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadialBarChart
+                  innerRadius="70%"
+                  outerRadius="100%"
+                  data={[{ name: 'Execução', value: gaugeValue }]}
+                  startAngle={210}
+                  endAngle={-30}
+                  barSize={16}
+                >
+                  <RadialBar background dataKey="value" cornerRadius={8} fill={execPct <= 100 ? C.pos : C.line} />
+                </RadialBarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="-mt-10 text-center">
+              <p style={{ fontFamily: "'Big Shoulders Display', sans-serif", fontWeight: 900, fontSize: '2.1rem', lineHeight: 1, color: '#1A1820' }}>
+                {formatPct(execPct)}
+              </p>
+              <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', color: '#9B6E20', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                margem vs budget: {formatPct(safePct(totalRealizado - totalBudget, totalBudget))}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-hidden h-full">
+          <CardHeader className="pb-2" style={{ borderBottom: '0.5px solid #E4DFD5' }}>
+            <CardTitle>Top Impacto por Departamento</CardTitle>
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#B8924A', opacity: 0.55, marginTop: 6 }}>
+              Ganhos e perdas mais relevantes
+            </p>
+          </CardHeader>
+          <CardContent className="pt-3 pb-2">
+            {rankedVariance.length === 0 ? (
+              <div className="h-[190px] flex items-center justify-center">
                 <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: '#B8924A', opacity: 0.35, letterSpacing: '0.15em', textTransform: 'uppercase' }}>
-                  Sem variações positivas
+                  Sem variações para exibir
                 </p>
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={290}>
-                <RadarChart data={radarData} margin={{ top: 12, right: 24, bottom: 12, left: 24 }}>
-                  <PolarGrid stroke="#E4DFD5" strokeWidth={0.5} />
-                  <PolarAngleAxis
-                    dataKey="dept"
-                    tick={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 8, fill: '#475569' }}
-                  />
-                  <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-                  <Radar
-                    name="Variação"
-                    dataKey="value"
-                    stroke="#1A1820"
-                    strokeWidth={1.5}
-                    fill="#B8924A"
-                    fillOpacity={0.15}
-                    dot={{ r: 3, fill: '#1A1820', stroke: '#fff', strokeWidth: 1.5 }}
-                  />
-                  <Tooltip content={<RadarTooltip />} />
-                </RadarChart>
+              <ResponsiveContainer width="100%" height={190}>
+                <BarChart data={rankedVariance} layout="vertical" margin={{ top: 4, right: 10, left: 4, bottom: 4 }}>
+                  <CartesianGrid horizontal={false} stroke="#F5F2EC" strokeWidth={0.5} />
+                  <XAxis type="number" tick={tickStyle} tickFormatter={tickFmt} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="dept" width={82} tick={{ ...tickStyle, fill: '#475569' }} axisLine={false} tickLine={false} />
+                  <Tooltip content={<DeptTooltip />} cursor={{ fill: 'rgba(184,146,74,0.04)' }} />
+                  <ReferenceLine x={0} stroke="#1A1820" strokeOpacity={0.2} />
+                  <Bar dataKey="variacao" radius={[3, 3, 3, 3]}>
+                    {rankedVariance.map((entry, idx) => (
+                      <Cell key={`${entry.dept}-${idx}`} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
             )}
           </CardContent>
         </Card>
       </div>
-
     </div>
   )
 }
