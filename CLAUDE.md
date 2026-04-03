@@ -37,11 +37,30 @@ middleware.ts - Middleware de autenticação
 
 ## Arquivos grandes — atenção ao contexto
 
-Leia apenas as partes necessárias desses arquivos:
-- `app/dept/page.tsx` — 2.075 linhas
-- `app/dre/page.tsx` — 1.476 linhas
-- `lib/query.ts` — 622 linhas
-- `components/DreDetalhamentoModal.tsx` — 692 linhas
+**NUNCA leia esses arquivos inteiros.** Use sempre `Grep` para localizar o trecho exato antes de usar `Read` com `offset` e `limit`:
+
+| Arquivo | Linhas |
+|---|---|
+| `app/dept/page.tsx` | ~2.160 |
+| `app/dre-gerencial/page.tsx` | ~1.863 |
+| `app/dre/page.tsx` | ~1.518 |
+| `components/ExecCharts.tsx` | ~1.050 |
+| `app/analise/page.tsx` | ~956 |
+| `app/admin/users/page.tsx` | ~847 |
+| `app/unidades-negocio/page.tsx` | ~658 |
+| `lib/query.ts` | ~623 |
+| `app/medidas/page.tsx` | ~575 |
+| `app/plano-contas/page.tsx` | ~563 |
+| `app/one-page-financeiro/page.tsx` | ~537 |
+| `app/por-unidade/page.tsx` | ~533 |
+| `app/admin/comments/page.tsx` | ~531 |
+| `components/DreDetalhamentoModal.tsx` | ~692 |
+
+### Fluxo obrigatório para editar arquivos grandes:
+1. `Grep` para encontrar a linha exata do trecho
+2. `Read` com `offset` (linha - 10) e `limit` (~80 linhas)
+3. `Edit` com o trecho exato encontrado
+4. **Nunca use `Read` sem `limit` nesses arquivos**
 
 ## Padrões do projeto
 
