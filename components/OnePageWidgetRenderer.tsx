@@ -8,48 +8,82 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   PieChart,
   Pie,
   Cell,
   Legend,
+  Sector,
+  TooltipProps,
 } from 'recharts'
 import { formatCurrency, formatPct, formatPeriodo } from '@/lib/utils'
-import { CHART_COLORS } from '@/lib/constants'
 import type { WidgetConfig, DataSource } from '@/lib/one-page-types'
 
-// ─── Color schemes ────────────────────────────────────────────────────────────
+// ─── Color palettes ───────────────────────────────────────────────────────────
 
-const SCHEMES: Record<string, string[]> = {
-  default: [...CHART_COLORS],
-  green:   ['#16a34a', '#22c55e', '#4ade80', '#86efac', '#bbf7d0'],
-  gold:    ['#be8c4a', '#d4a76a', '#e8c48a', '#f0d4a8', '#f8e4cc'],
-  blue:    ['#1d4ed8', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'],
-  mono:    ['#111827', '#374151', '#6b7280', '#9ca3af', '#d1d5db'],
+const PALETTES: Record<string, string[]> = {
+  default: ['#1A1820','#B8924A','#6B4E18','#334155','#166534','#B91C1C','#475569','#D97706','#064e3b','#7c3aed'],
+  green:   ['#064e3b','#059669','#10b981','#34d399','#6ee7b7','#a7f3d0','#065f46','#059669'],
+  gold:    ['#78350f','#d97706','#f59e0b','#fbbf24','#fde68a','#92400e','#b45309','#d97706'],
+  blue:    ['#1e3a5f','#1d4ed8','#2563eb','#3b82f6','#60a5fa','#93c5fd','#1e40af','#1d4ed8'],
+  mono:    ['#1e293b','#334155','#475569','#64748b','#94a3b8','#cbd5e1','#1e293b','#334155'],
+}
+function getPalette(scheme: string): string[] {
+  return PALETTES[scheme] ?? PALETTES.default
+}
+
+function tickFmt(v: number): string {
+  const a = Math.abs(v)
+  if (a >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`
+  if (a >= 1_000)     return `${(v / 1_000).toFixed(0)}K`
+  return String(Math.round(v))
+}
+
+function ChartTooltip({ active, payload }: TooltipProps<number, string>) {
+  if (!active || !payload?.length) return null
+  const d = payload[0]
+  return (
+    <div style={{ background: '#1A1820', borderRadius: 6, padding: '10px 14px', border: '0.5px solid rgba(184,146,74,0.25)', minWidth: 120 }}>
+      <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: '#B8924A', opacity: 0.7, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>
+        {d.name}
+      </p>
+      <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: 13, color: '#fff' }}>
+        {formatCurrency(Number(d.value))}
+      </p>
+    </div>
+  )
 }
 
 // ─── Data helpers ─────────────────────────────────────────────────────────────
 
 async function fetchWidgetData(ds: DataSource, periods: string[]): Promise<unknown[]> {
-  const pp = periods.length ? `&periodos=${encodeURIComponent(periods.join(','))}` : ''
-
   if (ds.kind === 'summary') {
     const d = await fetch('/api/analise?type=summary', { cache: 'no-store' }).then(r => r.json())
     return [d]
   }
 
   if (ds.kind === 'exec_chart') {
+    // When filtering by unidade de negócio, fetch all units and filter client-side
+    const filteringByUnidade = (ds.filterUnidades?.length ?? 0) > 0
     const params = new URLSearchParams({
-      groupBy: ds.groupBy,
+      groupBy: filteringByUnidade ? 'unidade_negocio' : ds.groupBy,
       field:   ds.field,
-      topN:    String(ds.topN),
+      topN:    filteringByUnidade ? '50' : String(ds.topN),
     })
-    if (periods.length)     params.set('periodos', periods.join(','))
-    if (ds.depts?.length)   params.set('depts',    ds.depts.join(','))
-    if (ds.centros?.length) params.set('centros',  ds.centros.join(','))
+    if (ds.sortOrder)               params.set('sortOrder',     ds.sortOrder)
+    if (periods.length)             params.set('periodos',      periods.join(','))
+    if (ds.filterDepts?.length)     params.set('departamentos', ds.filterDepts.join(','))
+    if (ds.filterCentros?.length)   params.set('centros',       ds.filterCentros.join(','))
+    if (ds.filterDreGroup)          params.set('dreGroup',      ds.filterDreGroup)
     const d = await fetch(`/api/exec-chart?${params}`, { cache: 'no-store' }).then(r => r.json())
-    return Array.isArray(d?.items) ? d.items : []
+    let items: { name: string; value: number; budget: number; razao: number }[] =
+      Array.isArray(d?.items) ? d.items : []
+    // Filter by unidade client-side if needed
+    if (filteringByUnidade) {
+      items = items.filter(r => ds.filterUnidades!.includes(r.name))
+    }
+    return items
   }
 
   if (ds.kind === 'analise') {
@@ -67,7 +101,7 @@ async function fetchWidgetData(ds: DataSource, periods: string[]): Promise<unkno
       groupByPeriod: 'true',
     })
     if (periods.length) params.set('periodos', periods.join(','))
-    const d = await fetch(`/api/analise?${params}${pp ? '' : ''}`, { cache: 'no-store' }).then(r => r.json())
+    const d = await fetch(`/api/analise?${params}`, { cache: 'no-store' }).then(r => r.json())
     return Array.isArray(d) ? d : []
   }
 
@@ -174,21 +208,23 @@ function getKPIValue(config: WidgetConfig, raw: unknown[]): { value: number; del
 
 function SkeletonWidget({ h }: { h: number }) {
   return (
-    <div
-      className="animate-pulse rounded-xl"
-      style={{ height: h * 80, backgroundColor: 'rgba(0,0,0,0.05)' }}
-    />
+    <div className="p-4 flex flex-col justify-end gap-2 pb-3" style={{ height: h * 80 }}>
+      {[55, 75, 40, 90, 65].map((pct, i) => (
+        <div key={i} className="rounded-sm animate-pulse w-full"
+          style={{ height: `${Math.max(8, pct * 0.4)}px`, background: `rgba(184,146,74,${0.04 + i * 0.025})` }} />
+      ))}
+    </div>
   )
 }
 
 function ErrorWidget({ h }: { h: number }) {
   return (
-    <div
-      className="flex items-center justify-center rounded-xl"
-      style={{ height: h * 80 }}
-    >
-      <p style={{ fontSize: 12, color: '#dc2626', fontFamily: "'IBM Plex Mono', monospace" }}>
-        Erro ao carregar dados
+    <div className="flex flex-col items-center justify-center rounded-xl" style={{ height: h * 80 }}>
+      <div style={{ width: 36, height: 36, borderRadius: '50%', backgroundColor: '#FBF7EE', border: '0.5px solid #E4DFD5', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+        <span style={{ fontSize: 16 }}>⚠</span>
+      </div>
+      <p style={{ fontSize: 9, color: '#B8924A', fontFamily: "'IBM Plex Mono', monospace", letterSpacing: '0.15em', textTransform: 'uppercase', opacity: 0.4 }}>
+        Erro ao carregar
       </p>
     </div>
   )
@@ -219,7 +255,7 @@ function KPIWidget({ config, raw }: { config: WidgetConfig; raw: unknown[] }) {
   const { value, delta, deltaPct } = getKPIValue(config, raw)
   const valueSizes = { sm: 24, md: 36, lg: 48, xl: 64 }
   const vSize = valueSizes[config.fontSize]
-  const colors = SCHEMES[config.colorScheme]
+  const colors = getPalette(config.colorScheme)
 
   return (
     <div
@@ -276,45 +312,54 @@ function KPIWidget({ config, raw }: { config: WidgetConfig; raw: unknown[] }) {
 
 function BarWidget({ config, raw }: { config: WidgetConfig; raw: unknown[] }) {
   const ds = config.dataSource
-  const colors = SCHEMES[config.colorScheme]
+  const colors = getPalette(config.colorScheme)
+  const showAxes = config.showAxes !== false
+  const showGrid = config.showGrid !== false
 
   const chartData = (() => {
     if (ds.kind === 'exec_chart') return toExecChartRows(raw).slice(0, 12)
     if (ds.kind === 'analise')    return toAnaliseByDept(raw, ds.field).slice(0, 12)
     return (raw as ChartRow[]).slice(0, 12)
   })()
+  // use absolute values for chart display
+  const absData = chartData.map(r => ({ ...r, absValue: Math.abs(r.value) }))
 
   const chartH = config.h * 80 - 50
+
+  const barLabel = config.showDataLabels
+    ? { formatter: (v: number) => tickFmt(v), position: 'top' as const, fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, fill: '#94a3b8' }
+    : false
 
   return (
     <div className="p-4" style={{ height: config.h * 80 }}>
       <WidgetHeader title={config.title} subtitle={config.subtitle} />
       <ResponsiveContainer width="100%" height={chartH}>
-        <BarChart data={chartData} margin={{ top: 0, right: 5, left: 0, bottom: 5 }}>
-          <CartesianGrid vertical={false} stroke="#f1f5f9" />
-          <XAxis
-            dataKey="name"
-            tick={{ fontSize: 9, fill: '#94a3b8' }}
-            axisLine={false}
-            tickLine={false}
-            angle={-20}
-            textAnchor="end"
-            interval={0}
-          />
-          <YAxis
-            tick={{ fontSize: 9, fill: '#94a3b8' }}
-            axisLine={false}
-            tickLine={false}
-            tickFormatter={v => `${(Number(v) / 1000).toFixed(0)}K`}
-            width={38}
-          />
-          <Tooltip
-            formatter={(v: number) => [formatCurrency(v), 'Valor']}
-            contentStyle={{ fontSize: 11, border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8 }}
-          />
-          {config.showLegend && <Legend wrapperStyle={{ fontSize: 10 }} />}
-          <Bar dataKey="value" radius={[3, 3, 0, 0]}>
-            {chartData.map((_: unknown, i: number) => (
+        <BarChart data={absData} margin={{ top: 14, right: 8, left: -10, bottom: 24 }}>
+          {showGrid && <CartesianGrid vertical={false} stroke="#F0EDE8" strokeWidth={0.5} />}
+          {showAxes && (
+            <XAxis
+              dataKey="name"
+              tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }}
+              axisLine={false}
+              tickLine={false}
+              angle={-30}
+              textAnchor="end"
+              interval={0}
+              tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 11) + '…' : v}
+            />
+          )}
+          {showAxes && (
+            <YAxis
+              tickFormatter={tickFmt}
+              tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }}
+              axisLine={false}
+              tickLine={false}
+            />
+          )}
+          <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(184,146,74,0.04)' }} />
+          {config.showLegend && <Legend wrapperStyle={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} />}
+          <Bar dataKey="absValue" radius={[2, 2, 0, 0]} maxBarSize={28} label={barLabel}>
+            {absData.map((_: unknown, i: number) => (
               <Cell key={i} fill={colors[i % colors.length]} />
             ))}
           </Bar>
@@ -326,7 +371,10 @@ function BarWidget({ config, raw }: { config: WidgetConfig; raw: unknown[] }) {
 
 function LineWidget({ config, raw }: { config: WidgetConfig; raw: unknown[] }) {
   const ds = config.dataSource
-  const colors = SCHEMES[config.colorScheme]
+  const colors = getPalette(config.colorScheme)
+  const showAxes = config.showAxes !== false
+  const showGrid = config.showGrid !== false
+  const areaColor = colors[0]
 
   const chartData = (() => {
     if (ds.kind === 'analise') return toAnaliseByPeriodo(raw, ds.field)
@@ -337,39 +385,46 @@ function LineWidget({ config, raw }: { config: WidgetConfig; raw: unknown[] }) {
 
   const chartH = config.h * 80 - 50
 
+  const areaLabel = config.showDataLabels
+    ? { formatter: (v: number) => tickFmt(v), position: 'top' as const, fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, fill: '#94a3b8' }
+    : false
+
   return (
     <div className="p-4" style={{ height: config.h * 80 }}>
       <WidgetHeader title={config.title} subtitle={config.subtitle} />
       <ResponsiveContainer width="100%" height={chartH}>
-        <LineChart data={chartData} margin={{ top: 0, right: 5, left: 0, bottom: 5 }}>
-          <CartesianGrid vertical={false} stroke="#f1f5f9" />
-          <XAxis
-            dataKey="name"
-            tick={{ fontSize: 9, fill: '#94a3b8' }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <YAxis
-            tick={{ fontSize: 9, fill: '#94a3b8' }}
-            axisLine={false}
-            tickLine={false}
-            tickFormatter={v => `${(Number(v) / 1000).toFixed(0)}K`}
-            width={38}
-          />
-          <Tooltip
-            formatter={(v: number) => [formatCurrency(v), 'Valor']}
-            contentStyle={{ fontSize: 11, border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8 }}
-          />
-          {config.showLegend && <Legend wrapperStyle={{ fontSize: 10 }} />}
-          <Line
+        <AreaChart data={chartData} margin={{ top: 14, right: 8, left: -10, bottom: 24 }}>
+          {showGrid && <CartesianGrid vertical={false} stroke="#F0EDE8" strokeWidth={0.5} />}
+          {showAxes && (
+            <XAxis
+              dataKey="name"
+              tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }}
+              axisLine={false}
+              tickLine={false}
+            />
+          )}
+          {showAxes && (
+            <YAxis
+              tickFormatter={tickFmt}
+              tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" }}
+              axisLine={false}
+              tickLine={false}
+            />
+          )}
+          <Tooltip content={<ChartTooltip />} cursor={{ stroke: areaColor, strokeWidth: 1, strokeDasharray: '4 2' }} />
+          {config.showLegend && <Legend wrapperStyle={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} />}
+          <Area
             type="monotone"
             dataKey="value"
-            stroke={colors[0]}
-            strokeWidth={2.2}
-            dot={{ r: 2.5, fill: colors[0] }}
-            activeDot={{ r: 4 }}
+            stroke={areaColor}
+            strokeWidth={2}
+            fill={areaColor}
+            fillOpacity={0.08}
+            dot={{ fill: areaColor, r: 3.5, strokeWidth: 2, stroke: '#fff' }}
+            activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff', fill: areaColor }}
+            label={areaLabel}
           />
-        </LineChart>
+        </AreaChart>
       </ResponsiveContainer>
     </div>
   )
@@ -377,15 +432,42 @@ function LineWidget({ config, raw }: { config: WidgetConfig; raw: unknown[] }) {
 
 function DonutWidget({ config, raw }: { config: WidgetConfig; raw: unknown[] }) {
   const ds = config.dataSource
-  const colors = SCHEMES[config.colorScheme]
+  const colors = getPalette(config.colorScheme)
+  const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined)
 
   const chartData = (() => {
     if (ds.kind === 'exec_chart') return toExecChartRows(raw).slice(0, 8)
     if (ds.kind === 'analise')    return toAnaliseByDept(raw, ds.field).slice(0, 8)
     return (raw as ChartRow[]).slice(0, 8)
   })()
+  const absData = chartData.map(r => ({ ...r, absValue: Math.abs(r.value) }))
+  const total = absData.reduce((s, r) => s + r.absValue, 0)
 
   const chartH = config.h * 80 - 50
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const renderActiveShape = (props: any) => {
+    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, percent, value } = props
+    return (
+      <g>
+        <Sector cx={cx} cy={cy} innerRadius={innerRadius} outerRadius={outerRadius + 5}
+          startAngle={startAngle} endAngle={endAngle} fill={fill} opacity={0.97}
+          stroke="#fff" strokeWidth={1.5} />
+        {innerRadius > 0 && (
+          <>
+            <text x={cx} y={cy - 7} textAnchor="middle" dominantBaseline="central"
+              style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: 13, fill: '#1A1820', pointerEvents: 'none' }}>
+              {tickFmt(value)}
+            </text>
+            <text x={cx} y={cy + 10} textAnchor="middle" dominantBaseline="central"
+              style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 8, fill: '#B8924A', pointerEvents: 'none', letterSpacing: '0.06em' }}>
+              {`${(percent * 100).toFixed(1)}%`}
+            </text>
+          </>
+        )}
+      </g>
+    )
+  }
 
   return (
     <div className="p-4" style={{ height: config.h * 80 }}>
@@ -393,24 +475,28 @@ function DonutWidget({ config, raw }: { config: WidgetConfig; raw: unknown[] }) 
       <ResponsiveContainer width="100%" height={chartH}>
         <PieChart>
           <Pie
-            data={chartData}
-            dataKey="value"
+            data={absData}
+            dataKey="absValue"
             nameKey="name"
             cx="50%"
             cy="50%"
             innerRadius="52%"
             outerRadius="78%"
+            cornerRadius={6}
             paddingAngle={1.5}
+            stroke="#fff"
+            strokeWidth={2}
+            activeIndex={activeIndex}
+            activeShape={renderActiveShape}
+            onMouseEnter={(_, index) => setActiveIndex(index)}
+            onMouseLeave={() => setActiveIndex(undefined)}
           >
-            {chartData.map((_: unknown, i: number) => (
+            {absData.map((_: unknown, i: number) => (
               <Cell key={i} fill={colors[i % colors.length]} />
             ))}
           </Pie>
-          <Tooltip
-            formatter={(v: number) => [formatCurrency(v), 'Valor']}
-            contentStyle={{ fontSize: 11, border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8 }}
-          />
-          {config.showLegend && <Legend wrapperStyle={{ fontSize: 10 }} />}
+          <Tooltip content={<ChartTooltip />} />
+          {config.showLegend && <Legend wrapperStyle={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} />}
         </PieChart>
       </ResponsiveContainer>
     </div>

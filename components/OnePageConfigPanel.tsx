@@ -1,5 +1,5 @@
 'use client'
-import { X, Trash2, Copy, BarChart2, TrendingUp, PieChart, Table2, Type, Gauge } from 'lucide-react'
+import { X, Trash2, Copy, BarChart2, TrendingUp, PieChart, Table2, Type, Gauge, SlidersHorizontal } from 'lucide-react'
 import type { WidgetConfig, WidgetType } from '@/lib/one-page-types'
 
 interface Props {
@@ -9,6 +9,7 @@ interface Props {
   onDelete: () => void
   onDuplicate: () => void
   onChangeSource: () => void
+  onOpenEditModal?: () => void
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -189,6 +190,7 @@ export function OnePageConfigPanel({
   onDelete,
   onDuplicate,
   onChangeSource,
+  onOpenEditModal,
 }: Props) {
   const isOpen = widget !== null
 
@@ -384,7 +386,101 @@ export function OnePageConfigPanel({
               onChange={v => onUpdate({ showDelta: v })}
             />
           )}
+          {(widget.type === 'bar' || widget.type === 'line') && (
+            <>
+              <PanelToggle
+                label="Eixos"
+                checked={widget.showAxes !== false}
+                onChange={v => onUpdate({ showAxes: v })}
+              />
+              <PanelToggle
+                label="Linhas de grade"
+                checked={widget.showGrid !== false}
+                onChange={v => onUpdate({ showGrid: v })}
+              />
+              <PanelToggle
+                label="Rótulos de dados"
+                checked={widget.showDataLabels}
+                onChange={v => onUpdate({ showDataLabels: v })}
+              />
+            </>
+          )}
         </PanelSection>
+
+        {/* Filtros ativos — apenas para exec_chart */}
+        {widget.dataSource.kind === 'exec_chart' && (
+          <PanelSection label="Filtros de Dados">
+            <div className="space-y-2">
+              {widget.dataSource.filterDepts?.length ? (
+                <div className="flex items-start gap-1.5">
+                  <span
+                    className="px-1.5 py-0.5 rounded-full flex-shrink-0 text-[10px] font-medium"
+                    style={{ backgroundColor: 'rgba(190,140,74,0.12)', color: '#be8c4a' }}
+                  >
+                    DEPT
+                  </span>
+                  <p className="text-xs" style={{ color: 'rgba(0,0,0,0.6)' }}>
+                    {widget.dataSource.filterDepts.join(', ')}
+                  </p>
+                </div>
+              ) : null}
+              {widget.dataSource.filterDreGroup ? (
+                <div className="flex items-start gap-1.5">
+                  <span
+                    className="px-1.5 py-0.5 rounded-full flex-shrink-0 text-[10px] font-medium"
+                    style={{ backgroundColor: 'rgba(99,102,241,0.12)', color: '#6366f1' }}
+                  >
+                    DRE
+                  </span>
+                  <p className="text-xs" style={{ color: 'rgba(0,0,0,0.6)' }}>
+                    {widget.dataSource.filterDreGroup}
+                  </p>
+                </div>
+              ) : null}
+              {widget.dataSource.filterUnidades?.length ? (
+                <div className="flex items-start gap-1.5">
+                  <span
+                    className="px-1.5 py-0.5 rounded-full flex-shrink-0 text-[10px] font-medium"
+                    style={{ backgroundColor: 'rgba(16,185,129,0.12)', color: '#10b981' }}
+                  >
+                    UN
+                  </span>
+                  <p className="text-xs" style={{ color: 'rgba(0,0,0,0.6)' }}>
+                    {widget.dataSource.filterUnidades.join(', ')}
+                  </p>
+                </div>
+              ) : null}
+              {widget.dataSource.filterCentros?.length ? (
+                <div className="flex items-start gap-1.5">
+                  <span
+                    className="px-1.5 py-0.5 rounded-full flex-shrink-0 text-[10px] font-medium"
+                    style={{ backgroundColor: 'rgba(20,184,166,0.12)', color: '#0d9488' }}
+                  >
+                    CC
+                  </span>
+                  <p className="text-xs" style={{ color: 'rgba(0,0,0,0.6)' }}>
+                    {widget.dataSource.filterCentros.join(', ')}
+                  </p>
+                </div>
+              ) : null}
+              {!widget.dataSource.filterDepts?.length &&
+                !widget.dataSource.filterDreGroup &&
+                !widget.dataSource.filterUnidades?.length &&
+                !widget.dataSource.filterCentros?.length && (
+                  <p className="text-xs" style={{ color: 'rgba(0,0,0,0.35)' }}>
+                    Sem filtros — exibindo todos os dados
+                  </p>
+                )}
+            </div>
+            <button
+              onClick={onOpenEditModal ?? onChangeSource}
+              className="flex items-center gap-1.5 text-xs font-medium mt-1"
+              style={{ color: '#be8c4a' }}
+            >
+              <SlidersHorizontal size={11} /> Editar filtros avançados
+            </button>
+          </PanelSection>
+        )}
 
         {/* Layout */}
         <PanelSection label="Layout">

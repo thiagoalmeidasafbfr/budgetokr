@@ -62,10 +62,25 @@ export default function MedidasPage() {
   const [loading,      setLoading]      = useState(false)
   const [error,        setError]        = useState<string | null>(null)
   const [allDepts,     setAllDepts]     = useState<string[]>([])
+  const [dreLinhas,    setDreLinhas]    = useState<{ nome: string; formula_grupos: string }[]>([])
+  const [quickNum,     setQuickNum]     = useState('')
+  const [quickDen,     setQuickDen]     = useState('')
 
   useEffect(() => { loadMedidas() }, [])
   useEffect(() => {
     fetch('/api/analise?type=distinct&col=nome_departamento').then(r => r.json()).then(d => setAllDepts(Array.isArray(d) ? d : []))
+    fetch('/api/dre?type=linhas', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d)) {
+          const subtotals = d.filter((l: { tipo: string }) => l.tipo === 'subtotal')
+          setDreLinhas(subtotals.map((l: { nome: string; formula_grupos: string }) => ({
+            nome: l.nome,
+            formula_grupos: l.formula_grupos,
+          })))
+        }
+      })
+      .catch(() => {})
   }, [])
 
   const loadMedidas = () =>
@@ -311,6 +326,73 @@ export default function MedidasPage() {
             {/* Ratio: numerador + denominador */}
             {form.tipo_medida === 'ratio' && (
               <div className="space-y-4">
+                {/* DRE Quick Setup */}
+                {dreLinhas.length > 0 && (
+                  <div
+                    className="rounded-xl p-3 space-y-2"
+                    style={{ backgroundColor: 'rgba(190,140,74,0.06)', border: '1px solid rgba(190,140,74,0.2)' }}
+                  >
+                    <p className="text-xs font-semibold" style={{ color: '#9B6E20' }}>
+                      ⚡ Atalho: Margem DRE
+                    </p>
+                    <p className="text-xs" style={{ color: 'rgba(0,0,0,0.5)' }}>
+                      Selecione duas linhas DRE para gerar os filtros automaticamente (ex: Gross Profit ÷ Net Revenue)
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs font-medium text-gray-600 mb-1 block">Numerador (A)</label>
+                        <select
+                          value={quickNum}
+                          onChange={e => setQuickNum(e.target.value)}
+                          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none"
+                        >
+                          <option value="">Selecione…</option>
+                          {dreLinhas.map(l => <option key={l.nome} value={l.nome}>{l.nome}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-gray-600 mb-1 block">Denominador (B)</label>
+                        <select
+                          value={quickDen}
+                          onChange={e => setQuickDen(e.target.value)}
+                          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none"
+                        >
+                          <option value="">Selecione…</option>
+                          {dreLinhas.map(l => <option key={l.nome} value={l.nome}>{l.nome}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!quickNum || !quickDen}
+                      onClick={() => {
+                        const numLinha = dreLinhas.find(l => l.nome === quickNum)
+                        const denLinha = dreLinhas.find(l => l.nome === quickDen)
+                        const toGroups = (linha: { formula_grupos: string }) => {
+                          try {
+                            const arr = JSON.parse(linha.formula_grupos) as string[]
+                            return arr.filter(Boolean).join(', ')
+                          } catch {
+                            return linha.formula_grupos
+                          }
+                        }
+                        if (!numLinha || !denLinha) return
+                        const numVal = toGroups(numLinha)
+                        const denVal = toGroups(denLinha)
+                        setForm(f => ({
+                          ...f,
+                          filtros: [{ column: 'dre' as FilterColumn, operator: (numVal.includes(',') ? 'in' : '=') as FilterOperator, value: numVal, logic: 'AND' as const }],
+                          denominador_filtros: [{ column: 'dre' as FilterColumn, operator: (denVal.includes(',') ? 'in' : '=') as FilterOperator, value: denVal, logic: 'AND' as const }],
+                        }))
+                      }}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-40"
+                      style={{ backgroundColor: '#be8c4a' }}
+                    >
+                      Aplicar filtros DRE
+                    </button>
+                  </div>
+                )}
+
                 <div className="border border-gray-100 rounded-xl p-4 space-y-3 bg-gray-50/30">
                   <p className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
                     <span className="w-5 h-5 bg-gray-900 text-white rounded-full flex items-center justify-center text-xs">A</span>

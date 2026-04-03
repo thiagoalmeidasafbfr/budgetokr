@@ -5,7 +5,18 @@ export type WidgetType = 'kpi' | 'bar' | 'line' | 'donut' | 'table' | 'title'
 export type DataSource =
   | { kind: 'medida'; medidaId: number; medidaNome: string; viewField: 'razao' | 'budget' | 'variacao' | 'variacao_pct' }
   | { kind: 'analise'; groupBy: 'departamento' | 'periodo'; field: 'razao' | 'budget' | 'variacao'; depts?: string[] }
-  | { kind: 'exec_chart'; groupBy: string; field: 'razao' | 'budget' | 'variacao'; topN: number; depts?: string[]; centros?: string[] }
+  | {
+      kind: 'exec_chart'
+      groupBy: string
+      field: 'razao' | 'budget' | 'variacao'
+      topN: number
+      sortOrder?: 'asc' | 'desc'
+      // Filtros avançados
+      filterDepts?: string[]      // → param 'departamentos' na API
+      filterCentros?: string[]    // → param 'centros' na API
+      filterDreGroup?: string     // → param 'dreGroup' na API
+      filterUnidades?: string[]   // filtro client-side por unidade de negócio
+    }
   | { kind: 'summary'; field: 'budget_ytd' | 'razao_ytd' | 'variacao' | 'variacao_pct' }
   | { kind: 'static'; value: string }
 
@@ -27,6 +38,8 @@ export interface WidgetConfig {
   showDelta: boolean
   colorScheme: 'default' | 'green' | 'gold' | 'blue' | 'mono'
   borderStyle: 'none' | 'subtle' | 'card'
+  showAxes: boolean
+  showGrid: boolean
 }
 
 export function createDefaultWidget(type: WidgetType): WidgetConfig {
@@ -45,6 +58,8 @@ export function createDefaultWidget(type: WidgetType): WidgetConfig {
     showDelta: type === 'kpi',
     colorScheme: 'default' as const,
     borderStyle: 'card' as const,
+    showAxes: true,
+    showGrid: true,
   }
 
   switch (type) {
@@ -53,7 +68,7 @@ export function createDefaultWidget(type: WidgetType): WidgetConfig {
     case 'bar':
     case 'donut':
     case 'table':
-      return { ...base, dataSource: { kind: 'exec_chart', groupBy: 'dre', field: 'razao', topN: 8 } }
+      return { ...base, dataSource: { kind: 'exec_chart', groupBy: 'dre', field: 'razao', topN: 8, sortOrder: 'desc' as const } }
     case 'line':
       return { ...base, dataSource: { kind: 'analise', groupBy: 'periodo', field: 'razao' } }
     case 'title':

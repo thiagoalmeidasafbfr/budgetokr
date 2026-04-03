@@ -184,6 +184,8 @@ export async function GET(req: NextRequest) {
 
     const periodos      = periodosRaw ? periodosRaw.split(',').filter(Boolean) : []
     const departamentos = deptsRaw    ? deptsRaw.split(',').filter(Boolean)   : []
+    const centrosRaw    = sp.get('centros') ?? ''
+    const requestedCentros = centrosRaw ? centrosRaw.split(',').filter(Boolean) : []
 
     // Auth
     const user = await getSession()
@@ -204,9 +206,17 @@ export async function GET(req: NextRequest) {
       : null
     const authCentros = userCentros !== null ? userCentros : undefined
 
+    // Merge requested centros with auth-centros (auth always wins on intersection)
+    const effectiveCentros: string[] | undefined = (() => {
+      if (!requestedCentros.length) return authCentros
+      if (authCentros === undefined) return requestedCentros
+      const intersected = requestedCentros.filter(c => authCentros.includes(c))
+      return intersected.length ? intersected : authCentros
+    })()
+
     // ── Department-level grouping (via lancamentos → CC → nome_departamento) ──
     if (groupBy === 'departamento') {
-      const ccFilter = await resolveCentros(activeDepts, authCentros)
+      const ccFilter = await resolveCentros(activeDepts, effectiveCentros)
 
       let accountFilter: string[] | undefined
       if (dreGroup) {
@@ -216,7 +226,7 @@ export async function GET(req: NextRequest) {
           .eq('dre', dreGroup)
         accountFilter = (accs ?? []).map((r: { numero_conta_contabil: string }) => r.numero_conta_contabil)
         if (accountFilter.length === 0) {
-          const dreRowsEmpty = await getDRE(periodos, activeDepts ?? [], authCentros)
+          const dreRowsEmpty = await getDRE(periodos, activeDepts ?? [], effectiveCentros)
           const dreGroupsEmpty = [...new Set(dreRowsEmpty.map(r => r.dre))].filter(Boolean).sort()
           return NextResponse.json({ items: [], dreGroups: dreGroupsEmpty })
         }
@@ -244,14 +254,14 @@ export async function GET(req: NextRequest) {
       }
 
       const aggregated = Object.entries(deptAcc).map(([name, { budget, razao }]) => ({ name, budget, razao }))
-      const dreRowsDept = await getDRE(periodos, activeDepts ?? [], authCentros)
+      const dreRowsDept = await getDRE(periodos, activeDepts ?? [], effectiveCentros)
       const dreGroupsDept = [...new Set(dreRowsDept.map(r => r.dre))].filter(Boolean).sort()
       return NextResponse.json({ items: buildTopN(aggregated, topN, field, sortOrder), dreGroups: dreGroupsDept })
     }
 
     // ── Unidade de Negócio grouping (via lancamentos → unidades_negocio) ──────
     if (groupBy === 'unidade_negocio') {
-      const ccFilter = await resolveCentros(activeDepts, authCentros)
+      const ccFilter = await resolveCentros(activeDepts, effectiveCentros)
 
       let accountFilter: string[] | undefined
       if (dreGroup) {
@@ -261,21 +271,21 @@ export async function GET(req: NextRequest) {
           .eq('dre', dreGroup)
         accountFilter = (accs ?? []).map((r: { numero_conta_contabil: string }) => r.numero_conta_contabil)
         if (accountFilter.length === 0) {
-          const dreRowsEmpty = await getDRE(periodos, activeDepts ?? [], authCentros)
+          const dreRowsEmpty = await getDRE(periodos, activeDepts ?? [], effectiveCentros)
           const dreGroupsEmpty = [...new Set(dreRowsEmpty.map(r => r.dre))].filter(Boolean).sort()
           return NextResponse.json({ items: [], dreGroups: dreGroupsEmpty })
         }
       }
 
       const rows = await getLancamentosRowsByUnidade(periodos, ccFilter, accountFilter)
-      const dreRowsUn = await getDRE(periodos, activeDepts ?? [], authCentros)
+      const dreRowsUn = await getDRE(periodos, activeDepts ?? [], effectiveCentros)
       const dreGroupsUn = [...new Set(dreRowsUn.map(r => r.dre))].filter(Boolean).sort()
       return NextResponse.json({ items: buildTopN(rows, topN, field, sortOrder), dreGroups: dreGroupsUn })
     }
 
     // ── DRE-based groupings (agrupamento_arvore, dre) ────────────────────────
     if (groupBy === 'agrupamento_arvore' || groupBy === 'dre') {
-      const rows = await getDRE(periodos, activeDepts ?? [], authCentros)
+      const rows = await getDRE(periodos, activeDepts ?? [], effectiveCentros)
       const dreGroups = [...new Set(rows.map(r => r.dre))].filter(Boolean).sort()
 
       const acc: Record<string, { budget: number; razao: number }> = {}
@@ -295,7 +305,7 @@ export async function GET(req: NextRequest) {
 
     // ── Account-level grouping ───────────────────────────────────────────────
     if (groupBy === 'conta_contabil') {
-      const rows = await getDREByAccount(periodos, activeDepts ?? [], authCentros)
+      const rows = await getDREByAccount(periodos, activeDepts ?? [], effectiveCentros)
       const dreGroups = [...new Set(rows.map(r => r.dre))].filter(Boolean).sort()
 
       const acc: Record<string, { budget: number; razao: number }> = {}
@@ -317,7 +327,7 @@ export async function GET(req: NextRequest) {
       const dreFilters: FilterCondition[] = dreGroup
         ? [{ column: 'dre', operator: '=', value: dreGroup, logic: 'AND' }]
         : []
-      const analyseRows = await getAnalise(dreFilters, activeDepts ? [...activeDepts] : [], periodos, true, authCentros ?? [])
+      const analyseRows = await getAnalise(dreFilters, activeDepts ? [...activeDepts] : [], periodos, true, effectiveCentros ?? [])
 
       const acc: Record<string, { budget: number; razao: number }> = {}
       for (const r of analyseRows) {
@@ -330,13 +340,13 @@ export async function GET(req: NextRequest) {
       }
 
       const aggregated = Object.entries(acc).map(([name, v]) => ({ name, ...v }))
-      const dreRowsCC = await getDRE(periodos, activeDepts ?? [], authCentros)
+      const dreRowsCC = await getDRE(periodos, activeDepts ?? [], effectiveCentros)
       const dreGroupsCC = [...new Set(dreRowsCC.map(r => r.dre))].filter(Boolean).sort()
       return NextResponse.json({ items: buildTopN(aggregated, topN, field, sortOrder), dreGroups: dreGroupsCC })
     }
 
     // ── contrapartida grouping (lancamentos-based) ────────────────────────────
-    const ccFilter = await resolveCentros(activeDepts, authCentros)
+    const ccFilter = await resolveCentros(activeDepts, effectiveCentros)
 
     let accountFilter: string[] | undefined
     if (dreGroup) {
@@ -346,7 +356,7 @@ export async function GET(req: NextRequest) {
         .eq('dre', dreGroup)
       accountFilter = (accs ?? []).map((r: { numero_conta_contabil: string }) => r.numero_conta_contabil)
       if (accountFilter.length === 0) {
-        const dreRows = await getDRE(periodos, activeDepts ?? [], authCentros)
+        const dreRows = await getDRE(periodos, activeDepts ?? [], effectiveCentros)
         const dreGroups = [...new Set(dreRows.map(r => r.dre))].filter(Boolean).sort()
         return NextResponse.json({ items: [], dreGroups })
       }
@@ -354,7 +364,7 @@ export async function GET(req: NextRequest) {
 
     const rows = await getLancamentosRows(periodos, ccFilter, accountFilter, 'nome_conta_contrapartida')
 
-    const dreRows = await getDRE(periodos.length ? periodos : [], activeDepts ?? [], authCentros)
+    const dreRows = await getDRE(periodos.length ? periodos : [], activeDepts ?? [], effectiveCentros)
     const dreGroups = [...new Set(dreRows.map(r => r.dre))].filter(Boolean).sort()
 
     return NextResponse.json({ items: buildTopN(rows, topN, field, sortOrder), dreGroups })
