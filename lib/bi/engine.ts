@@ -330,6 +330,57 @@ export async function runBiQuery(
   switch (metrica.tipo) {
 
     case 'linha_dre': {
+      const depts   = scope.departamentos ?? []
+      const centros = scope.centros_custo ?? []
+
+      // Non-KPI visuals with dept/CC scope → return breakdown per CC
+      if (widgetConfig.visual !== 'kpi_card' && (depts.length > 0 || centros.length > 0)) {
+        const linhas = await fetchDRELinhas(supabase)
+        const linha  = linhas.find(l => l.nome === metrica.linha_nome)
+        if (!linha) return { tipo: 'breakdown', itens: [] }
+
+        // Build CC list from explicit selection or from depts
+        let ccList: Array<{ id: string; nome: string }> = []
+        if (centros.length > 0) {
+          const { data } = await supabase.from('centros_custo')
+            .select('centro_custo, nome_centro_custo').in('centro_custo', centros)
+          ccList = (data ?? []).map((r: Record<string,unknown>) => ({
+            id: r.centro_custo as string, nome: (r.nome_centro_custo ?? r.centro_custo) as string,
+          }))
+        } else {
+          const { data } = await supabase.from('centros_custo')
+            .select('centro_custo, nome_centro_custo').in('nome_departamento', depts)
+          ccList = (data ?? []).map((r: Record<string,unknown>) => ({
+            id: r.centro_custo as string, nome: (r.nome_centro_custo ?? r.centro_custo) as string,
+          }))
+        }
+
+        const results: Array<{ label: string; realizado: number; budget: number }> = []
+        for (const cc of ccList) {
+          const scopeCC: BiScope = { ...scope, departamentos: [], centros_custo: [cc.id] }
+          const rows = await fetchDREData(periodos, scopeCC, supabase)
+          const gMap = aggregateDRE(rows)
+          const comp = computeLine(linha, gMap, linhas, linha.ordem)
+          if (comp.realizado !== 0 || comp.budget !== 0) {
+            results.push({ label: cc.nome, realizado: comp.realizado, budget: comp.budget })
+          }
+        }
+
+        const total  = results.reduce((s, r) => s + Math.abs(r.realizado), 0)
+        const sorted = results.sort((a, b) => Math.abs(b.realizado) - Math.abs(a.realizado))
+        return {
+          tipo: 'breakdown',
+          itens: sorted.map(r => ({
+            label:            r.label,
+            realizado:        r.realizado,
+            budget:           r.budget,
+            desvio_pct:       r.budget !== 0 ? ((r.realizado - r.budget) / Math.abs(r.budget)) * 100 : null,
+            participacao_pct: total > 0 ? (Math.abs(r.realizado) / total) * 100 : 0,
+          })),
+        }
+      }
+
+      // Scalar path (kpi_card or no scope restriction)
       const [rows, linhas] = await Promise.all([
         fetchDREData(periodos, scope, supabase),
         fetchDRELinhas(supabase),
@@ -492,6 +543,53 @@ export async function runBiQuery(
     }
 
     case 'grupo_dre': {
+      const depts   = scope.departamentos ?? []
+      const centros = scope.centros_custo ?? []
+
+      // Non-KPI visuals with dept/CC scope → return breakdown per CC
+      if (widgetConfig.visual !== 'kpi_card' && (depts.length > 0 || centros.length > 0)) {
+        let ccList: Array<{ id: string; nome: string }> = []
+        if (centros.length > 0) {
+          const { data } = await supabase.from('centros_custo')
+            .select('centro_custo, nome_centro_custo').in('centro_custo', centros)
+          ccList = (data ?? []).map((r: Record<string,unknown>) => ({
+            id: r.centro_custo as string, nome: (r.nome_centro_custo ?? r.centro_custo) as string,
+          }))
+        } else {
+          const { data } = await supabase.from('centros_custo')
+            .select('centro_custo, nome_centro_custo').in('nome_departamento', depts)
+          ccList = (data ?? []).map((r: Record<string,unknown>) => ({
+            id: r.centro_custo as string, nome: (r.nome_centro_custo ?? r.centro_custo) as string,
+          }))
+        }
+
+        const results: Array<{ label: string; realizado: number; budget: number }> = []
+        for (const cc of ccList) {
+          const scopeCC: BiScope = { ...scope, departamentos: [], centros_custo: [cc.id] }
+          const rows = await fetchDREData(periodos, scopeCC, supabase)
+          const agg  = aggregateDRE(rows).get(metrica.grupo_nome)
+          const realizado = (agg?.razao  ?? 0)
+          const budget    = (agg?.budget ?? 0)
+          if (realizado !== 0 || budget !== 0) {
+            results.push({ label: cc.nome, realizado, budget })
+          }
+        }
+
+        const total  = results.reduce((s, r) => s + Math.abs(r.realizado), 0)
+        const sorted = results.sort((a, b) => Math.abs(b.realizado) - Math.abs(a.realizado))
+        return {
+          tipo: 'breakdown',
+          itens: sorted.map(r => ({
+            label:            r.label,
+            realizado:        r.realizado,
+            budget:           r.budget,
+            desvio_pct:       r.budget !== 0 ? ((r.realizado - r.budget) / Math.abs(r.budget)) * 100 : null,
+            participacao_pct: total > 0 ? (Math.abs(r.realizado) / total) * 100 : 0,
+          })),
+        }
+      }
+
+      // Scalar path
       const rows = await fetchDREData(periodos, scope, supabase)
       const agg = aggregateDRE(rows).get(metrica.grupo_nome)
       const realizado = agg?.razao  ?? 0
