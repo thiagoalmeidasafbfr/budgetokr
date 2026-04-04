@@ -1,6 +1,6 @@
 // Shared types for the One Page Financeiro canvas BI feature
 
-export type WidgetType = 'kpi' | 'bar' | 'line' | 'donut' | 'table' | 'title'
+export type WidgetType = 'kpi' | 'bar' | 'bar_h' | 'line' | 'pie' | 'donut' | 'treemap' | 'table' | 'title'
 
 export type DataSource =
   | {
@@ -9,6 +9,14 @@ export type DataSource =
       medidaNome: string
       viewField: 'razao' | 'budget' | 'variacao' | 'variacao_pct'
       medidaGroupBy?: 'periodo' | 'centro_custo' | 'departamento'
+      /** Filtrar por departamentos específicos (passa para a API) */
+      filterDepts?: string[]
+      /** Filtrar por centros de custo específicos (passa para a API como extraFiltros) */
+      filterCentros?: string[]
+      /** Limitar ao top N resultados (ordenado por valor absoluto desc) */
+      topN?: number
+      /** Mostrar coluna de budget lado a lado (apenas em bar/bar_h/table) */
+      showBudget?: boolean
     }
   | { kind: 'analise'; groupBy: 'departamento' | 'periodo'; field: 'razao' | 'budget' | 'variacao'; depts?: string[] }
   | {
@@ -17,11 +25,10 @@ export type DataSource =
       field: 'razao' | 'budget' | 'variacao'
       topN: number
       sortOrder?: 'asc' | 'desc'
-      // Filtros avançados
-      filterDepts?: string[]      // → param 'departamentos' na API
-      filterCentros?: string[]    // → param 'centros' na API
-      filterDreGroup?: string     // → param 'dreGroup' na API
-      filterUnidades?: string[]   // filtro client-side por unidade de negócio
+      filterDepts?: string[]
+      filterCentros?: string[]
+      filterDreGroup?: string
+      filterUnidades?: string[]
     }
   | { kind: 'summary'; field: 'budget_ytd' | 'razao_ytd' | 'variacao' | 'variacao_pct' }
   | { kind: 'static'; value: string }
@@ -42,11 +49,13 @@ export interface WidgetConfig {
   showLegend: boolean
   showDataLabels: boolean
   showDelta: boolean
-  colorScheme: 'default' | 'green' | 'gold' | 'blue' | 'mono'
+  colorScheme: 'default' | 'green' | 'gold' | 'blue' | 'mono' | 'traffic'
   borderStyle: 'none' | 'subtle' | 'card'
   showAxisX: boolean
   showAxisY: boolean
   showGrid: boolean
+  /** Número máximo de itens exibidos (tabelas, rankings) */
+  maxRows?: number
 }
 
 export function createDefaultWidget(type: WidgetType): WidgetConfig {
@@ -58,7 +67,7 @@ export function createDefaultWidget(type: WidgetType): WidgetConfig {
     x: 0,
     y: 0,
     w: type === 'kpi' ? 3 : type === 'title' ? 12 : 6,
-    h: type === 'kpi' ? 3 : type === 'title' ? 2 : 4,
+    h: type === 'kpi' ? 3 : type === 'title' ? 2 : 5,
     fontSize: 'md' as const,
     showLegend: true,
     showDataLabels: false,
@@ -68,15 +77,19 @@ export function createDefaultWidget(type: WidgetType): WidgetConfig {
     showAxisX: true,
     showAxisY: true,
     showGrid: true,
+    maxRows: 10,
   }
 
   switch (type) {
     case 'kpi':
       return { ...base, dataSource: { kind: 'summary', field: 'razao_ytd' } }
     case 'bar':
+    case 'bar_h':
+    case 'pie':
     case 'donut':
+    case 'treemap':
     case 'table':
-      return { ...base, dataSource: { kind: 'exec_chart', groupBy: 'dre', field: 'razao', topN: 8, sortOrder: 'desc' as const } }
+      return { ...base, dataSource: { kind: 'exec_chart', groupBy: 'dre', field: 'razao', topN: 10, sortOrder: 'desc' as const } }
     case 'line':
       return { ...base, dataSource: { kind: 'analise', groupBy: 'periodo', field: 'razao' } }
     case 'title':

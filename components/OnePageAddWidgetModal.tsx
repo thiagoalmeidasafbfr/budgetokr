@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { X, BarChart2, TrendingUp, PieChart, Table2, Type, Gauge, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react'
+import { X, BarChart2, TrendingUp, PieChart, Table2, Type, Gauge, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, SlidersHorizontal, LayoutGrid, AlignStartVertical } from 'lucide-react'
 import type { WidgetConfig, WidgetType, DataSource } from '@/lib/one-page-types'
 import { createDefaultWidget } from '@/lib/one-page-types'
 
@@ -15,12 +15,15 @@ type Step = 1 | 2 | 3
 type MedidaOption = { id: number; nome: string }
 
 const WIDGET_TYPES: { type: WidgetType; icon: React.ElementType; label: string; desc: string }[] = [
-  { type: 'kpi',    icon: Gauge,      label: 'KPI Card',      desc: 'Valor em destaque com variação' },
-  { type: 'bar',    icon: BarChart2,  label: 'Barras',        desc: 'Comparativo entre categorias' },
-  { type: 'line',   icon: TrendingUp, label: 'Linha',         desc: 'Evolução ao longo do tempo' },
-  { type: 'donut',  icon: PieChart,   label: 'Donut',         desc: 'Distribuição proporcional' },
-  { type: 'table',  icon: Table2,     label: 'Tabela',        desc: 'Lista detalhada de valores' },
-  { type: 'title',  icon: Type,       label: 'Título',        desc: 'Texto livre para organizar' },
+  { type: 'kpi',     icon: Gauge,             label: 'KPI Card',       desc: 'Valor em destaque com delta vs budget' },
+  { type: 'bar',     icon: BarChart2,         label: 'Barras',         desc: 'Comparativo vertical entre categorias' },
+  { type: 'bar_h',   icon: AlignStartVertical, label: 'Barras Horiz.', desc: 'Ranking horizontal (lojas, depts)' },
+  { type: 'line',    icon: TrendingUp,        label: 'Linha / Área',   desc: 'Evolução ao longo do tempo' },
+  { type: 'pie',     icon: PieChart,          label: 'Pizza',          desc: 'Distribuição proporcional (pizza)' },
+  { type: 'donut',   icon: PieChart,          label: 'Donut',          desc: 'Distribuição com valor central' },
+  { type: 'treemap', icon: LayoutGrid,        label: 'Treemap',        desc: 'Hierarquia por área proporcional' },
+  { type: 'table',   icon: Table2,            label: 'Tabela',         desc: 'Lista com realizado, budget e var%' },
+  { type: 'title',   icon: Type,              label: 'Título',         desc: 'Texto livre para organizar seções' },
 ]
 
 const GROUPBY_OPTIONS = [
@@ -634,40 +637,107 @@ function Step2({
       {/* Medida config */}
       {sourceKind === 'medida' && dataSource.kind === 'medida' && (
         <div className="space-y-3">
+          {/* Medida selection - highlight it as the primary choice */}
           <div>
-            <FieldLabel>Medida Calculada</FieldLabel>
+            <FieldLabel>Métrica / Medida Calculada</FieldLabel>
             {medidas.length === 0 ? (
               <p style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>Carregando medidas...</p>
             ) : (
-              <SelectInput
-                value={String(dataSource.medidaId)}
-                onChange={v => {
-                  const m = medidas.find(x => String(x.id) === v)
-                  if (m) onChange({ ...dataSource, medidaId: m.id, medidaNome: m.nome })
-                }}
-                options={medidas.map(m => ({ value: String(m.id), label: m.nome }))}
-              />
+              <div className="space-y-1 max-h-44 overflow-y-auto pr-1">
+                {medidas.map(m => {
+                  const selected = dataSource.medidaId === m.id
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => onChange({ ...dataSource, medidaId: m.id, medidaNome: m.nome })}
+                      className="w-full text-left px-3 py-2 rounded-lg text-sm transition-all"
+                      style={{
+                        border: selected ? '1.5px solid #be8c4a' : '1px solid rgba(0,0,0,0.08)',
+                        backgroundColor: selected ? 'rgba(190,140,74,0.08)' : '#fafaf9',
+                        color: selected ? '#9B6E20' : '#374151',
+                        fontWeight: selected ? 600 : 400,
+                      }}
+                    >
+                      {m.nome}
+                    </button>
+                  )
+                })}
+              </div>
             )}
           </div>
-          <div>
-            <FieldLabel>Campo</FieldLabel>
-            <SelectInput
-              value={dataSource.viewField}
-              onChange={v => onChange({ ...dataSource, viewField: v as 'razao' | 'budget' | 'variacao' | 'variacao_pct' })}
-              options={MEDIDA_VIEW_FIELDS}
-            />
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <FieldLabel>Campo</FieldLabel>
+              <SelectInput
+                value={dataSource.viewField}
+                onChange={v => onChange({ ...dataSource, viewField: v as 'razao' | 'budget' | 'variacao' | 'variacao_pct' })}
+                options={MEDIDA_VIEW_FIELDS}
+              />
+            </div>
+            <div>
+              <FieldLabel>Agrupar por</FieldLabel>
+              <SelectInput
+                value={dataSource.medidaGroupBy ?? 'periodo'}
+                onChange={v => onChange({ ...dataSource, medidaGroupBy: v as 'periodo' | 'centro_custo' | 'departamento' })}
+                options={[
+                  { value: 'periodo',       label: 'Período' },
+                  { value: 'centro_custo',  label: 'Centro de Custo' },
+                  { value: 'departamento',  label: 'Departamento' },
+                ]}
+              />
+            </div>
           </div>
+
+          {/* Budget comparison toggle */}
+          {(widgetType === 'bar' || widgetType === 'bar_h' || widgetType === 'line' || widgetType === 'table') && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm" style={{ color: '#374151' }}>Mostrar Budget lado a lado</span>
+              <Toggle checked={!!dataSource.showBudget} onChange={v => onChange({ ...dataSource, showBudget: v })} />
+            </div>
+          )}
+
+          {/* Medida filters */}
           <div>
-            <FieldLabel>Agrupar por</FieldLabel>
-            <SelectInput
-              value={dataSource.medidaGroupBy ?? 'periodo'}
-              onChange={v => onChange({ ...dataSource, medidaGroupBy: v as 'periodo' | 'centro_custo' | 'departamento' })}
-              options={[
-                { value: 'periodo',       label: 'Período (série temporal)' },
-                { value: 'centro_custo',  label: 'Centro de Custo' },
-                { value: 'departamento',  label: 'Departamento' },
-              ]}
-            />
+            <button
+              type="button"
+              onClick={() => setFiltersExpanded(prev => !prev)}
+              className="flex items-center gap-1.5 text-xs font-medium"
+              style={{ color: filtersExpanded ? '#be8c4a' : 'rgba(0,0,0,0.45)' }}
+            >
+              <SlidersHorizontal size={12} />
+              Filtros (departamentos / centros de custo)
+              {(dataSource.filterDepts?.length || dataSource.filterCentros?.length) ? (
+                <span className="px-1.5 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(190,140,74,0.15)', color: '#be8c4a', fontSize: 10 }}>
+                  {(dataSource.filterDepts?.length ?? 0) + (dataSource.filterCentros?.length ?? 0)} ativo(s)
+                </span>
+              ) : null}
+              {filtersExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            </button>
+
+            {filtersExpanded && (
+              <div className="mt-2 space-y-3 p-3 rounded-xl" style={{ backgroundColor: 'rgba(190,140,74,0.04)', border: '1px solid rgba(190,140,74,0.15)' }}>
+                <div>
+                  <FieldLabel>Departamentos (opcional)</FieldLabel>
+                  <MultiSelectCheckbox
+                    options={departamentos}
+                    selected={dataSource.filterDepts ?? []}
+                    onChange={v => onChange({ ...dataSource, filterDepts: v })}
+                    placeholder="Todos os departamentos"
+                  />
+                </div>
+                <div>
+                  <FieldLabel>Centros de Custo (opcional)</FieldLabel>
+                  <MultiSelectCheckbox
+                    options={centroOptions.map(c => c.nome)}
+                    selected={(dataSource.filterCentros ?? []).map(code => centroOptions.find(c => c.code === code)?.nome ?? code)}
+                    onChange={names => onChange({ ...dataSource, filterCentros: names.map(n => centroOptions.find(c => c.nome === n)?.code ?? n) })}
+                    placeholder="Todos os centros de custo"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -697,6 +767,7 @@ function Step3({
     { value: 'green',   label: 'Verde' },
     { value: 'blue',    label: 'Azul' },
     { value: 'mono',    label: 'Mono' },
+    { value: 'traffic', label: 'Semáforo' },
   ]
 
   return (
@@ -795,16 +866,8 @@ function Step3({
             <Toggle checked={config.showDelta} onChange={v => onChange({ showDelta: v })} />
           </div>
         )}
-        {(config.type === 'bar' || config.type === 'line') && (
+          {(config.type === 'bar' || config.type === 'bar_h' || config.type === 'line') && (
           <>
-            <div className="flex items-center justify-between">
-              <span className="text-sm" style={{ color: '#374151' }}>Eixo X</span>
-              <Toggle checked={config.showAxisX !== false} onChange={v => onChange({ showAxisX: v })} />
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm" style={{ color: '#374151' }}>Eixo Y</span>
-              <Toggle checked={config.showAxisY !== false} onChange={v => onChange({ showAxisY: v })} />
-            </div>
             <div className="flex items-center justify-between">
               <span className="text-sm" style={{ color: '#374151' }}>Linhas de grade</span>
               <Toggle checked={config.showGrid !== false} onChange={v => onChange({ showGrid: v })} />
@@ -814,6 +877,22 @@ function Step3({
               <Toggle checked={config.showDataLabels} onChange={v => onChange({ showDataLabels: v })} />
             </div>
           </>
+        )}
+        {(config.type === 'bar' || config.type === 'bar_h' || config.type === 'table' || config.type === 'treemap' || config.type === 'pie' || config.type === 'donut') && (
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-sm" style={{ color: '#374151' }}>Máx. de itens</span>
+              <p style={{ fontSize: 10, color: 'rgba(0,0,0,0.4)' }}>Limita o número de linhas/barras</p>
+            </div>
+            <input
+              type="number"
+              min={3} max={50}
+              value={config.maxRows ?? 10}
+              onChange={e => onChange({ maxRows: Math.max(3, Math.min(50, parseInt(e.target.value) || 10)) })}
+              className="w-16 rounded-lg px-2 py-1 text-sm text-right"
+              style={{ border: '1px solid rgba(0,0,0,0.12)', color: '#0f172a', backgroundColor: 'white' }}
+            />
+          </div>
         )}
       </div>
     </div>

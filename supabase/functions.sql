@@ -815,3 +815,32 @@ RETURNS TABLE(periodo TEXT) LANGUAGE sql STABLE AS $$
   WHERE data_lancamento IS NOT NULL
   ORDER BY 1;
 $$;
+
+
+-- ─── get_board_data: dados para OnePage Board (por centro_custo × dre) ─────────
+-- Retorna totais de razão e budget agrupados por (centro_custo, dre).
+-- Usado pelo OnePage Financial Intelligence para cálculo de margens e KPIs.
+-- Segue o mesmo padrão estático de get_dre para evitar problemas de codificação.
+CREATE OR REPLACE FUNCTION get_board_data(
+  p_periodos TEXT[] DEFAULT '{}',
+  p_centros  TEXT[] DEFAULT '{}'
+) RETURNS JSONB LANGUAGE sql AS $$
+  SELECT jsonb_agg(row_to_json(t)) FROM (
+    SELECT
+      l.centro_custo,
+      COALESCE(cc.nome_centro_custo, l.centro_custo)  AS nome_centro_custo,
+      COALESCE(cc.nome_departamento, '')               AS nome_departamento,
+      COALESCE(ca.dre, 'Sem classificação')            AS dre,
+      COALESCE(MIN(ca.ordem_dre), 999)                 AS ordem_dre,
+      SUM(CASE WHEN l.tipo = 'razao'  THEN l.debito_credito ELSE 0 END) AS razao,
+      SUM(CASE WHEN l.tipo = 'budget' THEN l.debito_credito ELSE 0 END) AS budget
+    FROM lancamentos l
+    LEFT JOIN centros_custo    cc ON l.centro_custo          = cc.centro_custo
+    LEFT JOIN contas_contabeis ca ON l.numero_conta_contabil = ca.numero_conta_contabil
+    WHERE
+      (array_length(p_periodos, 1) IS NULL OR to_char(l.data_lancamento, 'YYYY-MM') = ANY(p_periodos))
+      AND (array_length(p_centros, 1) IS NULL OR l.centro_custo = ANY(p_centros))
+    GROUP BY l.centro_custo, cc.nome_centro_custo, cc.nome_departamento, ca.dre
+    ORDER BY COALESCE(cc.nome_centro_custo, l.centro_custo), COALESCE(MIN(ca.ordem_dre), 999), ca.dre
+  ) t;
+$$;
