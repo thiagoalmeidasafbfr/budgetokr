@@ -44,6 +44,13 @@ const nav: NavItem[] = [
 
   { type: 'section', label: 'Análise Financeira' },
   {
+    type: 'link', href: '/onepage',
+    icon: Sparkles,
+    label: 'Analytics Engine',
+    sublabel: 'One-Page · Análise executiva',
+    masterOnly: true,
+  },
+  {
     type: 'link', href: '/dre',
     icon: LineChart,
     label: 'DRE',
