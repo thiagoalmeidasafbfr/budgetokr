@@ -1,5 +1,5 @@
 'use client'
-import { BRAND, FONTS, fmtBRL, fmtPct } from '@/lib/brand'
+import { BRAND, FONTS, fmtValue } from '@/lib/brand'
 import type { WidgetConfig, BiQueryResult } from '@/lib/bi/widget-types'
 
 interface WidgetProps {
@@ -26,7 +26,8 @@ export function WaterfallChart({ config, data }: WidgetProps) {
     }
   })
 
-  const fmtTick = (v: number) => fmtBRL(v, true)
+  const fmt = (v: number) => fmtValue(v, config.estilo)
+  const fmtTick = fmt
 
   return (
     <div className="h-full flex flex-col gap-1">
@@ -43,10 +44,10 @@ export function WaterfallChart({ config, data }: WidgetProps) {
                    tickFormatter={fmtTick} width={64} />
             <ReferenceLine y={0} stroke={BRAND.neutral} />
             <Tooltip formatter={(v: number, _: string, p: Record<string,unknown>) =>
-              [fmtBRL((p.payload as { rawValue: number }).rawValue), 'Valor']}
+              [fmt((p.payload as { rawValue: number }).rawValue), 'Valor']}
               contentStyle={{ fontFamily: FONTS.mono, fontSize: 11 }} />
             <Bar dataKey="value" radius={[2,2,0,0]}
-                 label={{ position:'top', formatter: (v:number) => fmtBRL(v,true), fontSize:9, fontFamily: FONTS.mono }}>
+                 label={{ position:'top', formatter: fmt, fontSize:9, fontFamily: FONTS.mono }}>
               {entries.map((e, i) => (
                 <Cell key={i}
                   fill={e.isTotal ? BRAND.ink : e.positive ? BRAND.gold : BRAND.danger} />

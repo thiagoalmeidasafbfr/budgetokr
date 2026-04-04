@@ -1,5 +1,5 @@
 'use client'
-import { BRAND, FONTS, fmtBRL, fmtPct } from '@/lib/brand'
+import { BRAND, FONTS, fmtValue } from '@/lib/brand'
 import type { WidgetConfig, BiQueryResult } from '@/lib/bi/widget-types'
 
 interface WidgetProps {
@@ -12,7 +12,9 @@ interface WidgetProps {
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
 
 export function LineArea({ config, data }: WidgetProps) {
-  const { mostrar_titulo, mostrar_eixos, mostrar_grid, mostrar_legenda } = config.estilo
+  const { mostrar_titulo, mostrar_eixos, mostrar_grid, mostrar_legenda, cor_primaria } = config.estilo
+  const fmt = (v: number) => fmtValue(v, config.estilo)
+  const primaryColor = cor_primaria ?? BRAND.gold
   if (data.tipo !== 'serie') return null
 
   const chartData = data.pontos.map(p => ({
@@ -32,8 +34,8 @@ export function LineArea({ config, data }: WidgetProps) {
           <AreaChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
             <defs>
               <linearGradient id="gradRealizado" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor={BRAND.gold} stopOpacity={0.3} />
-                <stop offset="95%" stopColor={BRAND.gold} stopOpacity={0}   />
+                <stop offset="5%"  stopColor={primaryColor} stopOpacity={0.3} />
+                <stop offset="95%" stopColor={primaryColor} stopOpacity={0}   />
               </linearGradient>
             </defs>
             {mostrar_grid && <CartesianGrid strokeDasharray="3 3" stroke={BRAND.muted} opacity={0.3} vertical={false} />}
@@ -41,13 +43,13 @@ export function LineArea({ config, data }: WidgetProps) {
               <>
                 <XAxis dataKey="name" tick={{ fontSize: 9, fontFamily: FONTS.mono, fill: BRAND.muted }} />
                 <YAxis tick={{ fontSize: 9, fontFamily: FONTS.mono, fill: BRAND.muted }}
-                       tickFormatter={(v:number) => fmtBRL(v, true)} width={64} />
+                       tickFormatter={(v:number) => fmt(v)} width={64} />
               </>
             )}
-            <Tooltip formatter={(v:number) => [fmtBRL(v), '']}
+            <Tooltip formatter={(v:number) => [fmt(v), '']}
                      contentStyle={{ fontFamily: FONTS.mono, fontSize: 11 }} />
             {mostrar_legenda && <Legend wrapperStyle={{ fontSize: 10, fontFamily: FONTS.mono }} />}
-            <Area type="monotone" dataKey="Realizado" stroke={BRAND.gold} strokeWidth={2}
+            <Area type="monotone" dataKey="Realizado" stroke={primaryColor} strokeWidth={2}
                   fill="url(#gradRealizado)" dot={false} />
             <Area type="monotone" dataKey="Budget" stroke={BRAND.muted} strokeWidth={1.5}
                   strokeDasharray="4 4" fill="none" dot={false} />

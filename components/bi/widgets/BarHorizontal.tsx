@@ -1,5 +1,5 @@
 'use client'
-import { BRAND, FONTS, fmtBRL, fmtPct } from '@/lib/brand'
+import { BRAND, FONTS, fmtValue, CHART_PALETTE } from '@/lib/brand'
 import type { WidgetConfig, BiQueryResult } from '@/lib/bi/widget-types'
 
 interface WidgetProps {
@@ -10,10 +10,10 @@ interface WidgetProps {
 }
 
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts'
-import { CHART_PALETTE } from '@/lib/brand'
 
 export function BarHorizontal({ config, data }: WidgetProps) {
-  const { mostrar_titulo, mostrar_eixos, mostrar_grid } = config.estilo
+  const { mostrar_titulo, mostrar_eixos, mostrar_grid, cor_primaria } = config.estilo
+  const fmt = (v: number) => fmtValue(v, config.estilo)
 
   let chartData: Array<{ name: string; value: number }> = []
   if (data.tipo === 'breakdown') {
@@ -41,12 +41,12 @@ export function BarHorizontal({ config, data }: WidgetProps) {
             {mostrar_eixos && (
               <>
                 <XAxis type="number" tick={{ fontSize: 9, fontFamily: FONTS.mono, fill: BRAND.muted }}
-                       tickFormatter={(v:number) => fmtBRL(v, true)} />
+                       tickFormatter={(v:number) => fmt(v)} />
                 <YAxis type="category" dataKey="name" width={120}
                        tick={{ fontSize: 10, fontFamily: FONTS.mono, fill: BRAND.ink }} />
               </>
             )}
-            <Tooltip formatter={(v:number) => [fmtBRL(v), '']}
+            <Tooltip formatter={(v:number) => [fmt(v), '']}
                      contentStyle={{ fontFamily: FONTS.mono, fontSize: 11 }} />
             <Bar dataKey="value" radius={[0,2,2,0]}>
               {chartData.map((_, i) => (

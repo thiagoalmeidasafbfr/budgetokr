@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import GridLayout, { type Layout } from 'react-grid-layout'
 import { BRAND, FONTS } from '@/lib/brand'
 import { useBiStore } from '@/lib/bi/store'
+import { periodosFromBiPeriodo } from '@/lib/bi/engine'
 import type { BiQueryResult, WidgetConfig } from '@/lib/bi/widget-types'
 import { KpiCard }        from './widgets/KpiCard'
 import { WaterfallChart } from './widgets/WaterfallChart'
@@ -68,8 +69,19 @@ export function BiCanvas() {
     return () => obs.disconnect()
   }, [])
 
-  // Fetch data for a single widget
-  const fetchWidget = useCallback(async (wc: WidgetConfig) => {
+  // Fetch data for a single widget — injects global period when useGlobalPeriodo !== false
+  const fetchWidget = useCallback(async (wc: WidgetConfig, globalPeriodo?: typeof dashboard.periodo_global) => {
+    const effectiveConfig: WidgetConfig = (wc.scope.useGlobalPeriodo !== false && globalPeriodo)
+      ? { ...wc, scope: { ...wc.scope, periodo: globalPeriodo } }
+      : wc
+
+    const cacheKey = JSON.stringify({
+      id: wc.id,
+      periodos: periodosFromBiPeriodo(effectiveConfig.scope.periodo),
+      scope: { departamentos: effectiveConfig.scope.departamentos, centros_custo: effectiveConfig.scope.centros_custo },
+      metrica: effectiveConfig.metrica,
+    })
+
     if (pendingRef.current.has(wc.id)) return
     pendingRef.current.add(wc.id)
     setDataCache(prev => ({ ...prev, [wc.id]: 'loading' }))
@@ -77,7 +89,7 @@ export function BiCanvas() {
       const res = await fetch('/api/bi/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ widgetConfig: wc }),
+        body: JSON.stringify({ widgetConfig: effectiveConfig }),
       })
       if (!res.ok) throw new Error(await res.text())
       const result: BiQueryResult = await res.json()
@@ -88,13 +100,16 @@ export function BiCanvas() {
     } finally {
       pendingRef.current.delete(wc.id)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Initial and dashboard-change fetch
+  // Re-fetch all widgets when widgets list or global period changes
   useEffect(() => {
     const w = dashboard.widgets.filter(w => w.visual !== 'text_label')
-    for (const wc of w) fetchWidget(wc)
-  }, [dashboard.widgets, fetchWidget])
+    for (const wc of w) fetchWidget(wc, dashboard.periodo_global)
+  // dashboard.periodo_global must be in deps to trigger re-fetch on period change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dashboard.widgets, dashboard.periodo_global, fetchWidget])
 
   // React-grid-layout layouts
   const layouts: Layout[] = dashboard.widgets.map(w => ({
@@ -169,25 +184,35 @@ export function BiCanvas() {
                 >
                   {/* Edit chrome — only in edit mode */}
                   {isEditing && (
-                    <div
-                      className="rgl-drag-handle absolute top-0 left-0 right-0 h-6 flex items-center justify-between px-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-grab"
-                      style={{ backgroundColor: BRAND.gold + 'CC' }}
-                      data-no-print
-                    >
-                      <span className="text-white text-[10px] font-mono select-none">⠿ {wc.titulo ?? wc.visual}</span>
-                      <div className="flex items-center gap-1">
+                    <>
+                      {/* Drag handle strip — only the dots icon is the drag target */}
+                      <div
+                        className="rgl-drag-handle absolute top-0 left-0 right-10 h-6 flex items-center px-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-grab"
+                        style={{ backgroundColor: BRAND.gold + 'CC' }}
+                        data-no-print
+                      >
+                        <span className="text-white text-[10px] font-mono select-none truncate">⠿ {wc.titulo ?? wc.visual}</span>
+                      </div>
+
+                      {/* Action buttons — outside drag handle, separate from it */}
+                      <div
+                        className="absolute top-0 right-0 h-6 flex items-center gap-0.5 px-1 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                        style={{ backgroundColor: BRAND.gold + 'CC' }}
+                        data-no-print
+                        onPointerDown={e => e.stopPropagation()}
+                      >
                         <button
-                          onClick={() => setActiveWidget(activeWidgetId === wc.id ? null : wc.id)}
-                          className="text-white text-xs px-1 hover:opacity-70"
+                          onClick={e => { e.stopPropagation(); setActiveWidget(activeWidgetId === wc.id ? null : wc.id) }}
+                          className="text-white text-xs px-1 hover:opacity-70 leading-none"
                           title="Configurar"
                         >⚙</button>
                         <button
-                          onClick={() => useBiStore.getState().removeWidget(wc.id)}
-                          className="text-white text-xs px-1 hover:opacity-70"
+                          onClick={e => { e.stopPropagation(); useBiStore.getState().removeWidget(wc.id) }}
+                          className="text-white text-xs px-1 hover:opacity-70 leading-none"
                           title="Remover"
                         >×</button>
                       </div>
-                    </div>
+                    </>
                   )}
 
                   {/* Content */}

@@ -46,6 +46,7 @@ import type {
   BiQueryResult, DreLine, DreStructureLine,
 } from './widget-types'
 import { safePct } from '@/lib/utils'
+import { getMedidaResultados } from '@/lib/query'
 
 // ─── Period helpers ───────────────────────────────────────────────────────────
 
@@ -57,6 +58,9 @@ export function periodosFromBiPeriodo(p: BiPeriodo): string[] {
     const result: string[] = []
     for (let m = 1; m <= 12; m++) result.push(`${p.ano}-${String(m).padStart(2, '0')}`)
     return result
+  }
+  if (p.tipo === 'lista') {
+    return p.periodos.slice().sort()
   }
   // range
   const result: string[] = []
@@ -74,6 +78,17 @@ export function labelFromBiPeriodo(p: BiPeriodo): string {
   const MES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
   if (p.tipo === 'mes') return `${MES[p.mes - 1]} ${p.ano}`
   if (p.tipo === 'ytd') return `YTD ${p.ano}`
+  if (p.tipo === 'lista') {
+    if (p.periodos.length === 0) return '—'
+    const sorted = [...p.periodos].sort()
+    if (sorted.length === 1) {
+      const [y, m] = sorted[0].split('-').map(Number)
+      return `${MES[m-1]} ${y}`
+    }
+    const [y1, m1] = sorted[0].split('-').map(Number)
+    const [y2, m2] = sorted[sorted.length-1].split('-').map(Number)
+    return `${MES[m1-1]}–${MES[m2-1]} ${y1 === y2 ? y1 : `${y1}/${y2}`}`
+  }
   const [y1, m1] = p.de.split('-').map(Number)
   const [y2, m2] = p.ate.split('-').map(Number)
   return `${MES[m1-1]}–${MES[m2-1]} ${y1 === y2 ? y1 : `${y1}/${y2}`}`
@@ -92,7 +107,7 @@ function prevPeriodo(p: BiPeriodo, tipo: 'mes_anterior' | 'ano_anterior'): strin
   if (tipo === 'ano_anterior') {
     return periodos.map(pp => `${parseInt(pp.slice(0, 4)) - 1}${pp.slice(4)}`)
   }
-  // mes_anterior for range/ytd: shift all months back one
+  // mes_anterior for range/ytd/lista: shift all months back one
   return periodos.map(pp => {
     const [y, m] = pp.split('-').map(Number)
     const pm = m === 1 ? 12 : m - 1
@@ -116,7 +131,7 @@ async function fetchDREData(
   scope: BiScope,
   supabase: SupabaseClient
 ): Promise<DREAggRow[]> {
-  const depts = scope.departamento_id ? [scope.departamento_id] : []
+  const depts   = scope.departamentos ?? []
   const centros = scope.centros_custo ?? []
   const { data, error } = await supabase.rpc('get_dre', {
     p_periodos:      periodos,
@@ -250,7 +265,7 @@ function buildDreLines(
 // ─── getBiDimensoes ───────────────────────────────────────────────────────────
 
 export async function getBiDimensoes(supabase: SupabaseClient) {
-  const [ccRes, linhasRes] = await Promise.all([
+  const [ccRes, linhasRes, medidasRes] = await Promise.all([
     supabase.from('centros_custo')
       .select('centro_custo, nome_centro_custo, departamento, nome_departamento')
       .order('nome_departamento')
@@ -258,6 +273,9 @@ export async function getBiDimensoes(supabase: SupabaseClient) {
     supabase.from('dre_linhas')
       .select('id, ordem, nome, tipo, sinal, formula_grupos, formula_sinais, negrito, separador')
       .order('ordem'),
+    supabase.from('medidas')
+      .select('id, nome, descricao, unidade, tipo_medida, cor')
+      .order('nome'),
   ])
 
   if (ccRes.error) throw new Error(ccRes.error.message)
@@ -276,8 +294,8 @@ export async function getBiDimensoes(supabase: SupabaseClient) {
   return {
     departamentos: [...deptMap.entries()].map(([id, nome]) => ({ id, nome })).sort((a,b) => a.nome.localeCompare(b.nome)),
     centros_custo: rows.map((r: Record<string, unknown>) => ({
-      id:             r.centro_custo as string,
-      nome:           (r.nome_centro_custo ?? r.centro_custo) as string,
+      id:              r.centro_custo as string,
+      nome:            (r.nome_centro_custo ?? r.centro_custo) as string,
       departamento_id: r.departamento as string,
     })),
     linhas_dre: (linhasRes.data ?? []).map((r: Record<string, unknown>) => ({
@@ -288,6 +306,14 @@ export async function getBiDimensoes(supabase: SupabaseClient) {
       negrito:   r.negrito === 1,
       separador: r.separador === 1,
     })) as DreStructureLine[],
+    medidas: (medidasRes.data ?? []).map((r: Record<string, unknown>) => ({
+      id:          r.id as number,
+      nome:        r.nome as string,
+      descricao:   (r.descricao ?? '') as string,
+      unidade:     (r.unidade ?? '') as string,
+      tipo_medida: (r.tipo_medida ?? 'simples') as string,
+      cor:         (r.cor ?? '#6366f1') as string,
+    })),
   }
 }
 
@@ -297,8 +323,8 @@ export async function runBiQuery(
   widgetConfig: WidgetConfig,
   supabase: SupabaseClient
 ): Promise<BiQueryResult> {
-  const scope   = widgetConfig.scope
-  const metrica = widgetConfig.metrica
+  const scope    = widgetConfig.scope
+  const metrica  = widgetConfig.metrica
   const periodos = periodosFromBiPeriodo(scope.periodo)
 
   switch (metrica.tipo) {
@@ -365,11 +391,15 @@ export async function runBiQuery(
       const { data: ccRows } = await supabase
         .from('centros_custo')
         .select('departamento, nome_departamento')
-      const depts = [...new Set((ccRows ?? []).map((r: Record<string,unknown>) => r.departamento as string).filter(Boolean))]
+      const allDepts = [...new Set((ccRows ?? []).map((r: Record<string,unknown>) => r.departamento as string).filter(Boolean))]
+      // If scope restricts departments, use only those
+      const depts = (scope.departamentos?.length ?? 0) > 0
+        ? allDepts.filter(d => scope.departamentos!.includes(d))
+        : allDepts
 
       const results: Array<{ label: string; realizado: number; budget: number }> = []
       for (const deptId of depts) {
-        const scopeDept = { ...scope, departamento_id: deptId, centros_custo: undefined }
+        const scopeDept: BiScope = { ...scope, departamentos: [deptId], centros_custo: [] }
         const rows = await fetchDREData(periodos, scopeDept, supabase)
         const gMap = aggregateDRE(rows)
         const comp = computeLine(linha, gMap, linhas, linha.ordem)
@@ -400,17 +430,16 @@ export async function runBiQuery(
       const linha = linhas.find(l => l.nome === metrica.linha_nome)
       if (!linha) return { tipo: 'breakdown', itens: [] }
 
-      const depts = scope.departamento_id ? [scope.departamento_id] : []
-      const { data: ccRows } = await supabase
-        .from('centros_custo')
-        .select('centro_custo, nome_centro_custo')
-        .in(depts.length ? 'departamento' : 'centro_custo',
-            depts.length ? depts : scope.centros_custo ?? [])
+      const depts = scope.departamentos ?? []
+      let ccQuery = supabase.from('centros_custo').select('centro_custo, nome_centro_custo')
+      if (depts.length > 0) ccQuery = ccQuery.in('departamento', depts)
+      else if ((scope.centros_custo ?? []).length > 0) ccQuery = ccQuery.in('centro_custo', scope.centros_custo!)
+      const { data: ccRows } = await ccQuery
       const centros = (ccRows ?? []) as Array<{ centro_custo: string; nome_centro_custo: string }>
 
       const results: Array<{ label: string; realizado: number; budget: number }> = []
       for (const cc of centros) {
-        const scopeCC = { ...scope, centros_custo: [cc.centro_custo] }
+        const scopeCC: BiScope = { ...scope, departamentos: [], centros_custo: [cc.centro_custo] }
         const rows = await fetchDREData(periodos, scopeCC, supabase)
         const gMap = aggregateDRE(rows)
         const comp = computeLine(linha, gMap, linhas, linha.ordem)
@@ -437,22 +466,10 @@ export async function runBiQuery(
     // ── Top-N ─────────────────────────────────────────────────────────────────
     case 'topN_grupo': {
       const rows = await fetchDREData(periodos, scope, supabase)
-      // Group by CC within the requested grupo
-      const { data: ccAll } = await supabase
-        .from('lancamentos')
-        .select('centro_custo, nome_conta_contabil')
-        .limit(1)
-      // Use the dre RPC grouped by CC — use run_star_query instead
       const dreRows = rows.filter(r => r.dre === metrica.grupo_nome)
-      // Aggregate by centro_custo via direct query
-      const { data: detailRows, error: detErr } = await supabase.rpc('get_dre', {
-        p_periodos: periodos,
-        p_departamentos: scope.departamento_id ? [scope.departamento_id] : [],
-        p_centros: scope.centros_custo ?? [],
-      })
-      // Fall back to top-N by agrupamento_arvore within the grupo
+      // Aggregate by agrupamento_arvore within the grupo
       const byAgrup = new Map<string, number>()
-      for (const r of (dreRows ?? [])) {
+      for (const r of dreRows) {
         const key = r.agrupamento_arvore || r.dre || 'Outros'
         byAgrup.set(key, (byAgrup.get(key) ?? 0) + (r.razao ?? 0))
       }
@@ -500,6 +517,44 @@ export async function runBiQuery(
         valor: realizado,
         comparativo: budget || null,
         variacao_pct: budget !== 0 ? (desvio / Math.abs(budget)) * 100 : null,
+      }
+    }
+
+    // ── Medida criada ─────────────────────────────────────────────────────────
+    case 'medida': {
+      const depts   = scope.departamentos ?? []
+      const centros = scope.centros_custo ?? []
+
+      // Build extra filters for scope restriction
+      const extraFiltros: Array<{ campo: string; operador: string; valor: string }> = []
+      if (depts.length > 0) {
+        extraFiltros.push({ campo: 'departamento', operador: 'in', valor: depts.join(',') })
+      }
+      if (centros.length > 0) {
+        extraFiltros.push({ campo: 'centro_custo', operador: 'in', valor: centros.join(',') })
+      }
+
+      const results = await getMedidaResultados(metrica.medida_id, {
+        groupByDept:   false,
+        groupByPeriod: false,
+        groupByCentroCusto: false,
+        periodos,
+        extraFiltros,
+      })
+
+      // Aggregate all rows into a single scalar
+      let totalRazao = 0, totalBudget = 0
+      for (const r of results) {
+        totalRazao  += r.razao  ?? 0
+        totalBudget += r.budget ?? 0
+      }
+
+      const desvio = totalRazao - totalBudget
+      return {
+        tipo: 'escalar',
+        valor:        totalRazao,
+        comparativo:  totalBudget || null,
+        variacao_pct: totalBudget !== 0 ? (desvio / Math.abs(totalBudget)) * 100 : null,
       }
     }
 

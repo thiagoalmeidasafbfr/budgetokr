@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { BRAND, FONTS, fmtBRL } from '@/lib/brand'
+import { BRAND, FONTS } from '@/lib/brand'
 import { useBiStore } from '@/lib/bi/store'
 import type { WidgetConfig, WidgetVisual, BiMetrica, BiScope, BiPeriodo, WidgetEstilo } from '@/lib/bi/widget-types'
 import { WIDGET_META, DEFAULT_ESTILO } from '@/lib/bi/widget-types'
@@ -9,6 +9,7 @@ interface DimensoesData {
   departamentos: Array<{ id: string; nome: string }>
   centros_custo: Array<{ id: string; nome: string; departamento_id: string }>
   linhas_dre:    Array<{ nome: string; tipo: string }>
+  medidas:       Array<{ id: number; nome: string; descricao: string; unidade: string; tipo_medida: string; cor: string }>
 }
 
 interface WidgetConfigPanelProps {
@@ -33,7 +34,7 @@ const VISUAL_ICONS: Record<WidgetVisual, string> = {
   line_area: '📈', donut: '🍩', pie: '🥧', table: '📋', text_label: '✏️',
 }
 
-const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+const MESES_SHORT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 const ANOS  = [2022,2023,2024,2025,2026]
 
 export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps) {
@@ -44,6 +45,14 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
   const [dimensoes, setDimensoes] = useState<DimensoesData | null>(null)
   const [tab, setTab]             = useState<'what'|'where'|'how'>('what')
   const [confirmRemove, setConfirmRemove] = useState(false)
+  const [pickerYear, setPickerYear] = useState(() => {
+    const p = widget?.scope.periodo
+    if (!p) return new Date().getFullYear()
+    if (p.tipo === 'mes') return p.ano
+    if (p.tipo === 'ytd') return p.ano
+    if (p.tipo === 'lista' && p.periodos.length > 0) return parseInt(p.periodos[0].slice(0, 4))
+    return new Date().getFullYear()
+  })
 
   useEffect(() => {
     fetch('/api/bi/dimensoes').then(r => r.json()).then(d => setDimensoes(d)).catch(() => {})
@@ -52,8 +61,8 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
   if (!draft) return null
 
   const upd = (partial: Partial<WidgetConfig>) => setDraft(prev => prev ? { ...prev, ...partial } : prev)
-  const updScope  = (s: Partial<BiScope>)       => upd({ scope:  { ...draft.scope,  ...s } })
-  const updEstilo = (e: Partial<WidgetEstilo>)   => upd({ estilo: { ...draft.estilo, ...e } })
+  const updScope  = (s: Partial<BiScope>)     => upd({ scope:  { ...draft.scope,  ...s } })
+  const updEstilo = (e: Partial<WidgetEstilo>) => upd({ estilo: { ...draft.estilo, ...e } })
 
   function handleApply() {
     if (!draft) return
@@ -73,11 +82,40 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
     onClose()
   }
 
-  const dreLinhas = (dimensoes?.linhas_dre ?? []).filter(l => l.tipo !== 'calculada')
-  const depts     = dimensoes?.departamentos ?? []
-  const ccs       = (dimensoes?.centros_custo ?? []).filter(cc =>
-    !draft.scope.departamento_id || cc.departamento_id === draft.scope.departamento_id
+  const dreLinhas  = (dimensoes?.linhas_dre ?? []).filter(l => l.tipo !== 'calculada')
+  const depts      = dimensoes?.departamentos ?? []
+  const medidas    = dimensoes?.medidas ?? []
+
+  // Currently selected departments in draft
+  const selectedDepts: string[] = draft.scope.departamentos ?? []
+
+  // CCs visible: only those from selected depts (or all if no dept selected)
+  const visibleCCs = (dimensoes?.centros_custo ?? []).filter(cc =>
+    selectedDepts.length === 0 || selectedDepts.includes(cc.departamento_id)
   )
+
+  // Period picker helpers
+  const periodoPeriodos: Set<string> = new Set(
+    draft.scope.periodo.tipo === 'mes'   ? [`${draft.scope.periodo.ano}-${String(draft.scope.periodo.mes).padStart(2,'0')}`]
+    : draft.scope.periodo.tipo === 'ytd' ? Array.from({length:12}, (_,i) => `${draft.scope.periodo.ano}-${String(i+1).padStart(2,'0')}`)
+    : draft.scope.periodo.tipo === 'lista' ? draft.scope.periodo.periodos
+    : []
+  )
+
+  function togglePeriodoMonth(m: number) {
+    const key = `${pickerYear}-${String(m).padStart(2, '0')}`
+    const next = new Set(periodoPeriodos)
+    if (next.has(key)) next.delete(key)
+    else next.add(key)
+    const sorted = [...next].sort()
+    if (sorted.length === 0) return
+    if (sorted.length === 1) {
+      const [y, mon] = sorted[0].split('-').map(Number)
+      updScope({ periodo: { tipo: 'mes', mes: mon, ano: y } as BiPeriodo })
+    } else {
+      updScope({ periodo: { tipo: 'lista', periodos: sorted } as BiPeriodo })
+    }
+  }
 
   const TabBtn = ({ id, label }: { id: 'what'|'where'|'how'; label: string }) => (
     <button
@@ -92,6 +130,13 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
     >
       {label}
     </button>
+  )
+
+  const SectionLabel = ({ children }: { children: React.ReactNode }) => (
+    <label className="block text-[10px] font-semibold tracking-widest uppercase mb-1.5"
+           style={{ fontFamily: FONTS.heading, color: BRAND.muted }}>
+      {children}
+    </label>
   )
 
   return (
@@ -123,8 +168,7 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
           <>
             {/* Visual selector */}
             <div>
-              <label className="block text-[10px] font-semibold tracking-widest uppercase mb-2"
-                     style={{ fontFamily: FONTS.heading, color: BRAND.muted }}>Tipo de visualização</label>
+              <SectionLabel>Tipo de visualização</SectionLabel>
               <div className="grid grid-cols-3 gap-1.5">
                 {(Object.keys(VISUAL_ICONS) as WidgetVisual[]).map(v => (
                   <button
@@ -145,8 +189,7 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
 
             {/* Metric type */}
             <div>
-              <label className="block text-[10px] font-semibold tracking-widest uppercase mb-2"
-                     style={{ fontFamily: FONTS.heading, color: BRAND.muted }}>Métrica</label>
+              <SectionLabel>Métrica</SectionLabel>
               <select
                 value={draft.metrica.tipo}
                 onChange={e => upd({ metrica: { tipo: e.target.value as BiMetrica['tipo'], linha_nome: '' } as BiMetrica })}
@@ -161,6 +204,7 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
                 <option value="topN_grupo">Top-N de um Grupo</option>
                 <option value="dre_completa">DRE Completa</option>
                 <option value="dre_parcial">DRE Parcial (selecionar linhas)</option>
+                {medidas.length > 0 && <option value="medida">Medida criada</option>}
               </select>
             </div>
 
@@ -168,8 +212,7 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
             {(draft.metrica.tipo === 'linha_dre' || draft.metrica.tipo === 'serie_temporal' ||
               draft.metrica.tipo === 'breakdown_cc' || draft.metrica.tipo === 'breakdown_dpto') && (
               <div>
-                <label className="block text-[10px] font-semibold tracking-widest uppercase mb-1"
-                       style={{ fontFamily: FONTS.heading, color: BRAND.muted }}>Linha DRE</label>
+                <SectionLabel>Linha DRE</SectionLabel>
                 <select
                   value={(draft.metrica as { linha_nome?: string }).linha_nome ?? ''}
                   onChange={e => upd({ metrica: { ...draft.metrica, linha_nome: e.target.value } as BiMetrica })}
@@ -185,8 +228,7 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
             {/* Grupo selector */}
             {(draft.metrica.tipo === 'grupo_dre' || draft.metrica.tipo === 'topN_grupo') && (
               <div>
-                <label className="block text-[10px] font-semibold tracking-widest uppercase mb-1"
-                       style={{ fontFamily: FONTS.heading, color: BRAND.muted }}>Grupo DRE</label>
+                <SectionLabel>Grupo DRE</SectionLabel>
                 <select
                   value={(draft.metrica as { grupo_nome?: string }).grupo_nome ?? ''}
                   onChange={e => upd({ metrica: { ...draft.metrica, grupo_nome: e.target.value } as BiMetrica })}
@@ -202,8 +244,7 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
             {draft.metrica.tipo === 'topN_grupo' && (
               <div className="flex gap-2">
                 <div className="flex-1">
-                  <label className="block text-[10px] font-semibold tracking-widest uppercase mb-1"
-                         style={{ fontFamily: FONTS.heading, color: BRAND.muted }}>N</label>
+                  <SectionLabel>N</SectionLabel>
                   <input type="number" min={1} max={50}
                     value={(draft.metrica as { n?: number }).n ?? 10}
                     onChange={e => upd({ metrica: { ...draft.metrica, n: parseInt(e.target.value) || 10 } as BiMetrica })}
@@ -211,8 +252,7 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
                     style={{ borderColor: BRAND.border }} />
                 </div>
                 <div className="flex-1">
-                  <label className="block text-[10px] font-semibold tracking-widest uppercase mb-1"
-                         style={{ fontFamily: FONTS.heading, color: BRAND.muted }}>Ordem</label>
+                  <SectionLabel>Ordem</SectionLabel>
                   <select
                     value={(draft.metrica as { ordem?: string }).ordem ?? 'desc'}
                     onChange={e => upd({ metrica: { ...draft.metrica, ordem: e.target.value } as BiMetrica })}
@@ -225,10 +265,36 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
               </div>
             )}
 
+            {/* Medida selector */}
+            {draft.metrica.tipo === 'medida' && (
+              <div>
+                <SectionLabel>Medida criada</SectionLabel>
+                <select
+                  value={(draft.metrica as { medida_id?: number }).medida_id ?? ''}
+                  onChange={e => {
+                    const id = parseInt(e.target.value)
+                    const m = medidas.find(x => x.id === id)
+                    if (m) upd({ metrica: { tipo: 'medida', medida_id: m.id, nome_medida: m.nome } as BiMetrica })
+                  }}
+                  className="w-full px-2 py-1.5 border rounded text-sm outline-none focus:border-[#B8924A]"
+                  style={{ borderColor: BRAND.border, color: BRAND.ink }}
+                >
+                  <option value="">— Selecionar medida —</option>
+                  {medidas.map(m => (
+                    <option key={m.id} value={m.id}>{m.nome}{m.unidade ? ` (${m.unidade})` : ''}</option>
+                  ))}
+                </select>
+                {draft.metrica.tipo === 'medida' && (draft.metrica as { medida_id?: number }).medida_id && (
+                  <p className="text-[10px] mt-1" style={{ color: BRAND.muted }}>
+                    {medidas.find(m => m.id === (draft.metrica as { medida_id?: number }).medida_id)?.descricao}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Custom title */}
             <div>
-              <label className="block text-[10px] font-semibold tracking-widest uppercase mb-1"
-                     style={{ fontFamily: FONTS.heading, color: BRAND.muted }}>Título customizado</label>
+              <SectionLabel>Título customizado</SectionLabel>
               <input
                 type="text"
                 value={draft.titulo ?? ''}
@@ -244,31 +310,118 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
         {/* ─ ONDE ─ */}
         {tab === 'where' && (
           <>
-            {/* Department */}
-            <div>
-              <label className="block text-[10px] font-semibold tracking-widest uppercase mb-1"
-                     style={{ fontFamily: FONTS.heading, color: BRAND.muted }}>Departamento</label>
-              <select
-                value={draft.scope.departamento_id ?? ''}
-                onChange={e => updScope({ departamento_id: e.target.value || undefined, centros_custo: [] })}
-                className="w-full px-2 py-1.5 border rounded text-sm outline-none"
-                style={{ borderColor: BRAND.border, color: BRAND.ink }}
+            {/* Use global period toggle */}
+            <div className="flex items-center justify-between p-2.5 rounded-lg border"
+                 style={{ borderColor: draft.scope.useGlobalPeriodo !== false ? BRAND.gold : BRAND.border,
+                          backgroundColor: draft.scope.useGlobalPeriodo !== false ? '#FBF7EE' : 'white' }}>
+              <div>
+                <p className="text-xs font-semibold" style={{ color: BRAND.ink }}>Usar período global</p>
+                <p className="text-[10px]" style={{ color: BRAND.muted }}>Segue o seletor do dashboard</p>
+              </div>
+              <button
+                onClick={() => updScope({ useGlobalPeriodo: draft.scope.useGlobalPeriodo === false ? true : false })}
+                className="relative w-10 h-5 rounded-full transition-colors"
+                style={{ backgroundColor: draft.scope.useGlobalPeriodo !== false ? BRAND.gold : '#D1D5DB' }}
               >
-                <option value="">Todos os departamentos</option>
-                {depts.map(d => <option key={d.id} value={d.id}>{d.nome}</option>)}
-              </select>
+                <span className="absolute top-0.5 transition-all w-4 h-4 rounded-full bg-white shadow"
+                      style={{ left: draft.scope.useGlobalPeriodo !== false ? '22px' : '2px' }} />
+              </button>
             </div>
 
-            {/* CCs multiselect */}
-            {ccs.length > 0 && (
+            {/* Period override — only when not using global */}
+            {draft.scope.useGlobalPeriodo === false && (
               <div>
-                <label className="block text-[10px] font-semibold tracking-widest uppercase mb-1"
-                       style={{ fontFamily: FONTS.heading, color: BRAND.muted }}>
-                  Centros de custo ({draft.scope.centros_custo?.length ? `${draft.scope.centros_custo.length} sel.` : 'todos'})
-                </label>
-                <div className="max-h-36 overflow-y-auto border rounded" style={{ borderColor: BRAND.border }}>
-                  {ccs.map(cc => {
+                <SectionLabel>Período específico</SectionLabel>
+
+                {/* Year */}
+                <div className="flex gap-1 mb-2">
+                  {ANOS.map(y => (
+                    <button key={y}
+                      onClick={() => setPickerYear(y)}
+                      className="flex-1 py-0.5 text-[10px] rounded border transition-colors"
+                      style={{
+                        borderColor: pickerYear === y ? BRAND.gold : BRAND.border,
+                        backgroundColor: pickerYear === y ? '#FBF7EE' : 'white',
+                        color: pickerYear === y ? BRAND.gold : BRAND.muted,
+                        fontFamily: FONTS.mono,
+                      }}>
+                      {y}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Month grid */}
+                <div className="grid grid-cols-4 gap-1 mb-2">
+                  {MESES_SHORT.map((m, i) => {
+                    const key = `${pickerYear}-${String(i+1).padStart(2,'0')}`
+                    const isSel = periodoPeriodos.has(key)
+                    return (
+                      <button key={i}
+                        onClick={() => togglePeriodoMonth(i+1)}
+                        className="py-1.5 rounded text-xs font-medium border transition-all"
+                        style={{
+                          borderColor: isSel ? BRAND.gold : BRAND.border,
+                          backgroundColor: isSel ? BRAND.gold : 'white',
+                          color: isSel ? 'white' : BRAND.ink,
+                          fontFamily: FONTS.mono,
+                        }}>
+                        {m}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Quick: YTD button */}
+                <button
+                  onClick={() => updScope({ periodo: { tipo: 'ytd', ano: pickerYear } as BiPeriodo })}
+                  className="w-full py-1 text-xs rounded border transition-colors hover:bg-[#FBF7EE]"
+                  style={{ borderColor: BRAND.gold, color: BRAND.gold, fontFamily: FONTS.mono }}>
+                  YTD {pickerYear}
+                </button>
+              </div>
+            )}
+
+            {/* Department multiselect */}
+            <div>
+              <SectionLabel>
+                Departamentos ({selectedDepts.length === 0 ? 'todos' : `${selectedDepts.length} sel.`})
+              </SectionLabel>
+              <div className="max-h-36 overflow-y-auto border rounded" style={{ borderColor: BRAND.border }}>
+                {depts.map(d => {
+                  const sel = selectedDepts.includes(d.id)
+                  return (
+                    <label key={d.id} className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 cursor-pointer">
+                      <input type="checkbox" checked={sel}
+                        onChange={e => {
+                          const next = e.target.checked
+                            ? [...selectedDepts, d.id]
+                            : selectedDepts.filter(x => x !== d.id)
+                          // Clear CC selection when depts change (cascade)
+                          updScope({ departamentos: next, centros_custo: [] })
+                        }} />
+                      <span className="text-xs truncate" style={{ color: BRAND.ink }}>{d.nome}</span>
+                    </label>
+                  )
+                })}
+              </div>
+              {selectedDepts.length > 0 && (
+                <button onClick={() => updScope({ departamentos: [], centros_custo: [] })}
+                        className="text-[10px] mt-1" style={{ color: BRAND.muted }}>
+                  Limpar seleção
+                </button>
+              )}
+            </div>
+
+            {/* CC multiselect — cascaded from dept */}
+            {visibleCCs.length > 0 && (
+              <div>
+                <SectionLabel>
+                  Centros de custo ({(draft.scope.centros_custo?.length ?? 0) === 0 ? 'todos' : `${draft.scope.centros_custo!.length} sel.`})
+                </SectionLabel>
+                <div className="max-h-48 overflow-y-auto border rounded" style={{ borderColor: BRAND.border }}>
+                  {visibleCCs.map(cc => {
                     const sel = draft.scope.centros_custo?.includes(cc.id) ?? false
+                    const dept = depts.find(d => d.id === cc.departamento_id)
                     return (
                       <label key={cc.id} className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 cursor-pointer">
                         <input type="checkbox" checked={sel}
@@ -276,60 +429,26 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
                             const prev = draft.scope.centros_custo ?? []
                             updScope({ centros_custo: e.target.checked ? [...prev, cc.id] : prev.filter(c => c !== cc.id) })
                           }} />
-                        <span className="text-xs truncate" style={{ color: BRAND.ink }}>{cc.nome}</span>
+                        <span className="flex-1 min-w-0">
+                          <span className="text-xs truncate block" style={{ color: BRAND.ink }}>{cc.nome}</span>
+                          {selectedDepts.length !== 1 && dept && (
+                            <span className="text-[9px]" style={{ color: BRAND.muted }}>{dept.nome}</span>
+                          )}
+                        </span>
                       </label>
                     )
                   })}
                 </div>
                 <button onClick={() => updScope({ centros_custo: [] })}
-                        className="text-[10px] mt-1" style={{ color: BRAND.muted }}>Limpar seleção</button>
+                        className="text-[10px] mt-1" style={{ color: BRAND.muted }}>
+                  Limpar seleção
+                </button>
               </div>
             )}
 
-            {/* Period override */}
-            <div>
-              <label className="block text-[10px] font-semibold tracking-widest uppercase mb-1"
-                     style={{ fontFamily: FONTS.heading, color: BRAND.muted }}>Período</label>
-              <div className="flex gap-1 mb-2">
-                {(['mes','ytd'] as const).map(t => (
-                  <button key={t}
-                    onClick={() => updScope({
-                      periodo: t === 'mes'
-                        ? { tipo: 'mes', mes: 1, ano: new Date().getFullYear() }
-                        : { tipo: 'ytd', ano: new Date().getFullYear() }
-                    })}
-                    className="flex-1 py-1 text-xs rounded border transition-colors"
-                    style={{
-                      borderColor: draft.scope.periodo.tipo === t ? BRAND.gold : BRAND.border,
-                      backgroundColor: draft.scope.periodo.tipo === t ? '#FBF7EE' : 'white',
-                      color: draft.scope.periodo.tipo === t ? BRAND.gold : BRAND.muted,
-                    }}>
-                    {t === 'mes' ? 'Mensal' : 'YTD'}
-                  </button>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                {draft.scope.periodo.tipo === 'mes' && (
-                  <select
-                    value={(draft.scope.periodo as { mes: number }).mes}
-                    onChange={e => updScope({ periodo: { ...draft.scope.periodo, mes: parseInt(e.target.value) } as BiPeriodo })}
-                    className="flex-1 px-2 py-1.5 border rounded text-sm" style={{ borderColor: BRAND.border }}>
-                    {MESES.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
-                  </select>
-                )}
-                <select
-                  value={(draft.scope.periodo as { ano: number }).ano}
-                  onChange={e => updScope({ periodo: { ...draft.scope.periodo, ano: parseInt(e.target.value) } as BiPeriodo })}
-                  className="flex-1 px-2 py-1.5 border rounded text-sm" style={{ borderColor: BRAND.border }}>
-                  {ANOS.map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-              </div>
-            </div>
-
             {/* Comparativo */}
             <div>
-              <label className="block text-[10px] font-semibold tracking-widest uppercase mb-1"
-                     style={{ fontFamily: FONTS.heading, color: BRAND.muted }}>Comparativo</label>
+              <SectionLabel>Comparativo</SectionLabel>
               <select
                 value={draft.scope.comparativo ?? ''}
                 onChange={e => updScope({ comparativo: (e.target.value || null) as BiScope['comparativo'] })}
@@ -346,10 +465,9 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
         {/* ─ COMO ─ */}
         {tab === 'how' && (
           <>
-            {/* Toggles */}
+            {/* Visibility toggles */}
             <div>
-              <label className="block text-[10px] font-semibold tracking-widest uppercase mb-2"
-                     style={{ fontFamily: FONTS.heading, color: BRAND.muted }}>Exibir</label>
+              <SectionLabel>Exibir</SectionLabel>
               <div className="grid grid-cols-2 gap-1.5">
                 {([
                   ['mostrar_titulo',   'Título'],
@@ -371,8 +489,7 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
 
             {/* Font size */}
             <div>
-              <label className="block text-[10px] font-semibold tracking-widest uppercase mb-1"
-                     style={{ fontFamily: FONTS.heading, color: BRAND.muted }}>Tamanho da fonte</label>
+              <SectionLabel>Tamanho da fonte</SectionLabel>
               <div className="flex gap-1">
                 {(['xs','sm','md','lg','xl'] as const).map(s => (
                   <button key={s}
@@ -392,8 +509,7 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
 
             {/* Number format */}
             <div>
-              <label className="block text-[10px] font-semibold tracking-widest uppercase mb-1"
-                     style={{ fontFamily: FONTS.heading, color: BRAND.muted }}>Formato de número</label>
+              <SectionLabel>Formato de número</SectionLabel>
               <select
                 value={draft.estilo.formato_numero}
                 onChange={e => updEstilo({ formato_numero: e.target.value as WidgetEstilo['formato_numero'] })}
@@ -410,8 +526,7 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
             {/* Prefix / Suffix */}
             <div className="flex gap-2">
               <div className="flex-1">
-                <label className="block text-[10px] font-semibold tracking-widest uppercase mb-1"
-                       style={{ fontFamily: FONTS.heading, color: BRAND.muted }}>Prefixo</label>
+                <SectionLabel>Prefixo</SectionLabel>
                 <input type="text" placeholder="ex: R$"
                   value={draft.estilo.prefixo ?? ''}
                   onChange={e => updEstilo({ prefixo: e.target.value || undefined })}
@@ -419,8 +534,7 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
                   style={{ borderColor: BRAND.border }} />
               </div>
               <div className="flex-1">
-                <label className="block text-[10px] font-semibold tracking-widest uppercase mb-1"
-                       style={{ fontFamily: FONTS.heading, color: BRAND.muted }}>Sufixo</label>
+                <SectionLabel>Sufixo</SectionLabel>
                 <input type="text" placeholder="ex: %"
                   value={draft.estilo.sufixo ?? ''}
                   onChange={e => updEstilo({ sufixo: e.target.value || undefined })}
@@ -431,8 +545,7 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
 
             {/* Primary color */}
             <div>
-              <label className="block text-[10px] font-semibold tracking-widest uppercase mb-1"
-                     style={{ fontFamily: FONTS.heading, color: BRAND.muted }}>Cor primária</label>
+              <SectionLabel>Cor primária</SectionLabel>
               <div className="flex items-center gap-2">
                 <input type="color"
                   value={draft.estilo.cor_primaria ?? BRAND.gold}
@@ -443,6 +556,22 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
                   Resetar ({BRAND.gold})
                 </button>
               </div>
+            </div>
+
+            {/* Bold / Italic */}
+            <div className="flex gap-3">
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox"
+                  checked={draft.estilo.negrito}
+                  onChange={e => updEstilo({ negrito: e.target.checked })} />
+                <span className="text-xs font-bold" style={{ color: BRAND.ink }}>Negrito</span>
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox"
+                  checked={draft.estilo.italico}
+                  onChange={e => updEstilo({ italico: e.target.checked })} />
+                <span className="text-xs italic" style={{ color: BRAND.ink }}>Itálico</span>
+              </label>
             </div>
           </>
         )}
