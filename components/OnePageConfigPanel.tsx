@@ -489,22 +489,16 @@ export function OnePageConfigPanel({
 
         {/* Layout */}
         <PanelSection label="Layout">
-          <SliderField
-            label="Largura"
-            value={widget.w}
-            onChange={v => onUpdate({ w: v })}
-            min={1}
-            max={12}
-            unit=" col"
-          />
-          <SliderField
-            label="Altura"
-            value={widget.h}
-            onChange={v => onUpdate({ h: v })}
-            min={1}
-            max={8}
-            unit=" un"
-          />
+          <p className="text-xs" style={{ color: 'rgba(0,0,0,0.45)', lineHeight: 1.6 }}>
+            Arraste o canto inferior direito do widget para redimensionar.
+            Arraste o ícone <span style={{ fontFamily: 'monospace' }}>⠿</span> para mover.
+          </p>
+          <div
+            className="mt-2 rounded-lg px-3 py-2 text-xs"
+            style={{ backgroundColor: 'rgba(190,140,74,0.07)', color: '#9B6E20', fontFamily: "'IBM Plex Mono', monospace" }}
+          >
+            {widget.w} col × {widget.h} un · {widget.w * 80}px × {widget.h * 80}px aprox.
+          </div>
         </PanelSection>
 
         {/* Perigo */}
