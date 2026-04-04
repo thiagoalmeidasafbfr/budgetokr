@@ -8,7 +8,7 @@ import {
   Target, Layers, FileText, Database, Upload,
   ChevronRight, ChevronDown, Building2, BookOpen, LayoutList, Gauge,
   LogOut, User, ListTree, Shield, Landmark, Moon, Sun, History, MessageSquare, Briefcase, Users, PieChart, X,
-  Sparkles,
+  Sparkles, LayoutPanelLeft,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/components/ThemeProvider'
@@ -43,6 +43,13 @@ const nav: NavItem[] = [
   },
 
   { type: 'section', label: 'Análise Financeira' },
+  {
+    type: 'link', href: '/bi',
+    icon: LayoutPanelLeft,
+    label: 'BI Canvas',
+    sublabel: 'Dashboard executivo livre',
+    masterOnly: true,
+  },
   {
     type: 'link', href: '/onepage',
     icon: Sparkles,
