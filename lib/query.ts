@@ -597,6 +597,30 @@ export async function getPorUnidade(
   return (data ?? []) as PorUnidadeRow[]
 }
 
+// ─── OnePage Board Data ───────────────────────────────────────────────────────
+export interface BoardDataRow {
+  centro_custo: string
+  nome_centro_custo: string
+  nome_departamento: string
+  dre: string
+  ordem_dre: number
+  razao: number
+  budget: number
+}
+
+export async function getBoardData(
+  periodos?: string[],
+  centros?: string[]
+): Promise<BoardDataRow[]> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase.rpc('get_board_data', {
+    p_periodos: periodos ?? [],
+    p_centros:  centros  ?? [],
+  })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as BoardDataRow[]
+}
+
 export async function getMedidas(): Promise<import('./types').Medida[]> {
   const supabase = getSupabase()
   const { data, error } = await supabase.from('medidas').select('*').order('nome')
