@@ -3,8 +3,9 @@
 // ─── Dimensional scope ────────────────────────────────────────────────────────
 
 export interface BiScope {
-  departamentos?: string[]     // undefined/[] = all departments
+  departamentos?: string[]     // undefined/[] = all departments (nome_departamento values)
   centros_custo?: string[]     // undefined/[] = all in scope
+  unidades?: string[]          // undefined/[] = all business units (unidade names)
   periodo: BiPeriodo
   useGlobalPeriodo?: boolean   // true (default) = inherit dashboard.periodo_global
   comparativo?: 'budget' | 'mes_anterior' | 'ano_anterior' | null

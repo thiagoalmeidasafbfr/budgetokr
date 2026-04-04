@@ -52,19 +52,12 @@ export function BiCanvas() {
 
   const [dataCache, setDataCache] = useState<DataCache>({})
   const [showPicker, setShowPicker] = useState(false)
-  const [containerWidth, setContainerWidth] = useState(1000)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const pendingRef   = useRef<Set<string>>(new Set())
+  const pendingRef = useRef<Set<string>>(new Set())
 
-  useEffect(() => {
-    if (!containerRef.current) return
-    const obs = new ResizeObserver(entries => {
-      const w = entries[0]?.contentRect.width
-      if (w) setContainerWidth(w)
-    })
-    obs.observe(containerRef.current)
-    return () => obs.disconnect()
-  }, [])
+  // A4 canvas: 794px wide at 96dpi (210mm), inner grid uses 762px (16px padding each side)
+  const A4_WIDTH       = 794
+  const A4_GRID_WIDTH  = 762
+  const A4_ROW_HEIGHT  = 72   // row unit height in px
 
   const fetchWidget = useCallback(async (wc: WidgetConfig, globalPeriodo?: typeof dashboard.periodo_global) => {
     const effectiveConfig: WidgetConfig = (wc.scope.useGlobalPeriodo !== false && globalPeriodo)
@@ -130,8 +123,21 @@ export function BiCanvas() {
       <div className="flex flex-col flex-1 min-w-0">
         <BiHeader onAddWidget={() => setShowPicker(true)} />
 
-        {/* Widget grid */}
-        <div className="flex-1 overflow-y-auto p-4 bi-canvas" ref={containerRef}>
+        {/* Widget grid — A4 one-page format */}
+        <div
+          className="flex-1 overflow-y-auto bi-canvas"
+          style={{ backgroundColor: '#e8e4dd', padding: '24px 20px' }}
+        >
+          {/* A4 paper */}
+          <div
+            className="mx-auto bg-white relative"
+            style={{
+              width: A4_WIDTH,
+              minHeight: 1123,   // A4 height at 96dpi (297mm)
+              boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
+              padding: '16px',
+            }}
+          >
           {dashboard.widgets.length === 0 ? (
             <div
               className="flex flex-col items-center justify-center h-64 border-2 border-dashed rounded-2xl"
@@ -155,11 +161,11 @@ export function BiCanvas() {
               className="layout"
               layout={layouts}
               cols={12}
-              rowHeight={80}
-              width={containerWidth}
+              rowHeight={A4_ROW_HEIGHT}
+              width={A4_GRID_WIDTH}
               isDraggable={isEditing}
               isResizable={isEditing}
-              margin={[12, 12]}
+              margin={[10, 10]}
               containerPadding={[0, 0]}
               onLayoutChange={handleLayoutChange}
               draggableHandle=".rgl-drag-handle"
@@ -169,8 +175,10 @@ export function BiCanvas() {
                 const data: BiQueryResult = (raw && raw !== 'loading' && raw !== 'error')
                   ? raw as BiQueryResult
                   : LOADING_RESULT
-                const isLoading = raw === 'loading' || raw === undefined
-                const isError   = raw === 'error'
+                // text_label widgets never fetch data — skip loading/error states
+                const isTextLabel = wc.visual === 'text_label'
+                const isLoading = !isTextLabel && (raw === 'loading' || raw === undefined)
+                const isError   = !isTextLabel && raw === 'error'
 
                 return (
                   <div
@@ -239,6 +247,7 @@ export function BiCanvas() {
               })}
             </GridLayout>
           )}
+          </div>{/* end A4 paper */}
         </div>
       </div>
 
