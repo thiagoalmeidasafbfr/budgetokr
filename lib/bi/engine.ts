@@ -111,6 +111,22 @@ interface DREAggRow {
   razao: number
 }
 
+// Resolve unidade names → distinct centro_custo codes (via lancamentos.id_cc_cc)
+async function resolveUnidades(unidades: string[], supabase: SupabaseClient): Promise<string[]> {
+  if (!unidades.length) return []
+  const { data: unRows } = await supabase
+    .from('unidades_negocio')
+    .select('id_cc_cc')
+    .in('unidade', unidades)
+  const idCcCcs = (unRows ?? []).map((r: Record<string,unknown>) => r.id_cc_cc as string).filter(Boolean)
+  if (!idCcCcs.length) return []
+  const { data: lcRows } = await supabase
+    .from('lancamentos')
+    .select('centro_custo')
+    .in('id_cc_cc', idCcCcs)
+  return [...new Set((lcRows ?? []).map((r: Record<string,unknown>) => r.centro_custo as string).filter(Boolean))]
+}
+
 async function fetchDREData(
   periodos: string[],
   scope: BiScope,
@@ -118,7 +134,16 @@ async function fetchDREData(
 ): Promise<DREAggRow[]> {
   // ⚠ get_dre RPC expects nome_departamento (readable name), NOT departamento code.
   const depts   = scope.departamentos ?? []   // must be nome_departamento values
-  const centros = scope.centros_custo  ?? []
+  let   centros = scope.centros_custo  ?? []
+
+  // Resolve unidades de negócio → extra centro_custo codes
+  const unidades = scope.unidades ?? []
+  if (unidades.length > 0) {
+    const unCentros = await resolveUnidades(unidades, supabase)
+    // Merge with explicit centros (union), remove duplicates
+    centros = [...new Set([...centros, ...unCentros])]
+  }
+
   const { data, error } = await supabase.rpc('get_dre', {
     p_periodos:      periodos,
     p_departamentos: depts,
@@ -250,7 +275,7 @@ function buildDreLines(
 // ─── getBiDimensoes ───────────────────────────────────────────────────────────
 
 export async function getBiDimensoes(supabase: SupabaseClient) {
-  const [ccRes, linhasRes, medidasRes, periodosRes] = await Promise.all([
+  const [ccRes, linhasRes, medidasRes, periodosRes, unidadesRes] = await Promise.all([
     supabase.from('centros_custo')
       .select('centro_custo, nome_centro_custo, departamento, nome_departamento')
       .order('nome_departamento')
@@ -263,9 +288,11 @@ export async function getBiDimensoes(supabase: SupabaseClient) {
       .order('nome'),
     // Distinct periods from lancamentos via RPC
     supabase.rpc('get_distinct_periodos'),
+    // Distinct business units
+    supabase.rpc('get_distinct_unidades'),
   ])
 
-  if (ccRes.error) throw new Error(ccRes.error.message)
+  if (ccRes.error)    throw new Error(ccRes.error.message)
   if (linhasRes.error) throw new Error(linhasRes.error.message)
 
   const rows = ccRes.data ?? []
@@ -314,6 +341,12 @@ export async function getBiDimensoes(supabase: SupabaseClient) {
       cor:         (r.cor ?? '#6366f1') as string,
     })),
     periodos,
+    unidades: (!unidadesRes.error && Array.isArray(unidadesRes.data))
+      ? (unidadesRes.data as Array<{ unidade: string }>)
+          .map(r => r.unidade)
+          .filter(Boolean)
+          .sort()
+      : [],
   }
 }
 
@@ -605,8 +638,11 @@ export async function runBiQuery(
 
     // ── Medida criada ─────────────────────────────────────────────────────────
     case 'medida': {
-      const depts   = scope.departamentos ?? []
-      const centros = scope.centros_custo ?? []
+      const depts    = scope.departamentos ?? []
+      const unidades = scope.unidades ?? []
+      // Resolve unidades → extra centros first, then merge
+      const unCentros = unidades.length > 0 ? await resolveUnidades(unidades, supabase) : []
+      const centros   = [...new Set([...(scope.centros_custo ?? []), ...unCentros])]
 
       // Scope restriction filters — use correct FilterCondition shape
       const extraFiltros: FilterCondition[] = []

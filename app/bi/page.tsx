@@ -18,11 +18,21 @@ export default async function BiPage() {
     .single()
 
   const now = new Date()
+  // YTD up to the previous closed month — same convention used by all other pages.
+  // e.g. today = 2026-04-04 → Jan, Feb, Mar 2026
+  const prevM = now.getMonth() === 0 ? 12 : now.getMonth()   // 1-indexed prev month
+  const prevY = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()
+  const ytdMonths: string[] = []
+  for (let m = 1; m <= prevM; m++) ytdMonths.push(`${prevY}-${String(m).padStart(2, '0')}`)
+  const defaultPeriodo = ytdMonths.length === 1
+    ? { tipo: 'mes' as const, mes: 1, ano: prevY }
+    : { tipo: 'lista' as const, periodos: ytdMonths }
+
   const initialDashboard = data ?? {
     id:             '',
     user_id:        user.userId,
     nome:           'Meu Dashboard',
-    periodo_global: { tipo: 'mes', mes: now.getMonth() + 1, ano: now.getFullYear() },
+    periodo_global: defaultPeriodo,
     widgets:        [],
     atualizado_em:  now.toISOString(),
   }

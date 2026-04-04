@@ -26,30 +26,41 @@ export function BiSidebar() {
         const latestYear = ps[ps.length - 1].substring(0, 4)
         setExpandedYears(new Set([latestYear]))
 
-        // Check if current global selection has any intersection with available periods
-        const currentSel = periodosFromBiPeriodo(
-          useBiStore.getState().dashboard.periodo_global
-        )
-        const hasData = currentSel.some(p => ps.includes(p))
-
-        if (!hasData) {
-          // Auto-select: YTD up to previous month within the latest available year,
-          // mirroring the convention used by other pages (analise, dept, dre).
+        // Helper: apply YTD up to previous month (same as other pages)
+        function applyYtdDefault() {
           const now = new Date()
-          const prevM = now.getMonth() === 0 ? 12 : now.getMonth()   // 1-indexed prev month
+          const prevM = now.getMonth() === 0 ? 12 : now.getMonth()
           const prevY = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()
           const curMonthStr = `${prevY}-${String(prevM).padStart(2, '0')}`
-
-          // Try current year first, then fall back to latest available year
           const yearToUse = ps.some(p => p.startsWith(String(prevY))) ? String(prevY) : latestYear
           const ytd = ps.filter(p => p.startsWith(yearToUse) && p <= curMonthStr)
           const finalSel = ytd.length > 0 ? ytd : ps.filter(p => p.startsWith(yearToUse))
-
           if (finalSel.length === 1) {
             const [y, m] = finalSel[0].split('-').map(Number)
             useBiStore.getState().setPeriodoGlobal({ tipo: 'mes', mes: m, ano: y })
           } else if (finalSel.length > 1) {
             useBiStore.getState().setPeriodoGlobal({ tipo: 'lista', periodos: finalSel })
+          }
+        }
+
+        // Normalize: trim current selection to only periods with actual data.
+        // This removes future months that a saved "ytd" or full-year selection might include.
+        const available = new Set(ps)
+        const currentSel = periodosFromBiPeriodo(
+          useBiStore.getState().dashboard.periodo_global
+        )
+        const trimmed = currentSel.filter(p => available.has(p))
+
+        if (trimmed.length === 0) {
+          // No overlap at all — apply default
+          applyYtdDefault()
+        } else if (trimmed.length !== currentSel.length) {
+          // Some periods (likely future months) were trimmed — update selection
+          if (trimmed.length === 1) {
+            const [y, m] = trimmed[0].split('-').map(Number)
+            useBiStore.getState().setPeriodoGlobal({ tipo: 'mes', mes: m, ano: y })
+          } else {
+            useBiStore.getState().setPeriodoGlobal({ tipo: 'lista', periodos: trimmed.sort() })
           }
         }
 

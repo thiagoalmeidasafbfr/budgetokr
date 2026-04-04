@@ -10,6 +10,7 @@ interface DimensoesData {
   centros_custo: Array<{ id: string; nome: string; departamento_id: string }>
   linhas_dre:    Array<{ nome: string; tipo: string }>
   medidas:       Array<{ id: number; nome: string; descricao: string; unidade: string; tipo_medida: string; cor: string }>
+  unidades:      string[]
 }
 
 interface WidgetConfigPanelProps {
@@ -82,9 +83,11 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
     onClose()
   }
 
-  const dreLinhas  = (dimensoes?.linhas_dre ?? []).filter(l => l.tipo !== 'calculada')
-  const depts      = dimensoes?.departamentos ?? []
-  const medidas    = dimensoes?.medidas ?? []
+  const dreLinhas      = (dimensoes?.linhas_dre ?? []).filter(l => l.tipo !== 'calculada')
+  const depts          = dimensoes?.departamentos ?? []
+  const medidas        = dimensoes?.medidas ?? []
+  const allUnidades    = dimensoes?.unidades ?? []
+  const selectedUnidades: string[] = draft.scope.unidades ?? []
 
   // Currently selected departments in draft
   const selectedDepts: string[] = draft.scope.departamentos ?? []
@@ -378,6 +381,38 @@ export function WidgetConfigPanel({ widgetId, onClose }: WidgetConfigPanelProps)
                   style={{ borderColor: BRAND.gold, color: BRAND.gold, fontFamily: FONTS.mono }}>
                   YTD {pickerYear}
                 </button>
+              </div>
+            )}
+
+            {/* Unidades de negócio multiselect */}
+            {allUnidades.length > 0 && (
+              <div>
+                <SectionLabel>
+                  Unidades de negócio ({selectedUnidades.length === 0 ? 'todas' : `${selectedUnidades.length} sel.`})
+                </SectionLabel>
+                <div className="max-h-36 overflow-y-auto border rounded" style={{ borderColor: BRAND.border }}>
+                  {allUnidades.map(u => {
+                    const sel = selectedUnidades.includes(u)
+                    return (
+                      <label key={u} className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" checked={sel}
+                          onChange={e => {
+                            const next = e.target.checked
+                              ? [...selectedUnidades, u]
+                              : selectedUnidades.filter(x => x !== u)
+                            updScope({ unidades: next })
+                          }} />
+                        <span className="text-xs truncate" style={{ color: BRAND.ink }}>{u}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+                {selectedUnidades.length > 0 && (
+                  <button onClick={() => updScope({ unidades: [] })}
+                          className="text-[10px] mt-1" style={{ color: BRAND.muted }}>
+                    Limpar seleção
+                  </button>
+                )}
               </div>
             )}
 
