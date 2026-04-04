@@ -59,3 +59,41 @@ export function fmtNum(value: number | null | undefined): string {
   if (value == null) return '—'
   return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value)
 }
+
+// Formats a value according to WidgetEstilo settings
+export function fmtValue(
+  value: number | null | undefined,
+  opts?: {
+    formato_numero?: 'inteiro' | 'decimal' | 'milhares' | 'milhoes' | 'percentual'
+    prefixo?: string
+    sufixo?: string
+  }
+): string {
+  if (value == null) return '—'
+  const fmt = opts?.formato_numero ?? 'inteiro'
+  let formatted: string
+  if (fmt === 'percentual') {
+    formatted = `${value.toFixed(1)}%`
+  } else if (fmt === 'milhoes') {
+    formatted = new Intl.NumberFormat('pt-BR', {
+      notation: 'compact', compactDisplay: 'short',
+      minimumFractionDigits: 1, maximumFractionDigits: 1
+    }).format(value / 1_000_000) + ' M'
+  } else if (fmt === 'milhares') {
+    formatted = new Intl.NumberFormat('pt-BR', {
+      minimumFractionDigits: 0, maximumFractionDigits: 0
+    }).format(value / 1_000) + ' K'
+  } else if (fmt === 'decimal') {
+    formatted = new Intl.NumberFormat('pt-BR', {
+      minimumFractionDigits: 2, maximumFractionDigits: 2
+    }).format(value)
+  } else {
+    // inteiro (default)
+    formatted = new Intl.NumberFormat('pt-BR', {
+      minimumFractionDigits: 0, maximumFractionDigits: 0
+    }).format(value)
+  }
+  const pre  = opts?.prefixo ? `${opts.prefixo} ` : ''
+  const suf  = opts?.sufixo  ? ` ${opts.sufixo}`  : ''
+  return `${pre}${formatted}${suf}`
+}

@@ -1,5 +1,5 @@
 'use client'
-import { BRAND, FONTS, fmtBRL, fmtPct } from '@/lib/brand'
+import { BRAND, FONTS, fmtValue } from '@/lib/brand'
 import type { WidgetConfig, BiQueryResult } from '@/lib/bi/widget-types'
 
 interface WidgetProps {
@@ -15,6 +15,7 @@ import { CHART_PALETTE } from '@/lib/brand'
 export function DonutChart({ config, data }: WidgetProps) {
   if (data.tipo !== 'breakdown') return null
   const { mostrar_titulo, mostrar_legenda } = config.estilo
+  const fmt = (v: number) => fmtValue(v, config.estilo)
 
   const chartData = data.itens
     .filter(i => Math.abs(i.realizado) > 0)
@@ -36,7 +37,7 @@ export function DonutChart({ config, data }: WidgetProps) {
                 <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
               ))}
             </Pie>
-            <Tooltip formatter={(v:number) => [fmtBRL(v, true), 'Valor']}
+            <Tooltip formatter={(v:number) => [fmt(v), 'Valor']}
                      contentStyle={{ fontFamily: FONTS.mono, fontSize: 11 }} />
             {mostrar_legenda && (
               <Legend iconType="circle" iconSize={8}

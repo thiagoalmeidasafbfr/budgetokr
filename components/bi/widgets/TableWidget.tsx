@@ -1,5 +1,5 @@
 'use client'
-import { BRAND, FONTS, fmtBRL, fmtPct } from '@/lib/brand'
+import { BRAND, FONTS, fmtBRL, fmtPct, fmtValue } from '@/lib/brand'
 import type { WidgetConfig, BiQueryResult } from '@/lib/bi/widget-types'
 
 interface WidgetProps {
@@ -17,6 +17,7 @@ export function TableWidget({ config, data }: WidgetProps) {
   const [sortCol, setSortCol] = useState<SortCol>('realizado')
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('desc')
   const { mostrar_titulo } = config.estilo
+  const fmt = (v: number | null) => v == null ? '—' : fmtValue(v, config.estilo)
 
   if (data.tipo === 'breakdown') {
     const sorted = [...data.itens].sort((a, b) => {
@@ -54,13 +55,13 @@ export function TableWidget({ config, data }: WidgetProps) {
             <tbody>
               {sorted.map((item, i) => {
                 const desvio = item.realizado - (item.budget ?? item.realizado)
-                const desvioColor = desvio >= 0 ? BRAND.success : BRAND.danger
+                const desvioColor = desvio >= 0 ? BRAND.positive : BRAND.danger
                 return (
                   <tr key={i} className={i % 2 ? 'bg-[#FAFAF8]' : 'bg-white'}>
                     <td className="px-2 py-1.5 max-w-[160px] truncate" style={{ color: BRAND.ink }}>{item.label}</td>
-                    <td className="px-2 py-1.5 text-right" style={{ fontFamily: FONTS.mono }}>{fmtBRL(item.realizado)}</td>
-                    <td className="px-2 py-1.5 text-right" style={{ fontFamily: FONTS.mono, color: BRAND.muted }}>{item.budget != null ? fmtBRL(item.budget) : '—'}</td>
-                    <td className="px-2 py-1.5 text-right font-medium" style={{ fontFamily: FONTS.mono, color: desvioColor }}>{fmtBRL(desvio)}</td>
+                    <td className="px-2 py-1.5 text-right" style={{ fontFamily: FONTS.mono }}>{fmt(item.realizado)}</td>
+                    <td className="px-2 py-1.5 text-right" style={{ fontFamily: FONTS.mono, color: BRAND.muted }}>{item.budget != null ? fmt(item.budget) : '—'}</td>
+                    <td className="px-2 py-1.5 text-right font-medium" style={{ fontFamily: FONTS.mono, color: desvioColor }}>{fmt(desvio)}</td>
                     <td className="px-2 py-1.5 text-right font-medium" style={{ fontFamily: FONTS.mono, color: desvioColor }}>{item.desvio_pct != null ? fmtPct(item.desvio_pct) : '—'}</td>
                   </tr>
                 )
@@ -94,7 +95,7 @@ export function TableWidget({ config, data }: WidgetProps) {
                 const desvio = linha.desvio ?? 0
                 const bold   = linha.estrutura.negrito
                 const sep    = linha.estrutura.separador
-                const desvioColor = desvio >= 0 ? BRAND.success : BRAND.danger
+                const desvioColor = desvio >= 0 ? BRAND.positive : BRAND.danger
                 return (
                   <tr key={i}
                       className={`${i % 2 ? 'bg-[#FAFAF8]' : 'bg-white'} ${sep ? 'border-t-2' : ''}`}
@@ -103,9 +104,9 @@ export function TableWidget({ config, data }: WidgetProps) {
                         style={{ color: BRAND.ink, fontWeight: bold ? 700 : 400, fontFamily: FONTS.mono }}>
                       {linha.estrutura.nome}
                     </td>
-                    <td className="px-2 py-1.5 text-right" style={{ fontFamily: FONTS.mono, fontWeight: bold ? 700 : 400 }}>{fmtBRL(linha.realizado)}</td>
-                    <td className="px-2 py-1.5 text-right" style={{ fontFamily: FONTS.mono, color: BRAND.muted }}>{linha.budget != null ? fmtBRL(linha.budget) : '—'}</td>
-                    <td className="px-2 py-1.5 text-right font-medium" style={{ fontFamily: FONTS.mono, color: desvioColor }}>{fmtBRL(desvio)}</td>
+                    <td className="px-2 py-1.5 text-right" style={{ fontFamily: FONTS.mono, fontWeight: bold ? 700 : 400 }}>{fmt(linha.realizado)}</td>
+                    <td className="px-2 py-1.5 text-right" style={{ fontFamily: FONTS.mono, color: BRAND.muted }}>{linha.budget != null ? fmt(linha.budget) : '—'}</td>
+                    <td className="px-2 py-1.5 text-right font-medium" style={{ fontFamily: FONTS.mono, color: desvioColor }}>{fmt(desvio)}</td>
                     <td className="px-2 py-1.5 text-right font-medium" style={{ fontFamily: FONTS.mono, color: desvioColor }}>{linha.desvio_pct != null ? fmtPct(linha.desvio_pct) : '—'}</td>
                   </tr>
                 )

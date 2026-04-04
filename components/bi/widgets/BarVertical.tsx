@@ -1,5 +1,5 @@
 'use client'
-import { BRAND, FONTS, fmtBRL, fmtPct } from '@/lib/brand'
+import { BRAND, FONTS, fmtValue } from '@/lib/brand'
 import type { WidgetConfig, BiQueryResult } from '@/lib/bi/widget-types'
 
 interface WidgetProps {
@@ -12,7 +12,9 @@ interface WidgetProps {
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
 
 export function BarVertical({ config, data }: WidgetProps) {
-  const { mostrar_titulo, mostrar_eixos, mostrar_grid, mostrar_legenda } = config.estilo
+  const { mostrar_titulo, mostrar_eixos, mostrar_grid, mostrar_legenda, cor_primaria } = config.estilo
+  const fmt = (v: number) => fmtValue(v, config.estilo)
+  const primaryColor = cor_primaria ?? BRAND.gold
 
   let chartData: Array<Record<string, unknown>> = []
   if (data.tipo === 'breakdown') {
@@ -44,13 +46,13 @@ export function BarVertical({ config, data }: WidgetProps) {
                 <XAxis dataKey="name" tick={{ fontSize: 9, fontFamily: FONTS.mono, fill: BRAND.muted }}
                        angle={-30} textAnchor="end" interval={0} />
                 <YAxis tick={{ fontSize: 9, fontFamily: FONTS.mono, fill: BRAND.muted }}
-                       tickFormatter={(v:number) => fmtBRL(v, true)} width={60} />
+                       tickFormatter={fmt} width={60} />
               </>
             )}
-            <Tooltip formatter={(v:number) => [fmtBRL(v), '']}
+            <Tooltip formatter={(v:number) => [fmt(v), '']}
                      contentStyle={{ fontFamily: FONTS.mono, fontSize: 11 }} />
             {mostrar_legenda && <Legend wrapperStyle={{ fontSize: 10, fontFamily: FONTS.mono }} />}
-            <Bar dataKey="Realizado" fill={BRAND.gold} radius={[2,2,0,0]} />
+            <Bar dataKey="Realizado" fill={primaryColor} radius={[2,2,0,0]} />
             <Bar dataKey="Budget"    fill={BRAND.neutral} opacity={0.5} radius={[2,2,0,0]} />
           </BarChart>
         </ResponsiveContainer>
