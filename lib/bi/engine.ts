@@ -510,7 +510,7 @@ export async function runBiQuery(
       const depts   = scope.departamentos ?? []
       const centros = scope.centros_custo ?? []
 
-      // Build extra filters using correct FilterCondition shape: { column, operator, value }
+      // Scope restriction filters — use correct FilterCondition shape
       const extraFiltros: FilterCondition[] = []
       if (depts.length > 0) {
         extraFiltros.push({ column: 'nome_departamento', operator: 'in', value: depts.join(',') })
@@ -519,27 +519,56 @@ export async function runBiQuery(
         extraFiltros.push({ column: 'centro_custo', operator: 'in', value: centros.join(',') })
       }
 
+      // ── KPI card: aggregate into single scalar ────────────────────────────
+      if (widgetConfig.visual === 'kpi_card') {
+        const results = await getMedidaResultados(metrica.medida_id, {
+          groupByDept: false, groupByPeriod: false, groupByCentroCusto: false,
+          periodos, extraFiltros,
+        })
+        let totalRazao = 0, totalBudget = 0
+        for (const r of results) { totalRazao += r.razao ?? 0; totalBudget += r.budget ?? 0 }
+        const dev = totalRazao - totalBudget
+        return {
+          tipo: 'escalar',
+          valor:        totalRazao,
+          comparativo:  totalBudget || null,
+          variacao_pct: totalBudget !== 0 ? (dev / Math.abs(totalBudget)) * 100 : null,
+        }
+      }
+
+      // ── Table / chart visuals: return breakdown ───────────────────────────
+      // Group by CC when depts or CCs are scoped (show per-CC detail).
+      // Group by dept when no scope restriction (show company-wide view by dept).
+      // NB: for ratio medidas, getMedidaResultados sums numerators and denominators
+      //     across periods before dividing — so the ratio is always correct even when
+      //     groupByPeriod=false spans multiple months.
+      const groupByCc = depts.length > 0 || centros.length > 0
       const results = await getMedidaResultados(metrica.medida_id, {
-        groupByDept:        false,
+        groupByDept:        !groupByCc,
         groupByPeriod:      false,
-        groupByCentroCusto: false,
+        groupByCentroCusto: groupByCc,
         periodos,
         extraFiltros,
       })
 
-      let totalRazao = 0, totalBudget = 0
-      for (const r of results) {
-        totalRazao  += r.razao  ?? 0
-        totalBudget += r.budget ?? 0
+      if (results.length === 0) {
+        return { tipo: 'breakdown', itens: [] }
       }
 
-      const desvio = totalRazao - totalBudget
-      return {
-        tipo: 'escalar',
-        valor:        totalRazao,
-        comparativo:  totalBudget || null,
-        variacao_pct: totalBudget !== 0 ? (desvio / Math.abs(totalBudget)) * 100 : null,
-      }
+      const itens = results
+        .filter(r => (r.razao ?? 0) !== 0 || (r.budget ?? 0) !== 0)
+        .map(r => ({
+          label: groupByCc
+            ? (r.nome_centro_custo || r.centro_custo || r.nome_departamento || r.departamento || '—')
+            : (r.nome_departamento || r.departamento || '—'),
+          realizado:        r.razao   ?? 0,
+          budget:           r.budget  ?? 0,
+          desvio_pct:       r.variacao_pct ?? null,
+          participacao_pct: 0,  // not meaningful for ratio medidas
+        }))
+        .sort((a, b) => Math.abs(b.realizado) - Math.abs(a.realizado))
+
+      return { tipo: 'breakdown', itens }
     }
 
     default:

@@ -3,9 +3,21 @@
 import { create } from 'zustand'
 import type { BiDashboard, WidgetConfig, WidgetLayout, BiPeriodo } from './widget-types'
 
+// Default: YTD up to the previous month (same convention as other pages).
+// e.g. today = 2026-04-04 → selects Jan, Feb, Mar 2026
 const DEFAULT_PERIODO: BiPeriodo = (() => {
-  const now = new Date()
-  return { tipo: 'mes', mes: now.getMonth() + 1, ano: now.getFullYear() }
+  const now  = new Date()
+  // "previous month" — the last fully-closed month
+  const prevM = now.getMonth() === 0 ? 12 : now.getMonth()          // 1-indexed
+  const prevY = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()
+  if (prevM === 1) {
+    return { tipo: 'mes', mes: 1, ano: prevY }
+  }
+  const months: string[] = []
+  for (let m = 1; m <= prevM; m++) {
+    months.push(`${prevY}-${String(m).padStart(2, '0')}`)
+  }
+  return { tipo: 'lista', periodos: months }
 })()
 
 const EMPTY_DASHBOARD: BiDashboard = {
