@@ -199,3 +199,68 @@ body {
   .dark .text-gray-900 { color: black !important; }
   .print-full { width: 100% !important; max-width: none !important; }
 }
+
+/* ── React Grid Layout — base styles (replaces node_modules CSS) ─────────── */
+.react-grid-layout {
+  position: relative;
+}
+.react-grid-item {
+  transition: all 150ms ease;
+  transition-property: left, top, width, height;
+}
+.react-grid-item.cssTransforms {
+  transition-property: transform, width, height;
+}
+.react-grid-item.resizing {
+  transition: none;
+  z-index: 3;
+  will-change: width, height;
+}
+.react-grid-item.react-draggable-dragging {
+  transition: none;
+  z-index: 10;
+  will-change: transform;
+  opacity: 0.85;
+}
+.react-grid-item.dropping {
+  visibility: hidden;
+}
+.react-grid-item.react-grid-placeholder {
+  background: rgba(190, 140, 74, 0.08);
+  border: 1.5px dashed rgba(190, 140, 74, 0.35);
+  border-radius: 16px;
+  transition-duration: 100ms;
+  z-index: 2;
+  user-select: none;
+}
+
+/* ── Resize handle ────────────────────────────────────────────────────────── */
+.react-resizable-handle {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  bottom: 0;
+  right: 0;
+  cursor: se-resize;
+  z-index: 10;
+}
+.react-resizable-handle::after {
+  content: '';
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid rgba(190, 140, 74, 0.5);
+  border-bottom: 2px solid rgba(190, 140, 74, 0.5);
+  border-radius: 0 0 3px 0;
+  transition: border-color 150ms;
+}
+.react-grid-item:hover .react-resizable-handle::after {
+  border-color: rgba(190, 140, 74, 0.85);
+}
+
+/* ── Grid item — remove default react-resizable styles ───────────────────── */
+.react-resizable {
+  position: relative;
+}
