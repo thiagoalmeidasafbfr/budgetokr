@@ -1,8 +1,8 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Plus, Save, BarChart2 } from 'lucide-react'
 import { YearFilter } from '@/components/YearFilter'
-import { OnePageCanvas } from '@/components/OnePageCanvas'
+import { OnePageGridCanvas } from '@/components/OnePageGridCanvas'
 import { OnePageAddWidgetModal } from '@/components/OnePageAddWidgetModal'
 import { OnePageConfigPanel } from '@/components/OnePageConfigPanel'
 import { formatPeriodo } from '@/lib/utils'
@@ -18,7 +18,35 @@ export default function OnePageFinanceiro() {
   const [selPeriods, setSelPeriods]     = useState<string[]>([])
   const [isSaving, setIsSaving]         = useState(false)
   const [isLoaded, setIsLoaded]         = useState(false)
+  const [containerWidth, setContainerWidth] = useState(0)
   const isFirstLoad = useRef(true)
+  const canvasRef = useRef<HTMLDivElement>(null)
+
+  // ── Measure canvas width ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const el = canvasRef.current
+    if (!el) return
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width)
+      }
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // ── Handle layout changes from drag/resize ────────────────────────────────────
+  const handleLayoutChange = useCallback(
+    (updates: Array<{ id: string; x: number; y: number; w: number; h: number }>) => {
+      setWidgets(prev =>
+        prev.map(w => {
+          const upd = updates.find(u => u.id === w.id)
+          return upd ? { ...w, x: upd.x, y: upd.y, w: upd.w, h: upd.h } : w
+        })
+      )
+    },
+    []
+  )
 
   // ── Load periods ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -245,7 +273,7 @@ export default function OnePageFinanceiro() {
         className="transition-all duration-300"
         style={{ paddingRight: configPanelOpen ? 292 : 0 }}
       >
-        <div className="p-5">
+        <div className="p-5" ref={canvasRef}>
           {!isLoaded ? (
             <div className="grid grid-cols-12 gap-3">
               {[4, 4, 4, 8, 4, 12].map((w, i) => (
@@ -259,12 +287,13 @@ export default function OnePageFinanceiro() {
           ) : widgets.length === 0 ? (
             <EmptyState onAdd={() => { setEditingWidget(null); setIsAddModalOpen(true) }} />
           ) : (
-            <OnePageCanvas
+            <OnePageGridCanvas
               widgets={widgets}
               selectedId={selectedId}
               selPeriods={selPeriods}
+              containerWidth={containerWidth}
               onSelect={id => setSelectedId(prev => prev === id ? null : id)}
-              onReorder={setWidgets}
+              onLayoutChange={handleLayoutChange}
               onDelete={deleteWidget}
               onDuplicate={duplicateWidget}
             />
