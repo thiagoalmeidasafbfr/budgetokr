@@ -11,33 +11,18 @@
 //   sinal (INT 1|-1), formula_grupos (JSONB array of agrupamento_arvore names),
 //   formula_sinais (JSONB), negrito (INT 0|1), separador (INT 0|1)
 //   Subtotal = sum(preceding_grupo_values * grupo.sinal) * subtotal.sinal
-//   Calculada = custom formula (handled in page layer, skipped here)
 //
 // Tabela centros de custo: `centros_custo`
-//   campos: centro_custo (PK text), nome_centro_custo, departamento (text),
-//   nome_departamento, area, nome_area
+//   campos: centro_custo (PK text), nome_centro_custo, departamento (text CODE),
+//   nome_departamento (TEXT — readable name used by get_dre RPC), area, nome_area
 //
-// Tabela departamentos: não existe tabela separada — denormalizada em centros_custo
-//   (centros_custo.departamento + nome_departamento são os campos de referência)
-//
-// Tabela budget/orçamento: `lancamentos` WHERE tipo='budget'  (mesma tabela do razão)
-//
-// Como calcular um subtotal:
-//   sum_realizado = Σ grupo_lines_before_subtotal * grupo.sinal
-//   subtotal_realizado = sum_realizado * subtotal.sinal
-//
-// Campo de período/competência: lancamentos.data_lancamento (DATE)
-//   Agrupado como YYYY-MM via substring. Queries RPC usam array de 'YYYY-MM' strings.
-//
-// Tipos já existentes reutilizáveis:
-//   DRELinha (lib/dre-utils.ts), DRERow, DREAccountRow, TreeNode
-//   getDRELinhas(), getDRE(), getDREByAccount() em lib/query.ts
-//   buildTreeFromLinhas() em lib/dre-utils.ts
+// ⚠ IMPORTANT: get_dre RPC filters by cc.nome_departamento (NOT by cc.departamento).
+//   Therefore scope.departamentos[] must contain nome_departamento values (e.g. 'Comercial'),
+//   NOT the departamento code (e.g. 'COMERC').
 //
 // RPCs disponíveis:
 //   get_dre(p_periodos, p_departamentos, p_centros) → DRERow[]
-//   get_dre_by_account(p_periodos, p_departamentos, p_centros) → DREAccountRow[]
-//   get_analise(p_filters, p_departamentos, p_periodos, p_group_by_cc, p_centros)
+//     p_departamentos: cc.nome_departamento values
 //   run_star_query(p_tipo, p_filters, p_logic, p_extra_filters, p_periodos, p_group_dept, p_group_period, p_group_cc)
 
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -47,6 +32,7 @@ import type {
 } from './widget-types'
 import { safePct } from '@/lib/utils'
 import { getMedidaResultados } from '@/lib/query'
+import type { FilterCondition } from '@/lib/types'
 
 // ─── Period helpers ───────────────────────────────────────────────────────────
 
@@ -107,7 +93,6 @@ function prevPeriodo(p: BiPeriodo, tipo: 'mes_anterior' | 'ano_anterior'): strin
   if (tipo === 'ano_anterior') {
     return periodos.map(pp => `${parseInt(pp.slice(0, 4)) - 1}${pp.slice(4)}`)
   }
-  // mes_anterior for range/ytd/lista: shift all months back one
   return periodos.map(pp => {
     const [y, m] = pp.split('-').map(Number)
     const pm = m === 1 ? 12 : m - 1
@@ -131,8 +116,9 @@ async function fetchDREData(
   scope: BiScope,
   supabase: SupabaseClient
 ): Promise<DREAggRow[]> {
-  const depts   = scope.departamentos ?? []
-  const centros = scope.centros_custo ?? []
+  // ⚠ get_dre RPC expects nome_departamento (readable name), NOT departamento code.
+  const depts   = scope.departamentos ?? []   // must be nome_departamento values
+  const centros = scope.centros_custo  ?? []
   const { data, error } = await supabase.rpc('get_dre', {
     p_periodos:      periodos,
     p_departamentos: depts,
@@ -182,7 +168,7 @@ function aggregateDRE(rows: DREAggRow[]): Map<string, GrupoAgg> {
   return map
 }
 
-// ─── Compute a single DRE line from aggregated grupo data ─────────────────────
+// ─── Compute a single DRE line ────────────────────────────────────────────────
 
 function computeLine(
   linha: { nome: string; tipo: string; sinal: number },
@@ -203,7 +189,6 @@ function computeLine(
       ),
     }
   }
-  // subtotal: sum all preceding grupo lines * their sinal, then * subtotal.sinal
   let sumRazao = 0, sumBudget = 0
   const sumByPeriod: Record<string, { budget: number; razao: number }> = {}
   for (const prev of allLinhas) {
@@ -265,7 +250,7 @@ function buildDreLines(
 // ─── getBiDimensoes ───────────────────────────────────────────────────────────
 
 export async function getBiDimensoes(supabase: SupabaseClient) {
-  const [ccRes, linhasRes, medidasRes] = await Promise.all([
+  const [ccRes, linhasRes, medidasRes, periodosRes] = await Promise.all([
     supabase.from('centros_custo')
       .select('centro_custo, nome_centro_custo, departamento, nome_departamento')
       .order('nome_departamento')
@@ -276,6 +261,8 @@ export async function getBiDimensoes(supabase: SupabaseClient) {
     supabase.from('medidas')
       .select('id, nome, descricao, unidade, tipo_medida, cor')
       .order('nome'),
+    // Distinct periods from lancamentos via RPC
+    supabase.rpc('get_distinct_periodos'),
   ])
 
   if (ccRes.error) throw new Error(ccRes.error.message)
@@ -283,20 +270,32 @@ export async function getBiDimensoes(supabase: SupabaseClient) {
 
   const rows = ccRes.data ?? []
 
-  // Build unique departamentos list from centros_custo
-  const deptMap = new Map<string, string>()
+  // Build unique departamentos using nome_departamento as the identifier
+  // (get_dre RPC filters by cc.nome_departamento — NOT by cc.departamento code)
+  const deptMap = new Map<string, string>()  // nome_departamento → nome_departamento
   for (const r of rows) {
-    if (r.departamento && !deptMap.has(r.departamento)) {
-      deptMap.set(r.departamento, r.nome_departamento ?? r.departamento)
+    const nome = r.nome_departamento ?? r.departamento
+    if (nome && !deptMap.has(nome)) {
+      deptMap.set(nome, nome)
     }
   }
 
+  // Derive available periods — RPC returns TABLE(periodo TEXT)
+  let periodos: string[] = []
+  if (!periodosRes.error && Array.isArray(periodosRes.data)) {
+    periodos = (periodosRes.data as Array<{ periodo: string }>)
+      .map(r => r.periodo)
+      .filter(Boolean)
+      .sort()
+  }
+
   return {
-    departamentos: [...deptMap.entries()].map(([id, nome]) => ({ id, nome })).sort((a,b) => a.nome.localeCompare(b.nome)),
+    // id = nome_departamento (what get_dre expects in p_departamentos)
+    departamentos: [...deptMap.keys()].map(nome => ({ id: nome, nome })).sort((a,b) => a.nome.localeCompare(b.nome)),
     centros_custo: rows.map((r: Record<string, unknown>) => ({
       id:              r.centro_custo as string,
       nome:            (r.nome_centro_custo ?? r.centro_custo) as string,
-      departamento_id: r.departamento as string,
+      departamento_id: (r.nome_departamento ?? r.departamento) as string, // use nome_departamento for cascade
     })),
     linhas_dre: (linhasRes.data ?? []).map((r: Record<string, unknown>) => ({
       ordem:     r.ordem as number,
@@ -314,6 +313,7 @@ export async function getBiDimensoes(supabase: SupabaseClient) {
       tipo_medida: (r.tipo_medida ?? 'simples') as string,
       cor:         (r.cor ?? '#6366f1') as string,
     })),
+    periodos,
   }
 }
 
@@ -329,7 +329,6 @@ export async function runBiQuery(
 
   switch (metrica.tipo) {
 
-    // ── Scalar: single DRE line value ─────────────────────────────────────────
     case 'linha_dre': {
       const [rows, linhas] = await Promise.all([
         fetchDREData(periodos, scope, supabase),
@@ -342,7 +341,7 @@ export async function runBiQuery(
       const comp = computeLine(linha, grupoMap, linhas, linha.ordem)
       let comparativo: number | null = null
 
-      if (scope.comparativo && scope.comparativo !== null) {
+      if (scope.comparativo) {
         const prevRows = await fetchDREData(
           prevPeriodo(scope.periodo, scope.comparativo === 'budget' ? 'mes_anterior' : scope.comparativo),
           scope, supabase
@@ -351,19 +350,19 @@ export async function runBiQuery(
           comparativo = comp.budget
         } else {
           const prevMap = aggregateDRE(prevRows)
-          const prevComp = computeLine(linha, prevMap, linhas, linha.ordem)
-          comparativo = prevComp.realizado
+          comparativo = computeLine(linha, prevMap, linhas, linha.ordem).realizado
         }
       }
 
-      const variacao_pct = comparativo != null && comparativo !== 0
-        ? ((comp.realizado - comparativo) / Math.abs(comparativo)) * 100
-        : null
-
-      return { tipo: 'escalar', valor: comp.realizado, comparativo, variacao_pct }
+      return {
+        tipo: 'escalar',
+        valor: comp.realizado,
+        comparativo,
+        variacao_pct: comparativo != null && comparativo !== 0
+          ? ((comp.realizado - comparativo) / Math.abs(comparativo)) * 100 : null,
+      }
     }
 
-    // ── Time series ───────────────────────────────────────────────────────────
     case 'serie_temporal': {
       const [rows, linhas] = await Promise.all([
         fetchDREData(periodos, scope, supabase),
@@ -374,43 +373,43 @@ export async function runBiQuery(
       if (!linha) return { tipo: 'serie', pontos: [] }
 
       const comp = computeLine(linha, grupoMap, linhas, linha.ordem)
-      const pontos = periodos.map(p => ({
-        periodo:   p,
-        realizado: comp.byPeriod[p]?.razao  ?? 0,
-        budget:    comp.byPeriod[p]?.budget ?? null,
-      }))
-      return { tipo: 'serie', pontos }
+      return {
+        tipo: 'serie',
+        pontos: periodos.map(p => ({
+          periodo:   p,
+          realizado: comp.byPeriod[p]?.razao  ?? 0,
+          budget:    comp.byPeriod[p]?.budget ?? null,
+        })),
+      }
     }
 
-    // ── Breakdown by department ───────────────────────────────────────────────
     case 'breakdown_dpto': {
       const linhas = await fetchDRELinhas(supabase)
       const linha = linhas.find(l => l.nome === metrica.linha_nome)
       if (!linha) return { tipo: 'breakdown', itens: [] }
 
+      // Get all unique nome_departamento values
       const { data: ccRows } = await supabase
         .from('centros_custo')
-        .select('departamento, nome_departamento')
-      const allDepts = [...new Set((ccRows ?? []).map((r: Record<string,unknown>) => r.departamento as string).filter(Boolean))]
-      // If scope restricts departments, use only those
-      const depts = (scope.departamentos?.length ?? 0) > 0
-        ? allDepts.filter(d => scope.departamentos!.includes(d))
-        : allDepts
+        .select('nome_departamento')
+      const allNomes = [...new Set((ccRows ?? []).map((r: Record<string,unknown>) => r.nome_departamento as string).filter(Boolean))]
+
+      // Restrict to scope if depts selected
+      const nomes = (scope.departamentos?.length ?? 0) > 0
+        ? allNomes.filter(n => scope.departamentos!.includes(n))
+        : allNomes
 
       const results: Array<{ label: string; realizado: number; budget: number }> = []
-      for (const deptId of depts) {
-        const scopeDept: BiScope = { ...scope, departamentos: [deptId], centros_custo: [] }
+      for (const nome of nomes) {
+        const scopeDept: BiScope = { ...scope, departamentos: [nome], centros_custo: [] }
         const rows = await fetchDREData(periodos, scopeDept, supabase)
         const gMap = aggregateDRE(rows)
         const comp = computeLine(linha, gMap, linhas, linha.ordem)
-        const nomeDept = ccRows?.find((r: Record<string,unknown>) => r.departamento === deptId)?.nome_departamento as string ?? deptId
-        results.push({ label: nomeDept, realizado: comp.realizado, budget: comp.budget })
+        results.push({ label: nome, realizado: comp.realizado, budget: comp.budget })
       }
 
       const total = results.reduce((s, r) => s + Math.abs(r.realizado), 0)
-      const sorted = results
-        .filter(r => r.realizado !== 0)
-        .sort((a, b) => Math.abs(b.realizado) - Math.abs(a.realizado))
+      const sorted = results.filter(r => r.realizado !== 0).sort((a, b) => Math.abs(b.realizado) - Math.abs(a.realizado))
 
       return {
         tipo: 'breakdown',
@@ -424,16 +423,19 @@ export async function runBiQuery(
       }
     }
 
-    // ── Breakdown by centro de custo ──────────────────────────────────────────
     case 'breakdown_cc': {
       const linhas = await fetchDRELinhas(supabase)
       const linha = linhas.find(l => l.nome === metrica.linha_nome)
       if (!linha) return { tipo: 'breakdown', itens: [] }
 
+      // Filter CCs by nome_departamento (what scope.departamentos contains)
       const depts = scope.departamentos ?? []
       let ccQuery = supabase.from('centros_custo').select('centro_custo, nome_centro_custo')
-      if (depts.length > 0) ccQuery = ccQuery.in('departamento', depts)
-      else if ((scope.centros_custo ?? []).length > 0) ccQuery = ccQuery.in('centro_custo', scope.centros_custo!)
+      if (depts.length > 0) {
+        ccQuery = ccQuery.in('nome_departamento', depts)   // ← fixed: was 'departamento'
+      } else if ((scope.centros_custo ?? []).length > 0) {
+        ccQuery = ccQuery.in('centro_custo', scope.centros_custo!)
+      }
       const { data: ccRows } = await ccQuery
       const centros = (ccRows ?? []) as Array<{ centro_custo: string; nome_centro_custo: string }>
 
@@ -463,11 +465,9 @@ export async function runBiQuery(
       }
     }
 
-    // ── Top-N ─────────────────────────────────────────────────────────────────
     case 'topN_grupo': {
       const rows = await fetchDREData(periodos, scope, supabase)
       const dreRows = rows.filter(r => r.dre === metrica.grupo_nome)
-      // Aggregate by agrupamento_arvore within the grupo
       const byAgrup = new Map<string, number>()
       for (const r of dreRows) {
         const key = r.agrupamento_arvore || r.dre || 'Outros'
@@ -477,38 +477,23 @@ export async function runBiQuery(
       itens = metrica.ordem === 'desc'
         ? itens.sort((a, b) => b.valor - a.valor)
         : itens.sort((a, b) => a.valor - b.valor)
-      itens = itens.slice(0, metrica.n)
-      return { tipo: 'topN', itens, n: metrica.n, ordem: metrica.ordem }
+      return { tipo: 'topN', itens: itens.slice(0, metrica.n), n: metrica.n, ordem: metrica.ordem }
     }
 
-    // ── DRE completa ──────────────────────────────────────────────────────────
     case 'dre_completa': {
-      const [rows, linhas] = await Promise.all([
-        fetchDREData(periodos, scope, supabase),
-        fetchDRELinhas(supabase),
-      ])
-      const grupoMap = aggregateDRE(rows)
-      const dreLines = buildDreLines(linhas, grupoMap)
-      return { tipo: 'dre', linhas: dreLines }
+      const [rows, linhas] = await Promise.all([fetchDREData(periodos, scope, supabase), fetchDRELinhas(supabase)])
+      return { tipo: 'dre', linhas: buildDreLines(linhas, aggregateDRE(rows)) }
     }
 
-    // ── DRE parcial ───────────────────────────────────────────────────────────
     case 'dre_parcial': {
-      const [rows, linhas] = await Promise.all([
-        fetchDREData(periodos, scope, supabase),
-        fetchDRELinhas(supabase),
-      ])
-      const grupoMap = aggregateDRE(rows)
+      const [rows, linhas] = await Promise.all([fetchDREData(periodos, scope, supabase), fetchDRELinhas(supabase)])
       const filterNames = metrica.linhas.length > 0 ? metrica.linhas : undefined
-      const dreLines = buildDreLines(linhas, grupoMap, filterNames)
-      return { tipo: 'dre', linhas: dreLines }
+      return { tipo: 'dre', linhas: buildDreLines(linhas, aggregateDRE(rows), filterNames) }
     }
 
-    // ── Grupo DRE ─────────────────────────────────────────────────────────────
     case 'grupo_dre': {
       const rows = await fetchDREData(periodos, scope, supabase)
-      const grupoMap = aggregateDRE(rows)
-      const agg = grupoMap.get(metrica.grupo_nome)
+      const agg = aggregateDRE(rows).get(metrica.grupo_nome)
       const realizado = agg?.razao  ?? 0
       const budget    = agg?.budget ?? 0
       const desvio    = realizado - budget
@@ -525,24 +510,23 @@ export async function runBiQuery(
       const depts   = scope.departamentos ?? []
       const centros = scope.centros_custo ?? []
 
-      // Build extra filters for scope restriction
-      const extraFiltros: Array<{ campo: string; operador: string; valor: string }> = []
+      // Build extra filters using correct FilterCondition shape: { column, operator, value }
+      const extraFiltros: FilterCondition[] = []
       if (depts.length > 0) {
-        extraFiltros.push({ campo: 'departamento', operador: 'in', valor: depts.join(',') })
+        extraFiltros.push({ column: 'nome_departamento', operator: 'in', value: depts.join(',') })
       }
       if (centros.length > 0) {
-        extraFiltros.push({ campo: 'centro_custo', operador: 'in', valor: centros.join(',') })
+        extraFiltros.push({ column: 'centro_custo', operator: 'in', value: centros.join(',') })
       }
 
       const results = await getMedidaResultados(metrica.medida_id, {
-        groupByDept:   false,
-        groupByPeriod: false,
+        groupByDept:        false,
+        groupByPeriod:      false,
         groupByCentroCusto: false,
         periodos,
         extraFiltros,
       })
 
-      // Aggregate all rows into a single scalar
       let totalRazao = 0, totalBudget = 0
       for (const r of results) {
         totalRazao  += r.razao  ?? 0
