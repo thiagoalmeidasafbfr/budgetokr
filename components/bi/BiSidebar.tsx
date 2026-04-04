@@ -64,7 +64,10 @@ export function BiSidebar() {
   const selPeriods: string[] = periodosFromBiPeriodo(dashboard.periodo_global)
 
   function onPeriodsChange(next: string[]) {
-    if (next.length === 0) return
+    if (next.length === 0) {
+      setPeriodoGlobal({ tipo: 'lista', periodos: [] })
+      return
+    }
     const sorted = [...next].sort()
     if (sorted.length === 1) {
       const [y, m] = sorted[0].split('-').map(Number)

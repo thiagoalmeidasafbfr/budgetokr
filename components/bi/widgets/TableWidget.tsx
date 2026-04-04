@@ -118,5 +118,102 @@ export function TableWidget({ config, data }: WidgetProps) {
     )
   }
 
+  if (data.tipo === 'escalar') {
+    return (
+      <div className="h-full flex flex-col overflow-hidden">
+        {mostrar_titulo && config.titulo && (
+          <p className="px-3 py-1.5 text-[10px] font-semibold tracking-widest uppercase shrink-0 border-b"
+             style={{ fontFamily: FONTS.heading, color: BRAND.muted, borderColor: '#E4DFD5' }}>{config.titulo}</p>
+        )}
+        <div className="overflow-auto flex-1">
+          <table className="w-full text-xs">
+            <thead className="bg-gray-50 sticky top-0">
+              <tr>
+                {['Realizado', 'Comparativo', 'Variação %'].map(h => (
+                  <th key={h} className="px-2 py-1.5 text-right whitespace-nowrap"
+                      style={{ fontFamily: FONTS.mono, fontSize: 9, color: BRAND.muted }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="bg-white">
+                <td className="px-2 py-1.5 text-right" style={{ fontFamily: FONTS.mono }}>{fmt(data.valor)}</td>
+                <td className="px-2 py-1.5 text-right" style={{ fontFamily: FONTS.mono, color: BRAND.muted }}>{data.comparativo != null ? fmt(data.comparativo) : '—'}</td>
+                <td className="px-2 py-1.5 text-right font-medium"
+                    style={{ fontFamily: FONTS.mono, color: data.variacao_pct != null && data.variacao_pct >= 0 ? BRAND.positive : BRAND.danger }}>
+                  {data.variacao_pct != null ? fmtPct(data.variacao_pct) : '—'}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }
+
+  if (data.tipo === 'serie') {
+    return (
+      <div className="h-full flex flex-col overflow-hidden">
+        {mostrar_titulo && config.titulo && (
+          <p className="px-3 py-1.5 text-[10px] font-semibold tracking-widest uppercase shrink-0 border-b"
+             style={{ fontFamily: FONTS.heading, color: BRAND.muted, borderColor: '#E4DFD5' }}>{config.titulo}</p>
+        )}
+        <div className="overflow-auto flex-1">
+          <table className="w-full text-xs">
+            <thead className="bg-gray-50 sticky top-0">
+              <tr>
+                {['Período','Realizado','Budget'].map(h => (
+                  <th key={h} className="px-2 py-1.5 text-left whitespace-nowrap"
+                      style={{ fontFamily: FONTS.mono, fontSize: 9, color: BRAND.muted }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.pontos.map((ponto, i) => (
+                <tr key={i} className={i % 2 ? 'bg-[#FAFAF8]' : 'bg-white'}>
+                  <td className="px-2 py-1.5" style={{ fontFamily: FONTS.mono, color: BRAND.ink }}>{ponto.periodo}</td>
+                  <td className="px-2 py-1.5 text-right" style={{ fontFamily: FONTS.mono }}>{fmt(ponto.realizado)}</td>
+                  <td className="px-2 py-1.5 text-right" style={{ fontFamily: FONTS.mono, color: BRAND.muted }}>{ponto.budget != null ? fmt(ponto.budget) : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }
+
+  if (data.tipo === 'topN') {
+    return (
+      <div className="h-full flex flex-col overflow-hidden">
+        {mostrar_titulo && config.titulo && (
+          <p className="px-3 py-1.5 text-[10px] font-semibold tracking-widest uppercase shrink-0 border-b"
+             style={{ fontFamily: FONTS.heading, color: BRAND.muted, borderColor: '#E4DFD5' }}>{config.titulo}</p>
+        )}
+        <div className="overflow-auto flex-1">
+          <table className="w-full text-xs">
+            <thead className="bg-gray-50 sticky top-0">
+              <tr>
+                {['#','Descrição','Valor'].map(h => (
+                  <th key={h} className="px-2 py-1.5 text-left whitespace-nowrap"
+                      style={{ fontFamily: FONTS.mono, fontSize: 9, color: BRAND.muted }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.itens.map((item, i) => (
+                <tr key={i} className={i % 2 ? 'bg-[#FAFAF8]' : 'bg-white'}>
+                  <td className="px-2 py-1.5 w-8" style={{ fontFamily: FONTS.mono, color: BRAND.muted }}>{i + 1}</td>
+                  <td className="px-2 py-1.5 max-w-[160px] truncate" style={{ color: BRAND.ink }}>{item.label}</td>
+                  <td className="px-2 py-1.5 text-right" style={{ fontFamily: FONTS.mono }}>{fmt(item.valor)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }
+
   return <p className="text-sm text-gray-400 text-center p-4">Tipo de dado incompatível com tabela</p>
 }
